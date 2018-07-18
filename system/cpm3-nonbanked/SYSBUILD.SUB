@@ -10,18 +10,14 @@ date
 ;zsm4 =cbios3c/l
 m80 cbios3c,cbios3c=cbios3c
 ;
-; Link Non-Banked CP/M-Plus under CP/M-80 2.2
+; Link Non-Banked CP/M-Plus
 ;
 link bios3[os]=cbios3c,scb
 gencpm auto display
 ;
-; (CPMLDR doesn't work yet - commented out - needs LDRBOOT fixes)
-;zsm4 =cpmldr3.z80/l
-;zsm4 =ldrbios/l
-;zsm4 =ldrboot/l
-;link cpmldr3[l100]=ldrboot,cpmldr3,ldrbios,scb
-;
 ; If there were no errors, CPM3.SYS can be copied to the boot drive (A:)
-; NB: Be sure to keep a copy of the original (and previously working) version
+; NB: Be sure to keep a copy of the original (and previously working) version.
+; Should there be any problem booting, use the CP/M 2.2 boot option to
+; restore the saved version.
 date
 put console output to console
