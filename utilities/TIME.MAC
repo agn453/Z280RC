@@ -1,0 +1,1380 @@
+;
+;  T I M E . M A C
+;
+;  Program to get the date and time from the clock chip and set
+;  the CP/M-Plus system date and time.
+;
+;  Can also change/set the time in the clock chip if a date-time
+;  is specified on the command line.
+;
+;  Timekeeper chip selection is set by the following EQUates.
+;
+;  S100$SYSTEM
+;
+;  Accesses the DS1216 SmartWatch that is plugged into the
+;  TPA (Bank 1) Godbout RAM17 memory board at socket A8
+;  (address A800-AFFF).  For this reason, the program must
+;  be executed from CP/M-Plus in Banked mode to access this
+;  device. Assemble with M80 or ZSM4.
+;
+;  Z280RC
+;
+;  Accesses the DS1302 Trickle Charge Timekeeping chip at
+;  IO Port Address 00xxA2.  There is currently a Non-banked
+;  only restriction until the banked BIOS is completed due
+;  to User mode privileged requirements for changing the
+;  I/O bank via the LDCTL instruction.  Assemble with ZSM4.
+;
+;  Author:	Tony Nicholson
+;  Date:	15-May-1988
+;
+;  Modification History:
+;
+;  05-Jan-1987	Save BC register in leapck routine.
+;  22-Feb-1987	Include code to output set time escape
+;		sequence to the Fulcrum VIO-X2 video
+;		card so it displays on the line 25.
+;  02-Jan-1988  Fix leapck routine to correctly detect
+;		a leap year (passed in C register) by
+;		removing BC register save and load from
+;		the current year into C
+;  09-May-1988	Check if console output is to VIO-X2
+;		video and skip sending time for status
+;		line if not selected.
+;  15-May-1988	Extend leap year table to 2036, warn
+;		if run on non-banked system, and add
+;		clock setting ability (if specified
+;		on the command line).
+;  17-May-1999	Year-2K updates to CP/M-Plus.  Date
+;		flag in the SCB now indicates US/UK
+;		date format (mm/dd/yy vs dd/mm/yy).
+;		As well as alphabetic month names,
+;		accept numeric month digit too.
+;  12-Jul-2018	Add Z280RC support for DS1302 timekeeper.
+;
+;
+FALSE	EQU	0
+TRUE	EQU	NOT FALSE
+;
+; Select only one of the following depending on the system
+;
+S100$SYSTEM EQU FALSE	; TRUE for S100 System
+Z280RC	EQU	TRUE	; TRUE for Z280RC
+
+  if	S100$SYSTEM AND Z280RC
+	.printx	'Configure only one of S100$SYSTEM or Z280RC to TRUE'
+	ERROR
+  endif
+  if	(NOT S100$SYSTEM) AND (NOT Z280RC)
+	.printx	'Configure either S100$SYSTEM or Z280RC to TRUE'
+	ERROR
+  endif
+
+  if	S100$SYSTEM
+	.z80
+WATCH	equ	0A800h		; DS1216 SmartWatch address
+  endif
+
+  if	Z280RC
+	.z280
+WATCHP	equ	0		; I/O Page 00xx
+WATCH	equ	0a2h		; DS1302 Timekeeper address
+
+BANK$SUPPORT equ false		; TRUE to enable User mode support
+
+; Banked memory runs in User mode, so need to do a system call
+; to select the IO Page for the DS1302 timekeeper chip.
+
+    if BANK$SUPPORT	;***Not yet implemented***
+
+sc$IOPage equ	0	; System Call to select IOPage
+
+    endif
+  endif
+;
+BDOS	equ	0005h
+;
+; CP/M Plus BDOS function codes
+;
+$print	equ	9
+$vers	equ	12
+$scb	equ	49
+$stime	equ	104
+;
+ddma	equ	0080h		; Default DMA buffer address
+;
+	aseg
+	org	0100h
+;
+begin:
+	ld	hl,0		;Save stack pointer (using only
+	add	hl,sp		; 8080/8085 instructions)
+	ld	(stack),hl
+	ld	sp,stack	;Use local stack
+
+	xor	a		;Is this running on a Z80?
+	dec	a
+	jp	po,az80		; (an 8080/8085 will have even parity)
+
+	ld	de,z80msg	;Bad luck, this program uses Z80
+	jp	errexit		; instructions
+az80:
+  if	Z280RC
+	ld	a,40h		;For the Z280RC it must be a Z280
+	tset	a		; (this instruction will set the S flag
+	jp	p,az280		; on a Z80 and clear it on a Z280)
+
+	ld	de,z280msg	;We use Z280 op-codes to manipulate
+	jr	errexit		; the IOpage (LDCTL, SC)
+az280:
+  endif
+
+	ld	c,$vers		;Is this CP/M-Plus?
+	call	BDOS
+	cp	31h
+	jr	c,wrongv	; No
+
+	ld	c,$scb		;Banked?
+	ld	de,basescb
+	call	BDOS
+	ld	a,h		;Non-banked has zero
+	or	l		; common base address
+  if	S100$SYSTEM
+	jr	nz,versok	;Only Banked CP/M-Plus
+  endif
+  if	Z280RC
+	ld	(sysmod),a	;Non-banked is in System mode
+    if	not BANK$SUPPORT	; and Banked is in User mode
+	jr	z,versok	;Only allow Non-banked
+    else
+	jr	versok		;It's all ok to proceed
+    endif
+  endif
+
+wrongv:	ld	de,badver
+	jr	errexit
+
+versok:	
+	ld	c,$scb		;Interrogate the system date
+	ld	de,dflgscb	; flag format (US/UK)
+	call	BDOS
+
+	ld	a,l		;Bit 0 indicates UK if set
+	and	00000001b
+	ld	(usuk),a	;Save it
+
+	ld	hl,ddma		;Did command line
+	ld	a,(hl)		; have any parameters?
+	inc	hl		;(First byte is command tail length)
+	or	a
+	jr	z,readtime	;No, just get the time
+				; and set the CP/M system time
+
+timeparam::
+	call	parse		;Parse the date/time parameter as
+	jr	c,oops		; "Day DD-MMM-(yy)YY HH:MM:SS"
+				; CY flag set if there's any error
+				; deciphering the date and time
+
+settime::
+	call	valid		;Is the new date/time valid?
+	jr	c,badset
+
+	call	wrclk		;Write changed values to timekeeper
+	jr	timeok
+
+readtime::
+	call	rdclk		;Read the SmartWatch
+
+	call	valid		;Is date and time valid?
+	jr	nc,timeok
+	
+badtime::
+	ld	de,badmsg
+errexit:
+	ld	c,$print	;Give them the bad news
+	call	BDOS
+	jp	exit
+
+oops:	push	hl		;Save character pointer
+	ld	hl,ddma		;Copy up to 27 characters
+	ld	de,cmdtail	; from command-tail into
+	ld	b,27		; parse error message
+	ld	c,(hl)		;Command-tail length
+	inc	hl
+oops1:	ld	a,(hl)
+	ld	(de),a
+	inc	hl
+	inc	de
+	dec	b
+	jr	z,oops2		;27 copied
+	dec	c
+	jr	nz,oops1
+oops2:	ld	a,'"'		;closing double-quotes
+	ld	(de),a
+	inc	de
+	ld	a,' '
+	ld	(de),a
+	inc	de
+	pop	hl
+	ld	bc,ddma+1	;First character address
+	ccf
+	sbc	hl,bc		;Subtract to get position
+	ld	a,L
+	ex	de,hl
+	call	hex		;Character position in hex
+	ld	(hl),'$'	;String terminator
+
+	ld	de,parsemsg	;Print parse command-tail
+	ld	c,$print
+	call	bdos
+
+	ld	de,usagemsg	;Show usage and exit
+	jr	errexit
+
+badset:
+	ld	de,badspec
+	jr	errexit
+
+timeok:
+  if	S100$SYSTEM
+	ld	hl,DAYTIM	;Set clock running on
+	ld	a,1Bh		; Fulcrum VIO-X2 video
+	ld	(hl),a		; card (video console)
+	inc	hl
+	ld	a,'>'
+	ld	(hl),a
+	inc	hl
+	ld	a,(hours)
+	call	hex
+	ld	a,(mins)
+	call	hex
+	ld	a,(secs)
+	call	hex
+	ld	(hl),'$'	;String terminator
+
+	ld	c,$scb		;Interrogate console output device
+	ld	de,conoscb
+	call	BDOS
+	ld	a,h		;msb set means VIO-X video is
+	and	80h		; selected
+	jr	z,timeset
+
+outviox:
+	ld	c,$print	;Output time set escape
+	ld	de,DAYTIM	; sequence
+	call	BDOS
+  endif
+
+timeset:
+	ld	c,85h		;Convert date from BCD
+	ld	hl,dbase	; into CP/M-Plus date word
+
+nexty:	ld	a,c		;Advance a year
+	add	a,01h
+	daa
+	ld	c,a
+	call	leapck		;Get days in year to DE
+	ld	a,(year)
+	cp	c		;Is this the correct year?
+	jr	z,thisyr	;Yes
+	add	hl,de		;No, add in number of days
+	jr	nexty		; and check next year
+
+thisyr:	ld	a,(month)	;Convert BCD month to binary
+	call	bcdbin
+	ld	de,mdays
+	ld	b,0
+
+nextm:	dec	a		;Add in days per month
+	jr	z,thismn	; prior to this month
+	push	af
+	ld	a,(de)
+	inc	de
+	ld	c,a
+	pop	af
+	add	hl,bc
+	jr	nextm
+
+thismn:	ld	a,(day)		;Convert day from BCD
+	call	bcdbin		; to binary
+	ld	c,a
+	add	hl,bc
+	ld	(date),hl	;Save date word
+	ld	hl,(mins)	;Get minutes and hours
+	ld	a,h		;Swap byte order
+	ld	h,l		; and store hours & minutes
+	ld	l,a		; for setting
+	ld	(hh),hl
+	ld	c,$stime	;Set CP/M-Plus date and time
+	ld	de,date
+	call	BDOS
+	ld	a,(secs)	;Now set seconds by
+	ld	(ss),a		; storing into the system
+	ld	c,$scb		; control block
+	ld	de,secsscb
+	call	BDOS
+
+	call	prtime		;Print date and time to console
+
+exit::	ld	sp,(stack)	;This restores the CCP stack
+	ret			; (assumes we can just return)
+
+;
+; Print time to console from TIME buffer
+;
+; Format is	Day dd-mmm-yy HH:MM:SS
+;
+; All registers are saved
+;
+prtime::
+	push	hl
+	push	de
+	push	bc
+	push	af
+	ld	a,(wday)	;Get day number
+	dec	a		; and adjust to range 0..6
+	and	07h
+	ld	l,a		;Multiply it by 3
+	add	a,a
+	add	a,l
+	ld	l,a		;Form address of day name
+	ld	h,0		; string
+	ld	de,wdays
+	add	hl,de
+	ld	de,DAYTIM	;Copy day name to beginning
+	ld	bc,3		; of date-time string
+	ldir
+	ex	de,hl
+	ld	(hl),' '	;Follow up with a space
+	inc	hl
+	push	hl		;Save pointer to buffer
+	ld	a,(month)	;Get month and
+	call	bcdbin		; calculate address
+	ld	e,a		; of month name into
+	add	a,a		; DE
+	add	a,e
+	ld	e,a
+	ld	d,0
+	ld	hl,mthnam-3
+	add	hl,de
+	ex	de,hl
+	pop	hl		;Restore pointer to buffer
+	ld	a,(day)
+	call	hex		;Convert BCD date to
+	ld	(hl),'-'	; ASCII
+	inc	hl
+	ex	de,hl		;DE is still pointing
+	ld	bc,3		; to the month name
+	ldir
+	ex	de,hl
+	ld	(hl),'-'
+	inc	hl
+	ld	a,(year)
+	call	hex
+	ld	(hl),' '	;Also convert BCD time
+	inc	hl		; to ASCII
+	ld	a,(hours)
+	call	hex
+	ld	(hl),':'
+	inc	hl
+	ld	a,(mins)
+	call	hex
+	ld	(hl),':'
+	inc	hl
+	ld	a,(secs)
+	call	hex
+	ld	(hl),'$'	;String terminator
+
+	ld	c,$print	;Print date and time
+	ld	de,DAYTIM	; and return to CP/M
+	call	BDOS
+	pop	af
+	pop	bc
+	pop	de
+	pop	hl
+	ret
+
+hex::
+	push	af		;Convert binary BCD
+	rrca			; to ASCII decimal digits
+	rrca			; and store in buffer
+	rrca			; pointed to by the HL
+	rrca			; register pair.
+	call	nibble
+	pop	af
+nibble:	and	0Fh
+	add	a,90h
+	daa
+	adc	a,40h
+	daa
+	ld	(hl),a
+	inc	hl
+	ret
+
+bcdbin::
+	push	bc		;Save BC register
+	ld	c,a		;Copy BCD value to C
+	and	0Fh		;Mask out low digit
+	ld	b,a		; and save in B
+	ld	a,c		;Now divide high four bits
+	and	0F0h		; by eight to get 2*high
+	rrca			; digit.
+	rrca
+	rrca
+	ld	c,a		;Save 2*high digit in C
+	rlca			; *4
+	rlca			; *8
+	add	a,c		; *10
+	add	a,b		; + low digit
+	pop	bc		;All done
+	ret
+
+binbcd::
+	or	a		;No point doing anything
+	ret	z		; if value is zero
+	push	bc
+	ld	bc,10		;C=10, count of 10's digit in B=0
+binb0:	cp	c		;Is A < 10?
+	jr	c,binb10	;Yes
+	sub	c		;Subtract 10
+	inc	b		
+	jr	binb0
+binb10:	sla	b		;Shift 10's digit to high nibble
+	sla	b
+	sla	b
+	sla	b
+	add	a,b		;Add units digit
+	cp	99h+1		;Did it overflow?
+	jr	c,binbok
+	sub	10*16		;Yes, adjust to discard overflow
+binbok:	pop	bc
+	ret
+
+;
+leapck::
+	push	hl
+	ld	de,365		;Assume not a leap year
+	ld	a,28
+	ld	(febday),a
+	ld	hl,leaps	;Look up leap year table and
+notlp:	ld	a,(hl)
+	cp	0FFh		;End of table?
+	jr	z,endltb
+	inc	hl
+	cp	c
+	jr	nz,notlp
+	inc	de		;It is a leap year, bump days
+	ld	a,29		; and fixup February in
+	ld	(febday),a	; month table
+endltb:
+	pop	hl
+	ret
+
+;
+; Parse parameter string and extract date/time
+; ready to set the Smartwatch clock calendar chip
+;
+; On entry
+;	HL points to the command-tail ASCII text (NUL terminated)
+;	A contains length of buffer
+;
+; Accepted input text formats are
+;
+;	[Day] [DD-MMM[-YY|-YYYY] [HH:MM[:SS]]
+; or	[Day] [DD/MM[/YY|/YYYY] [HH:MM[:SS]]	(UK format)
+; or	[Day] [MM/DD[/YY|/YYYY] [HH:MM[:SS]]	(US format)
+;	
+; where [] denotes optional and [ | ] optional alternatives
+; e.g.
+;	String			Result
+;	"Fri"			Day=06
+;	"Mon 26-May"		Day=02 DD=26 MMM=05
+;	"Sat 10:45 2-Jun"	Day=07 DD=02 MMM=06 HH=10 MM=45 SS=00.00
+;	"14:27"			HH=14 MM=27 SS=00.00
+;	"14-May 18:27"		DD=14 MMM=05 HH=18 MM=27 SS=00.00
+;	"23:59:59 31-Dec-99"	DD=31 MMM=12 YY=99 HH=23 MM=59 SS=59
+;	"2-Apr-2008"		DD=02 MMM=04 YY=08
+;	"17:00 16/07"		HH=17 MM=00 DD=16 MMM=07 (UK format)
+;	"17:10 7/16"		HH=17 MM=10 MMM=07 DD=16 (US format)
+;
+; On exit
+;   Carry bit set on parsing error, cleared otherwise
+;   HL points past last parsed input
+;   B has the number of unparsed command-tail characters (zero if
+;     the whole command line was processed)
+;
+
+parse::				;Parse input date/time string
+	push	hl	
+	push	de
+	push	bc
+	push	af
+	call	rdclk		;Pre-fill default date-time values
+	pop	af
+	pop	bc
+	pop	de
+	pop	hl
+
+	ld	b,a		;Put command-tail length in B register
+	cp	3		;No time-spec is less than 3 characters
+	ret	c		;Return if < 3 characters with carry bit set
+
+	call	skipsp		;First character is usually a space
+	ret	c		;Carry set if end of buffer
+
+	ld	a,b		;Are there at least 3 characters
+	cp	3		; remaining in the command-tail?
+	ret	c		;No
+
+	; First check for three character Dayname ("Sun".."Sat")
+
+	ld	de,udays	;Lookup uppercase dayname table
+	ld	c,7		;Sizeof table
+	call	match3		; HL=bufptr, B=bufcnt
+	ld	a,c		;Index returned in C register
+	or	a
+	jr	z,pdate		;No Dayname, go look for Date or Time
+
+	ld	(wday),a	;Found Day, save index
+
+pdate::
+
+	; Look for Date (decimal number followed by a "-" or "/")
+	; or Time (decimal number followed by a ":")
+
+ptry:	ld	a,b
+	or	a		;Any more characters?
+	ret	z		;No, Return with CY=0
+
+	call	bcdin		;Parse digits into DE
+	ld	a,c		;Any digits processed?
+
+	or	a
+	jp	z,pmonth	;No, it could be a Month name
+
+	ld	a,(hl)
+	cp	'-'		;Hint for dd-mmm format date
+	jp	z,pdd
+	cp	'/'		;Hint for dd/mm or mm/dd date 
+	jr	z,pslash
+	cp	':'		;Hint for a time
+	jp	z,phh
+
+bad1:	scf			;Neither, Set CY and
+	ret			; return
+
+pslash:	inc	hl		;Point past the "/"
+	dec	b		;Less characters remaining
+	ld	a,(usuk)
+	and	00000001b
+	jr	z,usfmtm
+	ld	a,e		;It's UK format day
+	cp	01h		; allow only 01..31
+	jr	c,bad1
+	cp	31h+1
+	jr	nc,bad1
+	ld	(day),a
+	jr	scdm
+
+usfmtm:	ld	a,e		;It's US format month
+	cp	01h		; only allow 01..12
+	jr	c,bad1
+	cp	12h+1
+	jr	nc,bad1
+	ld	(month),a
+
+scdm:	; Middle date digits
+	call	bcdin
+	ld	a,c		;Any digits seen?
+	or	a
+	jr	z,bad1		;No - missing middle digits
+	ld	a,(usuk)
+	and	00000001b
+	jr	z,usfmtd
+	ld	a,e		;UK format month
+	cp	01h		;Only allow 01..12
+	jr	c,bad1
+	cp	12h+1
+	jr	nc,bad1
+	ld	(month),a
+	jr	scyyyy
+usfmtd:	ld	a,e		;US format day
+	cp	01h
+	jr	c,bad1
+	cp	31h+1
+	jr	nc,bad1
+	ld	(day),a
+
+scyyyy:	ld	a,b		;Any more characters?
+	or	a
+	ret	z		;No, dd/mm or mm/yy (without year)
+				; is accepted
+
+	ld	a,(hl)		;Year delimiter must be a "/"
+	inc	hl
+	dec	b
+	cp	' '		;If a space, check if time follows
+	jr	z,ptry
+	cp	'/'
+	jr	nz,bad1
+py01:	call	bcdin		;Get year (2 or 4 digits)
+	ld	a,c		;Any valid number?
+	or	a
+	jr	z,bad1		;No - bad date format
+	ld	a,e		;Any year 00..99 is acceptable
+	ld	(year),a
+	jp	ptry		;Done with a date
+
+pdd:
+	; DD-MMM-YYYY format date
+
+	ld	a,e		;Yes - DD digits
+	cp	01h		; allow only 01 thru 31
+	jr	c,bad3
+	cp	31h+1
+	jr	nc,bad3		;Bad DD number
+	ld	(day),a
+
+pmonth:
+	; Alphabetic month ("Jan".."Dec")
+	inc	hl
+	dec	b		;Past "-"
+
+	ld	a,b		;Must be at least 3 characters
+	cp	3		; remaining
+	ret	c		;No, Bad format return with CY set
+
+	ld	de,umonths	;Lookup uppercase monthname table
+	ld	c,12
+	call	match3
+	ld	a,c		;Any match?
+	or	a
+	jr	z,bad2		;Unrecognised month
+	daa			;Convert to BCD
+	ld	(month),a
+
+pyear:	ld	a,b
+	or	a		;Any more characters?
+	ret	z		;No, Accept dd-mmm and return
+
+	ld	a,(hl)		;Next character is a space or '-'
+	inc	hl
+	dec	b
+	cp	' '
+	jp	z,ptry		;Accept dd-mmm, go look for time
+	cp	'-'
+	jr	nz,bad2		;If no '-', bad date format
+	jr	py01		;Next part is year
+	
+bad2:	dec	hl		;Back-up to bad character
+	inc	b
+bad3:	scf
+	ret	
+
+phh::
+	; Time format detected
+
+	ld	a,e
+	cp	23h+1		;Hours is 00..23
+	jr	nc,bad3
+	inc	hl		;Pointer past the ':' (already seen)
+	dec	b
+	ld	(hours),a	;Save hours
+	xor	a
+	ld	(mins),a	;Any time change clears MM:SS
+	ld	(secs),a
+	ld	(s100th),a
+	ld	a,b
+	or	a		;Any more characters?
+	jr	z,bad3		;No - invalid time format
+
+	call	bcdin		;Get hours
+	ld	a,c		;Any digits parsed?
+	or	a
+	jr	z,bad3
+	ld	a,e
+	cp	59h+1		;Minutes is 00..59
+	jr	nc,bad3
+	ld	(mins),a
+	ld	a,b
+	or	a
+	ret	z		;No more - HH:MM is valid
+
+	ld	a,(hl)		;Is next character a space?
+	inc	hl
+	dec	b
+	jp	z,ptry		;HH:MM followed by space - go back
+				; to look for date or time
+	cp	':'
+	jr	nz,bad2		;Not a colon - time format error
+	call	bcdin
+	ld	a,c
+	or	a		;Any digits?
+	jr	z,bad3		;No - format error
+	ld	a,e
+	cp	59h+1		;Seconds are 00..59
+	jr	nc,bad3
+	ld	(secs),a
+	jp	ptry
+
+;
+; Check for valid date and time
+;
+valid::
+	ld	hl,time		;Check all time digits for BCD
+	ld	b,8		; (AM/PM mode bits not used or allowed)
+vnext:	ld	a,(hl)
+	call	isbcd		;Is it BCD?
+	ret	c		;No
+	inc	hl
+	djnz	vnext
+	dec	hl
+	ld	c,(hl)		;Prefetch year to C
+	dec	hl		;Point to month
+	ld	a,(hl)		;Is it 01 to 12?
+	cp	01h
+	ret	c		;No, 00 not allowed
+	cp	12h+1
+	ccf			;No, >12
+	ret	c
+	call	bcdbin		;Convert month to binary
+	ld	b,a		; and save in B register
+	dec	hl		;Point to day
+
+	call	leapck		;Adjust mdays table for Year in C reg
+
+	ld	a,(hl)		;Fetch day of month
+	cp	01h
+	ret	c		;00 not allowed
+
+	ld	de,mdays
+	dec	b
+	ld	a,b		;Lookup table for month
+	add	a,e
+	jr	nc,val01
+	inc	d
+val01:	ld	e,a
+	ld	a,(de)		;Fetch maximum day in month
+	call	binbcd		;convert to bcd
+	cp	(hl)
+	ret	c		;day > max day in month
+
+	dec	hl		;Point to day-of-week
+	ld	a,(hl)
+	cp	01h
+	ret	c
+	cp	07h+1		;Must be 01 to 07
+	ccf
+	ret	c
+
+	dec	hl		;Point to hours
+	ld	a,(hl)
+	cp	23h+1		;Must be 00 to 23
+	ccf
+	ret	c
+
+	dec	hl		;Point to minutes
+	ld	a,(hl)
+	cp	59h+1		;Must be 00 to 59
+	ccf
+	ret	c
+
+	dec	hl		;Point to seconds
+	ld	a,(hl)
+	cp	59h+1
+	ccf
+				;No point checking 100ths
+				; because it is already
+				; valid BCD 00 to 99
+	ret
+
+;
+; Check if A register contains valid BCD value
+; Returns carry set if not valid
+; Destroys C register contents
+;
+isbcd::	ld	c,a		;Copy value to C
+	and	0Fh		;Mask out low digit
+	cp	09h+1		;Is it 0 - 9?
+	ccf
+	ret	c		;Not a BCD digit
+	ld	a,c
+	and	0F0h		;Mask out high digit
+	cp	90h+1		;Is it 0x-9x?
+	ccf
+	ret
+
+
+;
+; Subroutine to read BCD digits from the ASCII buffer
+; pointed to by HL of size in B.  Result returned in DE.
+; HL is advanced and B decremented for each character
+; processed. C has the number of digits processed.
+;
+bcdin::
+	ld	de,0		;Init result
+	ld	c,0
+	call	skipsp		;Skip leading spaces
+	ret	c		;End of Buffer sets carry
+bcd04:	ld	a,(hl)
+	call	vdigit		;Valid BCD digit?
+	ret	c
+	call	addade
+	inc	c
+	inc	hl
+	djnz	bcd04
+	ret
+;
+addade:	ex	de,hl
+	add	hl,hl		;Multiply by 16
+	add	hl,hl
+	add	hl,hl
+	add	hl,hl
+	sub	'0'		;ASCII to binary
+	add	a,l		;Add this digit
+	ld	l,a
+	ex	de,hl
+	ret
+;
+vdigit::
+	cp	'0'		;Check for valid digit
+	ret	c
+	cp	'9'+1
+	ccf
+	ret
+;
+skipsp::
+	ld	a,(hl)		;Skip spaces
+	cp	' '
+	ret	nz
+	inc	hl
+	djnz	skipsp
+	ret
+;
+match3::
+	ld	a,c		;Save tablesize
+	ld	(tsize3),a
+	ld	c,1		;Initial index
+wd01:	ld	a,(de)
+	cp	(hl)		;First char match?
+	jr	z,wd02		;Yes
+	inc	de		;No, bump pointer
+	inc	de
+	inc	de
+wd00:	inc	c		;bump index
+	ld	a,(tsize3)
+	cp	c		;is it greater than tablesize?
+	jr	nc,wd01		;no, try next
+	ld	c,0		;Yes, return NO MATCH
+	ret
+
+wd02:	inc	de		;Second char match?
+	inc	hl
+	dec	b
+	ld	a,(de)
+	cp	(hl)
+	jr	z,wd03		;Yes
+	inc	de		;No, bump pointer
+	inc	de
+	dec	hl		;step back a character
+	inc	b
+	jr	wd00		; and go check next day name
+
+wd03:	inc	de
+	inc	hl
+	dec	b
+	ret	z		;No more chars
+	ld	a,(hl)		;a space? (two chars are unique)
+	cp	' '		;Yes, match!
+	ret	z
+	ld	a,(de)		;Third char match?
+	cp	(hl)
+	jr	z,wd04		;Yes
+	inc	de
+	dec	hl
+	dec	hl
+	inc	b
+	inc	b
+	jr	wd00
+
+wd04:	inc	hl		;buffer pointer advance
+	dec	b
+	ret
+
+;
+  if	S100$SYSTEM
+;
+wrclk::
+	di			;No interruptions
+	ld	a,(watch)	;Read socket to reset
+	push	af		; and save on stack
+	ld	hl,pattern	;Special 64 bit pattern recognition
+	call	outbytes	;Output select pattern
+	ld	hl,time
+	call	outbytes	;Output the time
+	pop	af		;Restore RAM contents
+	ld	(watch),a
+	ei			;Allow interrupts again
+	ret			;Return
+;
+; DS1216 Smartwatch installed under a RAM chip at the
+; WATCH address in the current bank (TPA bank 1).
+;
+rdclk::
+	di			;No interruptions
+	ld	a,(watch)	;Read socket to reset
+	push	af		; and save on stack
+	ld	hl,pattern	;Special 64 bit pattern recognition
+	call	outbytes	;Output select pattern
+	ld	hl,time
+	call	inbit		;Read the time
+	pop	af
+	ld	(watch),a	;Restore RAM contents
+	ei			;Allow interrupts again
+	ret			; and return
+;
+; Output 8 bytes to the DS1216
+;
+outbytes:
+	ld	b,8		;Set up byte count
+loop:	ld	c,8		; and bit count
+	ld	d,(hl)		;Get the byte
+loop1:	xor	a		;Get each bit
+	srl	d		; into the lsb
+	adc	a,0		; of the A register
+	ld	(watch),a	;Send to SmartWatch
+	dec	c
+	jr	nz,loop1	;Next bit
+	inc	hl		;Next byte
+	djnz	loop
+	ret
+;
+inbit:
+	ld	b,8		;Set up byte count
+loop2:	ld	c,8		; and bit count
+loop3:	xor	a		;Read each bit from
+	ld	a,(watch)	; the SmartWatch and
+	srl	a		; shift into memory
+	rr	(hl)
+	dec	c
+	jr	nz,loop3	;Next bit
+	inc	hl		;Next byte
+	djnz	loop2
+	ret
+  endif
+
+  if	Z280RC
+
+;
+; Write to the DS1302 timekeeping chip at the WATCH I/O port
+; within the IOpage bank 00xx.
+;
+; On entry, the time bytes are in the TIME storage locations
+;
+
+wrclk::
+	; Copy the time bytes into the Write Time Command Block
+
+	ld	de,secs
+	ld	hl,wrsec
+	ld	b,7		;7 bytes (sec,min,hour,dow,day,month,year)
+wrcpt:
+	ld	a,(de)
+	ld	(hl),a
+	inc	de		;Next time value
+	inc	hl		;Next command byte value
+	inc	hl		; (skip length and command)
+	inc	hl
+	djnz	wrcpt
+
+wrready::
+	call	selRTCiopage
+
+	ld	hl,wrcmds	;Point to write time commands
+
+wrloop:	ld	a,(hl)
+	or	a
+	jr	z,wrdone	;Done when we reach end of table
+
+	call	enRTC		;Write each time value to
+	call	outbytes	; the timekeeper chip (HL is advanced)
+	call	disRTC
+	jr	wrloop
+
+wrdone:	call	restoreIOpage
+	ret
+
+selRTCiopage::
+	push	hl
+	push	bc
+	push	af
+
+	ld	a,(sysmod)	;System mode?
+	or	a
+	jr	z,sel1		;Yes, can execute privileged instructions
+
+    if BANK$SUPPORT
+	ld	hl,watchp	;Watch IOpage
+	sc	sc$IOPage	;No, User mode must do a system call
+	ld	(savctl),hl	;Save previous I/O Page
+	jr	sel2
+    endif
+sel1:
+	ld	c,08h		;Select the I/O page register
+	ldctl	hl,(c)		;Fetch and save the current page
+	ld	(savctl),hl
+	ld	hl,watchp	;Select the watch page
+	ldctl	(c),hl		; watch chip
+
+sel2:	; I/O Page is now set
+	pop	af
+	pop	bc
+	pop	hl
+	ret
+
+restoreIOpage::
+	push	hl
+	push	bc
+	push	af
+	ld	hl,(savctl)	;Restore the I/O page register
+	ld	a,(sysmod)
+	or	a
+	jr	z,rest1		;Non-Banked is in System mode
+
+    if BANK$SUPPORT
+	sc	sc$IOPage	;Banked means we are in User mode
+	jr	rest2
+    endif
+
+rest1:
+	ld	c,08h
+	ldctl	(c),hl
+
+rest2:	pop	af
+	pop	bc
+	pop	hl
+	ret
+
+;
+; DS1302 timekeeping chip at the WATCH I/O port
+; on the Z280RC board within the IOpage bank 00xx.
+;
+rdclk::
+	call	selRTCiopage	;Select IOpage for watch chip
+
+	ld	hl,rdcmds
+	ld	de,time
+	xor	a
+	ld	(de),a		;Zero 100ths of a second (not used)
+	inc	de
+
+rdloop:	ld	a,(hl)		;Done when we reach end of
+	or	a		; command table
+	jr	z,rddone
+	push	de		;(outbytes uses D)
+	call	enRTC
+	call	outbytes	;Output command to read next value
+	call	inbyte		;Read it into A
+	pop	de
+	ld	(de),a		;Save to time array
+	inc	de
+	call	disRTC
+	jr	rdloop
+rddone:
+	call	restoreIOpage
+	ret
+
+;
+; Enable the timekeeper chip by driving nRTS high and SCLK low
+;
+enRTC:	ld	a,00000010b	;Drive nRST high, SCLK low, DATA low
+	out	(watch),a
+	nop			;Delay a little (about a microsecond)
+	nop
+	nop
+	ret
+
+;
+; Disable the timekeeper chip by first lowering SCLK to low
+; and then nRST low
+;
+disRTC:	ld	a,00000010b	;nRST high, SCLK low
+	out	(watch),a
+	nop			;Delay a little (about a microsecond)
+	nop
+	nop
+	ld	a,00000000b	;Drive nRST and SCLK low
+	out	(watch),a
+	nop			;Delay a little (about a microsecond)
+	nop
+	nop
+	ret
+
+;
+; Output command bytes to the DS1302 timekeeper bit-wise (LSB first)
+;
+; On entry HL points to the number of command bytes
+; followed by the command byte(s).  HL is advanced so that
+; this routine may be called to output more commands
+; after processing input requests (via inbyte routine).
+; Registers B,C and D are used and not saved.
+;
+outbytes::
+	ld	c,(hl)		;First byte is count
+	ld	a,c
+	or	a
+	ret	z		;Zero means no more commands
+	inc	hl
+outnextb:
+	ld	d,(hl)		;fetch next byte
+	inc	hl
+
+	ld	b,8		;For each of the 8-bits
+outb1:	ld	a,00000100b	;nRST and SCLK bits are ready for rra
+	srl	d		;shift bit 0 into CY
+	rra			; then into bit 7 of A with nRST
+				;  and SCLK to their correct position
+	out	(watch),a	;Data bit is high bit, nRST=1, SCLK=0
+	or	00000001b	;Set SCLK=1
+	out	(watch),a	;This latches the data bit (on rising SCLK)
+	djnz	outb1		;next bit
+
+	dec	c
+	ret	z		;Return with SCLK=1, ready for inbyte
+	
+	jr	outnextb	;next byte
+
+;
+; Read a byte from the DS1302 timekeeper chip
+;
+; On entry the SCLK pin to the chip is high (from previous
+; Command byte write) and nRST is high.
+; On exit the SCLK pin is returned to high, and nRST is high..
+; Returns result in A
+;
+inbyte:
+	push	hl
+	push	de
+	push	bc
+	ld	d,0		; result to zero
+	ld	c,watch
+	ld	b,8		; 8-bits
+
+inbit:	ld	a,10000010b	;SCLK to low (this latches bit to be read)
+	out	(watch),a
+	inw	hl,(c)		;Read data bit (this reads a word?)
+	ld	a,10000011b	;SCLK back to high
+	out	(watch),a
+	rl	l		;Move bit into carry flag
+	rr	d		; then into result
+	djnz	inbit		;Repeat for all 8 bits
+
+	ld	a,d		;Result to A
+	pop	bc
+	pop	de
+	pop	hl
+	ret
+
+;
+; Command bytes to read the time from the DS1302 timekeeper
+; (bytes in the same order as the TIME array)
+;
+rdcmds::
+ck$rdsec:	db 1,10000001b	;Read second
+ck$rdmin:	db 1,10000011b	;Read minute
+ck$rdhour:	db 1,10000101b	;Read hour
+ck$rddow:	db 1,10001011b	;Read day of week
+ck$rdday:	db 1,10000111b	;Read day
+ck$rdmonth:	db 1,10001001b	;Read month
+ck$rdyear:	db 1,10001101b	;Read year
+		db 0	; end of table
+
+;
+; Command bytes to set the time to the DS1302 timekeeper
+; (bytes in the same order as the TIME array -
+; so do not alter the order)
+;
+wrcmds::
+ck$unprot:	db 2,10001110b	;Control Register WP bit to zero
+wrctrl:		db	00000000b
+ck$trickle:	db 2,10010000b	;Write Trickle charge
+wrtrickle:	db	10100101b	; Diode and 2Kohm
+ck$wrsec:	db 2,10000000b	;Write second
+wrsec:		db	0
+ck$wrmin:	db 2,10000010b	;Write minute
+wrmin:		db	0
+ck$wrhour:	db 2,10000100b	;Write hour
+wrhour:		db	0
+ck$wrdow:	db 2,10001010b	;Write day of week
+wrdow:		db	0
+ck$wrday:	db 2,10000110b	;Write day
+wrday:		db	0
+ck$wrmonth:	db 2,10001000b	;Write month
+wrmonth:	db	0
+ck$wryear:	db 2,10001100b	;Write year
+wryear:		db	0
+ck$prot:	db 2,10001110b ;Control Register WP bit ON
+		db	10000000b
+		db 0	; end of table
+
+  endif	; Z280RC
+
+;
+dbase	equ	2922		;Base date of Tue 31-Dec-85
+
+badver:	db	13,10,'TIME - requires '
+  if	S100$SYSTEM
+	db	'Banked Memory '
+  endif
+	db	'CP/M-Plus$'
+
+parsemsg:
+	db	13,10,'Could not parse input date/time "'
+cmdtail:
+	db	'$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$'	;32 characters
+
+usagemsg:
+	db	13,10
+	db	13,10,'TIME - Set the CP/M-Plus time from the '
+  if	S100$SYSTEM
+	db	'DS1216'
+  endif
+  if	Z280RC
+	db	'DS1302'
+  endif
+	db	' timekeeper chip.'
+	db	13,10
+	db	13,10,'Usage: TIME		- Get time'
+	db	13,10,'       TIME time-spec	- Set new date/time'
+	db	13,10
+	db	13,10,'where time-spec is Day dd-mmm-yyyy HH:MM:SS'
+	db	13,10,'$'
+
+badspec:
+	db	13,10,'The specified date/time is not valid.'
+	db	13,10,'Date and Time on the '
+  if	S100$SYSTEM
+	db	'DS1216'
+  endif
+  if	Z280RC
+	db	'DS1302'
+  endif
+	db	' chip not changed.'
+  if	S100$SYSTEM
+	db	7,7,7
+  endif
+	db	'$'
+
+badmsg:
+	db	13,10,'Time values not valid. Unable to read the '
+  if	S100$SYSTEM
+	db	'DS1216'
+  endif
+  if	Z280RC
+	db	'DS1302'
+  endif
+	db	' chip clock.'
+	db	13,10,'CP/M System Date and Time have not been set.'
+  if	S100$SYSTEM
+	db	7,7,7
+  endif
+	db	'$'
+
+leaps:	db	88h		;Table of leap years
+	db	92h		; (until 2039 should be OK)
+	db	96h
+	db	00h
+	db	04h
+	db	08h
+	db	12h
+	db	16h
+	db	20h
+	db	24h
+	db	28h
+	db	32h
+	db	36h
+	db	0ffh		;End of table marker
+
+wdays:	db	'SunMonTueWedThuFriSat'
+udays:	db	'SUNMONTUEWEDTHUFRISAT'
+
+;Table of abbreviated month names.
+mthnam:	db	'JanFebMarAprMayJunJulAugSepOctNovDec'
+umonths:
+	db	'JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC'
+
+mdays:	db	31		;Table of days per month
+febday:	db	28
+	db	31
+	db	30
+	db	31
+	db	30
+	db	31
+	db	31
+	db	30
+	db	31
+	db	30
+	db	31
+
+date:	ds	2		;Number of days since 31-Dec-78
+hh:	ds	1
+mm:	ds	1
+
+secsscb:
+	db	05Ch		;Offset to seconds
+	db	0FFh		;Set
+ss:	db	00h		;Seconds value in BCD
+
+basescb:
+	db	05Dh		;Get SCB parameter block
+	db	0		; to fetch common memory
+	dw	0000h		; base address
+
+conoscb:
+	db	024h		;SCB to fetch scb$conout
+	db	0
+	dw	0000h
+
+dflgscb:
+	db	00Ch		;SCB to fetch Date Flag
+	db	0
+	dw	0000h
+
+  if	S100$SYSTEM
+pattern:
+	defb	0c5h,03ah,0a3h,05ch,0c5h,03ah,0a3h,05ch
+  endif
+;
+DAYTIM::	;Buffer to create ASCII date/time string
+	db	'Day DD-MMM-YY HH:MM:SS',13,10,'$'
+;
+usuk:	db	0		;Date format US=0, UK=1
+tsize3:	ds	1
+;
+z80msg:	db	'Requires a Z80 CPU',13,10,'$'
+;
+time::
+s100th::
+	defs	1		;Hundredths of seconds
+secs::	defs	1		;Seconds
+mins::	defs	1		;Minutes
+hours::	defs	1		;Hours
+wday::	defs	1		;Day of week
+day::	defs	1		;Day of month
+month::	defs	1		;Month
+year::	defs	1		;Year
+;
+  if	Z280RC
+z280msg:
+	db	'Requires a Z280 MPU',13,10,'$'
+sysmod::
+	defs	1		;System (0) or User Mode (1) flag
+savctl::
+	defs	2		;Saved IOPage register
+  endif	; Z280RC
+;
+	defs	64
+stack:	defw	0100h
+;
+	end	begin
