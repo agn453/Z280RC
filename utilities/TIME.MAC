@@ -90,7 +90,20 @@ BANK$SUPPORT equ false		; TRUE to enable User mode support
 sc$IOPage equ	0	; System Call to select IOPage
 
     endif
-  endif
+
+;
+; Z280 MPU work-around for OUTJMP defect which may be
+; triggered by a cache pipe-line fault for an I/O write
+; instruction followed by any jump instruction (for an
+; external write with wait states).
+;
+outjmp	macro
+	nop
+	nop
+	nop
+	endm
+
+  endif	;Z280RC
 ;
 BDOS	equ	0005h
 ;
@@ -1138,6 +1151,7 @@ outb1:	ld	a,00000100b	;nRST and SCLK bits are ready for rra
 	out	(watch),a	;Data bit is high bit, nRST=1, SCLK=0
 	or	00000001b	;Set SCLK=1
 	out	(watch),a	;This latches the data bit (on rising SCLK)
+	outjmp			;(OUTJMP prevention)
 	djnz	outb1		;next bit
 
 	dec	c
