@@ -10,27 +10,26 @@ const signon = ^m^j'OUT/JMP-Tester V1.0  TR 300391'^m^j;
 from an output command and a 'program flow change' command (eg CALL/JMP).
 
 According to Errata Sheet to Z280 errors may occur when after a
-'external write with wait states' executes a command that returns the
-Pipeline of the processor is deleted. For the CPU280, the former is only at
-I/O Write (i.e., OUT) possible. Except for CALL and JMP the pipeline will be
+'external write with wait states' executes a command that causes the
+pipeline of the processor to be deleted. For the CPU280, this can only happen
+after an I/O Write (i.e., OUT). Except for CALL and JMP the pipeline will be
 also deleted with PCACHE and LDCTL, whereby LDCTL is privileged and
 therefore, it does not need to be checked here (only occurs in the BIOS).
 Return-Commands are uncritical with an external stack (in general with
 the CPU280).
 
 The program OUTJMP examines files for the occurrence of such 'forbidden'
-Sequences and displays these as well as their address location. To be examined
-only programs with direct I/O control, ie  programming software for EPROMs/
+sequences and displays these as well as their address location. Only programs
+with direct I/O control need to be examined, ie programming software for EPROMs/
 PALs and the like as well as communication programs.  Not all the detected
-sequences represent possible problems (for example, data fields may have
-been misinterpreted).
+sequences represent possible problems (for example, data fields may be
+misinterpreted).
 
-If sequences are found, it must first be checked if they are correct
-were interpreted. If so, the program should be that way
-be patched that between the two commands at least one
-'normal' command, preferably an IN command is executed. In the
-In most cases, this will only be done by offloading the sequence into
-a mini-library subroutine. *)
+If sequences are found, you should check to see if such sequences have been
+correctly interpreted. If so, the program should be patched so at least one
+'normal' op-code is inserted between the two commands (preferably an IN
+command).  In most cases you can re-code the sequence as a subbroutine that
+can be CALLed and returned from before the flow is changed (by a JMP). *)
 
 (* Tables of all conceivable OUT commands (except D3xx) *)
 
@@ -101,7 +100,7 @@ begin
   assign(f,filnam);
   {$I-} reset(f); {$I+}
   if ioresult<>0 then begin
-    writeln('Datei ',filnam,' cannot be opened!');
+    writeln('File ',filnam,' cannot be opened!');
     halt; end;
 
   blockread(f,buf,9,secs);
