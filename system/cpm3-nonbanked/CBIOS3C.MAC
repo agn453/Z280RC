@@ -1021,8 +1021,8 @@ write:
 	ld hl,(dmaad)	; DMA address
 	ld c,CFdata	; reg C points to CF data reg
 	ld b,0h		; sector has 256 16-bit data
-	db 0edh,93h	; op code for outiw, output word and increment
-;	outiw
+	db 0edh,93h	; op code for otirw, output word and increment
+;	otirw
 	call readbsy	; check busy bit for write completion
 	call UARTPage	; restore the page i/o reg to UART
 	pop bc		; restore registers
