@@ -2,7 +2,7 @@
 ;AGN 20180718 Rev C - clock routines and DS1302 support. Also allow GENCPM
 ;		to allocate space for the disk allocation vectors (no longer
 ;		need ALV00..ALV04 allocated in the BIOS - except when LOADER
-;		is defined non-zero)
+;		is defined non-zero). Also OUTJMP workaround.
 ;AGN 20180716 Rev B - adjust CONST, CONOST, CONIN and CONOUT and add LIST,
 ;		LISTST, AUXIN, AUXOUT, AUXOST, AUXIST, DEVTBL and DEVINI
 ;AGN 20180709 Rev A - fix RAM disk on Z280RC (only 2Mb RAM) 0x80000-0x1FFFFF
@@ -73,6 +73,19 @@ dma		equ	26
 bdos		equ 5
 iobyte		equ 3
 cdisk		equ 4
+
+;AGN
+;
+; Z280 MPU work-around for OUTJMP defect which may be
+; triggered by a cache pipe-line fault for an I/O write
+; instruction followed by any jump instruction (for an
+; external write with wait states).
+;
+outjmp	macro
+	nop
+	nop
+	nop
+	endm
 
 	CSEG
 ; jump vector table used by CP/M
@@ -451,6 +464,7 @@ gclko:	ld a,00000100b		;(nRST 1 SCLK 0) shifted left
 	out (watch),a		;output bit (nRST 1 SCLK 0, data in bit 7)
 	or 00000001b		;raise SCLK to 1 to latch data output bit
 	out (watch),a		;output bit (nRST 1 SCLK 1, data in bit 7)
+	outjmp
 	djnz gclko		;repeat for each bit of command byte
 	push hl
 	push bc
@@ -671,6 +685,7 @@ read:
 	out (CF1623),a	; write to CF LA register, MSB
 	ld a,020h		; read CF sector command
 	out (CFstat),a	; issue the CF read sector comand
+	outjmp
 	call readdrq	; check drq bit set before read CF data
 	ld hl,(dmaad)	;y go straight from CF data register to DMA address
 	ld c,CFdata	; reg C points to CF data reg
@@ -1016,6 +1031,7 @@ write:
 	out (CF1623),a	; write to CF LA register, MSB
 	ld a,030h	; CF write command
 	out (CFstat),a
+	outjmp
 	call readdrq	; check drq bit set before writing
 
 	ld hl,(dmaad)	; DMA address
@@ -1023,6 +1039,7 @@ write:
 	ld b,0h		; sector has 256 16-bit data
 	db 0edh,93h	; op code for otirw, output word and increment
 ;	otirw
+	outjmp
 	call readbsy	; check busy bit for write completion
 	call UARTPage	; restore the page i/o reg to UART
 	pop bc		; restore registers

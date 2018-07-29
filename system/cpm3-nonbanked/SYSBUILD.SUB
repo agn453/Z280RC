@@ -7,17 +7,24 @@ date
 ;
 ; Assemble the CP/M-Plus CBIOS3
 ;
-;zsm4 =cbios3c/l
 m80 cbios3c,cbios3c=cbios3c
 ;
 ; Link Non-Banked CP/M-Plus
 ;
 link bios3[os]=cbios3c,scb
+;
+ren gencpm.dat=gencpm3.dat
 gencpm auto display
+ren gencpm3.dat=gencpm.dat
+;
+; Check for possible OUT/JMP issues
+;
+link temp.bin=cbios3c,scb
+outjmpe temp.bin
+era temp.bin
+era temp.sym
 ;
 ; If there were no errors, CPM3.SYS can be copied to the boot drive (A:)
-; NB: Be sure to keep a copy of the original (and previously working) version.
-; Should there be any problem booting, use the CP/M 2.2 boot option to
-; restore the saved version.
+; NB: Be sure to keep a copy of the original (and previously working) version
 date
 put console output to console
