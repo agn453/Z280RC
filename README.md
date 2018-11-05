@@ -46,7 +46,7 @@ and loaded via a special version of the CP/M Loader - TEST.COM
 there is superfluous output for BIOS kernel routines, and a simple debugger
 is invoked prior to starting CP/M's console command processor.  This allows
 memory and register examination as well as memory management manipulation.
-The system seems to start find, and you can navigate different drives and
+The system seems to start fine, and you can navigate different drives and
 run programs.  If I try to use PIP to copy large files from one of the
 CompactFlash drives (A: thru D:) to the RAM disk (drive M:) I get
 verification errors and from then on there appears to be a memory corruption.
