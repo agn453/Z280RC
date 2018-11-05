@@ -1,0 +1,2441 @@
+	title 'Z280RC BIOS Kernel for CP/M Plus(TM) 3.0'
+;
+;		+-----------------------+
+;		|			|
+;		|    B I O S K R N L	|
+;		|			|
+;		+-----------------------+
+;
+;   BIOS Kernel module supporting Bill Shen's Z280RC single
+;   board computer with RC2014 bus interface.  This system
+;   has a Zilog Z280 MPU with 2 MBytes of memory, a DS1302
+;   timekeeper and built-in IDE CardFlash interface with
+;   a single serial console interface.
+;
+;   This sourcefile is written in Z280 assembly language and
+;   should be compiled using Hector Peraza's Z80/Z180/Z280
+;   relocating macro-assembler ZSM4.
+;
+;   Configuration options are in the CONFIG.LIB include file.
+;
+;   Non-banked, Banked and CPMLDR versions can be created from
+;   a single sourcefile set by appropriate selection of options.
+;   CP/M submit files to build appropriate CPM3.SYS files are
+;   included.
+;
+;   Device support is in external modules -
+;
+;   IDEHD	IDE Hard Disk interface
+;   RAMDISK	RAM Disk using free memory
+;   CLOCK	DS1302 timekeeper clock
+;   CHARIO	Console Serial port I/O
+;   SCB		System Control Block interface to BDOS
+;
+;   In addition there is a primitive debugging module BIOSDBG
+;   to allow examination of memory, registers and the on-chip
+;   Memory Management Unit.  It is enabled by setting the DEBUG
+;   option in CONFIG.LIB
+;
+;
+;	Author:	Tony Nicholson
+;	Date:	27-Jul-2018
+;
+;   Modification History:
+;
+;	27-Jul-2018	Tony Nicholson	Z280RC system version
+;					(non-banked version)
+;	29-Jul-2018	Tony Nicholson	Banked version without
+;					interrupts using System-Mode
+;					(still not working)
+;	18-Aug-2018	Tony Nicholson	Some (yet-to-be tested)
+;					interrupt routines and
+;					skeleton System-mode/User-mode
+;					code - INT$ENABLED option
+;
+	page
+	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
+	maclib	Z280RCIO.LIB	; Z280RC I/O Port definitions
+	maclib	CONFIG.LIB	; Configuation
+	maclib	MODEBAUD.LIB	; Serial port control definitions
+
+	; BIOS entry points
+
+	public	?boot, ?wboot, ?const, ?conin, ?cono, ?list
+	public	?auxo, ?auxi, ?home, ?sldsk, ?sttrk, ?stsec
+	public	?stdma, ?read, ?write, ?lists, ?sctrn, ?conos
+	public	?auxis, ?auxos, ?dvtbl, ?devin, ?drtbl, ?mltio
+	public	?flush, ?mov, ?tim, ?bnksl, ?stbnk, ?xmov, ?userf
+
+	; I/O Page select routines
+
+	public	iopwatch, iopcf
+	public	ioprrr, iopdma, iopmmu
+	public	iopuart, iopct, iopdef
+	public	pshiop, popiop
+
+	; Utility routines used by other modules
+
+	public	dummy, ?pmsg, ?pderr, ?geco, ?getch
+	public	?phexm, ?phex, ?phexhl, ?putc
+  if debug
+	public	?usrsl
+  endif
+
+	; BIOS modules Temporary Common Stack
+
+  if banked
+	public	@tstack
+  endif
+
+	; Disk communication data items
+
+	public	@dtbl
+	public	@adrv, @rdrv, @trk, @sect
+	public	@dma, @dbnk, @cnt, @dtyp
+
+  if multi$sector$io
+	public	@derflg, @rwcnt
+  endif
+
+	; Memory control and CPU mode
+
+	public	@cbnk, @sumode, @ubnk
+
+	; DMA controller related
+
+	public	dmaxfr, phyahl, cnv12
+
+	; Routines in other modules
+
+	extrn	time		; in CLOCK module
+	extrn	?cinit, @ctbl	; in CHARIO module
+	extrn	?ci, ?cist, ?co, ?cost
+
+	; External data items in the SCB module
+
+	extrn	scb$base	; System Control Block
+	extrn	@civec, @covec, @aivec, @aovec, @lovec
+	extrn	@mxtpa		; Top of TPA
+
+	; External DTBL entries
+	;
+	; IDEHD module
+
+  if idehd
+	extrn	ide00
+    if not ldrbios
+	extrn	ide01, ide02, ide03
+      if partn8
+	extrn	ide04, ide05, ide06, ide07
+      endif ; partn8
+    endif ; not ldrbios
+  endif ; idehd
+
+	; RAMDISK module
+
+  if ramdisk
+	extrn	ram0
+  endif ; ramdisk
+
+  if debug
+	extrn	biosdbg		; Include BIOS Debugger
+  endif
+	page
+;
+; BIOS Jump Vector.
+;
+;	All BIOS routines are invoked by calling
+;	these entry points.
+;
+	common$segment
+
+bios:
+;
+?boot:	jp	boot	; Initial entry on cold start
+?wboot:	jp	wboot	; Re-entry on program exit, warm start
+?const:	jp	const	; Return console input status
+?conin:	jp	conin	; Return console input character
+?cono:	jp	conout	; Send console output character
+?list:	jp	list	; Send list device output character
+?auxo:	jp	auxout	; Send auxiliary output character
+?auxi:	jp	auxin	; Return auxiliary input character
+?home:	jp	home	; Set disks to logical home
+?sldsk:	jp	seldsk	; Select disk drive, return disk parameter info
+?sttrk:	jp	settrk	; Set disk track
+?stsec:	jp	setsec	; Set disk sector
+?stdma:	jp	setdma	; Set disk I/O memory buffer address
+?read:	jp	read	; Read physical block(s)
+?write:	jp	write	; Write physical block(s)
+?lists:	jp	listst	; Return list device output status
+?sctrn:	jp	sectrn	; Translate logical to physical sector
+?conos:	jp	conost	; Return console output status
+?auxis:	jp	auxist	; Return auxiliary input status
+?auxos:	jp	auxost	; Return auxiliary output status
+?dvtbl:	jp	devtbl	; Return address of device definition table
+?devin:	jp	?cinit	; Change serial device settings/baud rate
+?drtbl:	jp	drvtbl	; Return address of disk drive table
+?mltio:	jp	multio	; Set multiple record count for disk I/O
+?flush:	jp	flush	; Flush BIOS maintained disk caching
+?mov:	jp	move	; Block move memory to memory
+?tim:	jp	time	; Get/Set Time and Date timekeeper
+?bnksl:	jp	selmem	; Select bank for code execution and default DMA
+?stbnk:	jp	setbnk	; Select different bank for disk I/O DMA operation
+?xmov:	jp	xmove	; Set source and destination banks for one block move
+?userf:
+  if debug
+	jp	biosdbg	; Enter debugger
+  else
+	jp	dummy	; User defined function (not implemented)
+  endif
+	jp	dummy	; Reserved for future expansion
+	jp	dummy	; Reserved for future expansion
+	page
+;
+; Drive Table
+;
+	common$segment	; Must be in common memory
+
+@dtbl:
+  if idehd
+    if ldrbios
+	; Only IDEHD CardFlash drive A: for booting
+	dtbl	<ide00>
+    else
+      if ramdisk
+	if partn8
+	; Drives A:..H: on IDEHD CardFlash, M: is RAMDISK
+	  dtbl	<ide00,ide01,ide02,ide03,ide04,ide05,ide06,ide07,,,,,ram0>
+	else
+	; Drives A:..D: on IDEHD CardFlash, M: is RAMDISK
+	  dtbl	<ide00,ide01,ide02,ide03,,,,,,,,,ram0>
+	endif ; partn8
+      else
+	if partn8
+	; Drives A:..H: on IDEHD CardFlash
+	  dtbl	<ide00,ide01,ide02,ide03,ide04,ide05,ide06,ide07>
+	else
+	; Drives A:..D: on IDEHD CardFlash
+	  dtbl	<ide00,ide01,ide02,ide03>
+	endif ; partn8
+      endif ; ramdisk
+    endif ; ldrbios
+  else
+	; Sanity check we have a system boot device
+	.printx	"System storage device IDEHD not defined"
+  endif ; idehd
+	page
+;
+; BOOT
+;
+;	Initial entry point for system startup
+;
+	bank0$segment	; This is only called on start-up in bank 0
+
+boot:	
+	di
+
+  if ldrbios			; CPMLDR uses a local stack, so
+	ld	(@stack),sp	; save it so we can return to it
+  endif
+
+	ld	sp,@stack	; Common memory stack
+
+  if banked and int$enabled
+	ld	hl,@ustack	; User-mode stack
+	ldctl	usp,hl
+  endif
+
+  if 0 ; using pre-initialized values
+	xor	a
+	ld	hl,bzero	; Set all *BNK variables to zero
+	ld	b,bzerol	; (@DBNK, @CBNK, @UBNK, @SUMODE
+bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
+	inc	hl
+	djnz	bz0
+
+	ld	c,1		; Set MULTIO variables to 1 sector
+	call	multio
+  endif
+
+;
+; Refresh Register defaults (taken from ZZMON)
+;
+	call	ioprrr
+	ld	a,10110000b	; 16 microsecond refresh
+				; Enable (bit 7) rate=48 (bits 5..0)
+	out	(rrr),a		; (this is an 8-bit byte port)
+	outjmp
+
+;
+; Cache control
+;
+	pcache			; Purge existing cache (if any)
+
+  if cache$on
+	ld	l,00000000b	; Enable cache for instructions & data
+		; On-chip Memory/nCache is Cache (bit 7 OFF)
+		; Cache Instruction enabled (bit 6 OFF)
+		; Cache Data enabled (bit 5 OFF)
+		; Low Memory Burst disabled (bit 4 OFF)
+		; High Memory Burst disabled (bit 3 OFF)
+		; (bits 2..0 unused)
+  else
+	ld	l,01100000b	; Disable cache
+  endif ; cache$on
+
+	ld	c,ccr
+	ldctl	(c),hl
+
+;
+; Set-up onchip DMA controllers
+;
+;	call	iopdma	; I/O page for DMA is same as already set for RRR
+
+	ld	hl,0000000000000000b	; DMA Transaction Description
+		; Disable channel (bit 15 OFF)
+		; DMA Interrupts disabled (bit 11 OFF)
+	ld	c,tdr0		; For DMA0
+	outw	(c),hl
+	ld	c,tdr1		; For DMA1
+	outw	(c),hl
+	ld	c,tdr2		; For DMA2
+	outw	(c),hl
+	ld	c,tdr3		; For DMA3
+	outw	(c),hl
+
+	ld	hl,1111000010000000b	; DMA Master control
+		; Software Ready disabled for DMA1 & DMA0 (bits 6,5 OFF)
+		; Disable EOP, Linking for DMA1 & DMA0 (bits 4,3,2 OFF)
+		; Disable UART to DMA1 & DMA0 (bits 1,0 OFF)
+	ld	c,dmcr
+	outw	(c),hl
+
+  if banked
+;
+; Load the MMU page description registers
+;
+;	call	iopmmu	; I/O page for MMU is the same as already set for DMA
+
+	ld	hl,mmtab0	; Point System-mode PDRs to Bank 0
+	ld	a,spdr0
+	out	(pdr),a
+	ld	bc,16*256+bmp	; 16 words to MMU block move port
+	otirw
+
+	ld	hl,mmtab1	; Also point User-mode PDRs to TPA bank
+	ld	a,updr0
+	out	(pdr),a
+	ld	bc,16*256+bmp	; 16 words to MMU block move port
+	otirw
+	ld	a,tpa$bank	; Initialise User-mode Bank
+	ld	(@ubnk),a
+
+	ld	hl,1011101111100000b
+		; User-mode translate enable (bit 15 ON)
+		; 4K page size - no I/D mode (bit 14 OFF)
+		; System-mode translate enable (bit 11 ON)
+		; 4K page size - no I/D mode (bit 10 OFF)
+		; Page Fault indicators cleared (bits 4..0)
+		; (bits 13, 12 and 9..5 unused - but set ON)
+
+	ld	c,mmcr		; MMU Master Control Register
+	outw	(c),hl		; Enable memory management unit
+
+  endif
+
+;
+; Initialize Character devices
+;
+	ld	c,15		; Count down from 15..0
+initc0:	push	bc
+	call	?cinit		; Call the CHARIO module
+	pop	bc
+	dec	c
+	jp	p,initc0
+
+	; ?CINIT has set the I/O page to UARTP
+;
+; Initialize Disk Drive controllers
+;
+  if 0	; IDEHD and RAMDISK need no initialization - so skip this
+
+	ld	bc,16*256+0	; count 16 in B, drive 0 in C
+	ld	hl,@dtbl	; Do all 16 logical disk drives
+initd0:	push	bc
+	ld	e,(hl)		; Fetch drive entry to DE
+	inc	hl
+	ld	d,(hl)
+	inc	hl
+	ld	a,e		; Is it zero?
+	or	d
+	jr	z,initd1	; Yes, skip to next drive
+	push	hl		; Save @DRV pointer
+	ex	de,hl
+	dec	hl
+	dec	hl
+	ld	a,(hl)		; Get controller relative drive
+	ld	(@rdrv),a
+	ld	a,c		; Absolute drive
+	ld	(@adrv),a
+	dec	hl
+	ld	d,(hl)		; fetch init routine pointer to DE
+	dec	hl
+	ld	e,(hl)
+	ex	de,hl
+	call	ipchl		; Invoke the init routine
+	pop	hl
+initd1:	pop	bc		; Next drive
+	inc	c
+	djnz	initd0
+  endif ; 0
+
+  if banked
+	ld	hl,0000h	; Clear all Interrupt vector enable bits
+	ld	c,isr
+	ldctl	(c),hl
+
+	ld	l,00000000b	; Reset Trap control
+		; I/O is not privileged (bit 2 OFF)
+		; EPU disabled (bit 1 OFF)
+		; Stack Overflow Warning disabled (bit 0 OFF)
+	ld	c,tcr
+	ldctl	(c),hl
+  endif ; banked
+
+	ld	hl,deflts	; Set default character I/O
+	ld	de,@civec	; device vectors to the SCB
+	ld	bc,defltl
+	ldir
+
+  if banked
+    if int$enabled
+	ld	hl,itvt		; Copy the Interrupt and Trap
+	ld	de,1000h	;  Vector table to 001000h
+	ld	bc,itvtl
+	ldir
+
+	ld	hl,0010h	; Interrupt/Trap vector table at 001000h
+	ld	c,itv
+	ldctl	(c),hl
+
+	im	3
+
+	ei			; Enable interrupts
+    endif ; int$enabled
+  endif ; banked
+
+	ld	hl,signon
+	call	?pmsg		; Output system BIOS sign-on message
+
+  if banked
+	jp	bootc		; Back to common memory
+
+	common$segment
+
+bootc:
+  endif ; banked
+
+  if ldrbios			; All done for CPMLDR
+	ld	sp,(@stack)	;  so restore stack and return
+	ret
+  else
+
+    if 0 and debug
+	enter$debug	; Temporary Breakpoint
+    endif
+
+	call	setjumps	; This also sets @CBNK to the TPA$BANK
+	call	?ldccp
+
+    if debug
+	enter$debug	'BIOSDBG active. Use (C)ontinue to enter CP/M'
+    endif ; debug
+
+	jp	tpa
+
+  endif ; ldrbios
+
+;
+; Default character I/O device vectors
+;
+	bank0$segment
+
+signon:	config			; macro has a DEFZ signon string and date
+
+deflts:	defw	def$civec	; Console input
+	defw	def$covec	; Console output
+	defw	def$aivec	; Auxiliary input
+	defw	def$aovec	; Auxiliary output
+	defw	def$lovec	; List output
+defltl	equ	$-deflts
+
+  if banked
+    if int$enabled
+; 
+; Interrupt Trap Vector Table for Z280 MCU
+;
+	; This table holds pairs of MSR and Handler addresses
+	; and is copied to Physical address 001000h
+
+	bank0$segment
+itvt:
+	di			; First Entry in this Table is reserved
+	jp	?boot		; (and contains a jump to Cold Boot)
+	defw	int$mask,nmint	; NMI (is tied high via a pull-up resistor)
+	defw	0,iret3		; INTA
+	defw	0,iret3		; INTB
+	defw	0,iret3		; INTC
+	defw	0,iret3		; CT0
+	defw	0,iret3		; CT1
+	defw	0,iret3		; reserved
+	defw	0,iret3		; CT2
+	defw	0,iret3		; DMA0
+	defw	0,iret3		; DMA1
+	defw	0,iret3		; DMA2
+	defw	0,iret3		; DMA3
+	defw	0,iret3		; UART Receiver
+	defw	0,iret3		; UART Transmitter
+	defw	0,iret2		; Single Step Trap
+	defw	0,iret2		; Breakpoint on Halt Trap
+	defw	int$mask,divtrp	; Division Exception Trap
+	defw	int$mask,stotrp	; Stack Overflow Trap
+	defw	int$mask,acctrp	; Access Violation Trap
+	defw	int$mask,syscall; System Call Trap
+	defw	int$mask,privil	; Privileged Instruction Trap
+	defw	0,iret4		; EPU <- Memory Extended Instruction Trap
+	defw	0,iret4		; Memory <- EPU Extended Instruction Trap
+	defw	0,iret4		; A <- EPU Extended Instruction Trap
+	defw	0,iret4		; EPU Internal Operation Extended Trap
+	defw	0,iret3		; reserved (68h)
+	defw	0,iret3		; reserved (6Ch)
+
+itvtl	equ	$-itvt
+
+;
+; Interrupt and Trap Handling routines
+
+	common$segment
+;
+; System Call
+;
+;	Process SC instruction
+;
+; Enter with Function number (16 bit) on top of stack
+;	followed by the MSR register contents (16 bit)
+;	and return address.
+;
+syscall:
+	pop	(@sysfn)	; Pop function number
+;
+; NOT YET IMPLEMENTED
+;
+	retil
+
+@sysfn:	defs	2
+
+;
+; Access Violation Trap
+;
+acctrp:	pop	hl		; Discard MSR from stack
+	ld	hl,accmsg	; Output "Access Violation"
+	call	?pmsg		; (also selects the UARTP I/O page)
+	pop	hl
+	call	?phexhl		; Followed by the address in hex
+	ld	hl,pdrmsg	; then the MMU PDR in hex
+	call	?pmsg
+	call	iopmmu
+	inw	hl,(mmcr)
+	ld	a,l
+	and	00011111b	; Lower 5 bits is PFI
+	call	?phex
+	jr	iabort
+
+;
+; Non-Maskable Interrupt (This should NEVER be called)
+;
+nmint:	; Everything is lost if we get here
+	ld	sp,@stack	; Reset System Stack
+	ld	hl,nmimsg	; Output "*NMI" to console
+	call	?pmsg
+	ld	a,(scb$base+18h) ; CCP$FLGS in BDOS system control block
+	call	?phex		; Output it in hex on console
+	ld	a,'*'		;  followed by a "*"
+	call	?putc
+	ld	hl,scb$base+18h	; Reset chain to program bit in CCP$FLGS
+	res	7,(hl)
+	jp	?wboot
+
+;
+; Handle Privileged Instruction TRAP
+;
+; Allow DI and EI, all others get diagnostic message and re-start
+;
+privil:
+	pop	(msrsav)	; Save MSR from top of stack
+	ld	(hlsav),hl	; Save HL
+	pop	hl		; Address where TRAP occurred to HL
+	push	af		; Save AF
+	ldup	a,(hl)		; Get Opcode from User Address Space
+	cp	0f3h		; DI op-code?
+	jr	z,privdi
+	cp	0fbh		; EI op-code?
+	jr	z,privei
+	cp	0edh		; LDCTL (C),HL op-code?
+	jr	nz,priabo	; No, abort
+	inc	hl
+	ldup	a,(hl)		; Second byte of LDCTL (C),HL?
+	dec	hl
+	cp	06eh
+	jr	nz,priabo	; No, abort
+	ld	a,c		; Only allow access to IOP register
+	cp	iop
+	jr	nz,priabo
+	; OK - it's a LDCTL (C),HL referring to the I/O Page register
+	pop	af
+	inc	hl		; Advance over LDCTL (C),HL instruction
+	inc	hl
+	push	hl		; Back to stack for return
+	push	(msrsav)	; along with MSR
+	ld	hl,(hlsav)	; Restore HL
+	ldctl	(c),hl		; Execute the LDCTL (C),HL
+	retil			; and return to User-mode code
+
+priabo:	pop	af		; Restore AF
+
+	; We are about to abort back to Warm-start
+	; so we don't need to preserve any registers
+
+	push	hl		; Save address of trap
+	ld	hl,primsg	
+	call	?pmsg		; Output "Privileged Instruction "
+
+	ld	hl,(msrsav)	; Output MSR
+	call	?phexhl
+	ld	hl,atmsg
+	call	?pmsg
+
+	ld	a,(@cbnk)	; Output last bank selected in User-mode
+	call	?phex
+
+	pop	hl		; Get trap address
+	call	?phexhl		; Output Address
+	ld	a,':'		; Output a colon
+	call	?putc
+	ld	b,3		; Output 3 bytes of Op-Code in hex
+privlp:	ldup	a,(hl)		; (fetched from User-mode address space)
+	call	?phex
+	inc	hl
+	djnz	privlp
+iabort:
+      if int$debug
+	push	biosdbg		; Force entry to debugger
+      else
+	push	?wboot		; Warm boot entrypoint to stack
+      endif ; int$debug
+	push	int$mask	;  and default Interrupt Mask
+				;  (back to System-mode)
+	retil			; Interrupt return to re-start
+
+privdi:	pop	af		; Restore AF
+	inc	hl		; Advance "return address" past DI
+	push	hl
+	ld	hl,(msrsav)
+	ld	l,i$none	; Disable interrupts (all bits)
+	jr	priret
+
+privei:	pop	af		; Restore AF
+	inc	hl		; Advance "return address" past EI
+	push	hl		; Back on the stack
+	ld	hl,(msrsav)	; Set interrupt enable bits in MSR
+	ld	l,int$mask	; (lower 7 bits of MSR is the int mask)
+priret:	push	hl		; Save new MSR (with changed int mask)
+	ld	hl,(hlsav)	; Restore HL
+	retil			; Back to User-mode with interrupts disabled
+
+;
+; Division Exception Trap
+;
+divtrp:	pop	hl		; Discard MSR from stack
+	ld	hl,ovfmsg	; Message for "Divide Overflow"
+	jr	nz,divtrp1	
+	ld	hl,dv0msg	; It was "Divide by 0"
+divtrp1:
+	call	?pmsg		; Output message
+	pop	hl
+	call	?phexhl		; Followed by the address in hex
+	jr	iabort		; Abort via Warm-Boot
+
+;
+; Stack Overflow Trap
+;
+stotrp:	pop	hl		; Discard MSR from stack
+	ld	hl,stomsg	; Message for "Stack Overflow"
+	jr	divtrp1
+
+nmimsg:	defz	cr,lf,'*NMI'
+primsg:	defz	cr,lf,'Privileged instruction MSR='
+atmsg:	defz	' at '
+dv0msg: defz	cr,lf,'Divide by 0 at '
+ovfmsg:	defz	cr,lf,'Divide Overflow at '
+stomsg:	defz	cr,lf,'System Stack Overflow at '
+accmsg:	defz	cr,lf,'Access Violation'
+pdrmsg:	defz	' using PDR '
+
+hlsav:	defs	2
+msrsav:	defs	2
+
+;
+; Interrupt Returns
+;
+; Just correct the Stack Pointer and Return
+;
+iret4:	inc	sp	; Discard 4th item on stack
+	inc	sp
+iret3:	inc	sp	; Discard 3rd item on stack
+	inc	sp
+iret2:	retil		; Pop MSR and return
+
+    endif ; int$enabled
+  endif ; banked
+
+;
+; WBOOT
+;
+;	Warm boot
+;
+	common$segment
+
+wboot:
+  if banked and int$enabled
+	ld	a,(@sumode)	; Are we in System-mode?
+	or	a
+	jr	z,wbsys		; Yes
+	ld	sp,@ustack	; No, put stack in common
+	xor	a
+	sc	sc$sumode	;  and back to System-mode
+wbsys:
+  endif
+
+	ld	sp,@stack
+
+  if banked and int$enabled
+	ld	hl,@ustack	; Load a User-mode stack pointer
+	ldctl	usp,hl
+  endif
+
+  if ldrbios
+	ret
+  else
+	call	setjumps	; Init base page of TPA
+	call	?rlccp		; Re-load CCP
+	jp	tpa
+  endif
+
+;
+; DRVTBL
+;
+;	Return address of Drive Table in HL
+;
+	common$segment
+
+drvtbl:
+	ld	hl,@dtbl
+dummy:	ret
+
+;
+; XMOVE
+;
+;	Select banks for subsequent extended
+;	address memory block move
+;
+; Entry		B = destination bank
+;		C = source bank
+;
+	common$segment
+
+xmove:
+	ld	(@msbnk),bc	; Save C to @MSBNK and B to @MDBNK
+	ld	a,1		; Set extended move flag
+	ld	(@xmflg),a
+	ret
+
+;
+; MOVE
+;
+;	Memory block move
+;
+;	Copies BC bytes from the address pointed
+;	to by DE to the address pointed to by HL
+;
+	common$segment
+
+move:	push	hl		; Save destination
+	push	de		; Save source address
+				; HL has destination address
+				; BC has byte count
+
+	ld	a,(@xmflg)	; Is it an extended move?
+	or	a
+	jp	nz,bnkdif	; Yes
+
+	ld	a,(@cbnk)	; No, set source and destination banks
+	ld	(@msbnk),a	;  to the current bank
+	ld	(@mdbnk),a
+
+bnkdif:
+
+  if krnl$debug
+	ld	(@dstack),sp	; Save stack pointer
+	ld	sp,@dstack	; (To prevent the possibility of
+				;  stack overflow from debugging
+				;  output)
+	push	hl		; Save dest
+	push	de		; Save src
+	push	bc		; Save count
+
+	push	hl		; Save Dest again for printing
+	push	de		; Save Source again
+	ld	hl,mov$msg	; Output "MOVE from P"
+	call	?pmsg
+	ld	a,(@msbnk)	; Output source bank
+	call	?phex		
+	pop	hl		; Pop Source
+	call	?phexhl		; Output source address
+	ld	hl,to$msg	; Output " to "
+	call	?pmsg
+	ld	a,(@mdbnk)	; Output destination bank
+	call	?phex
+	pop	hl		; Pop Dest
+	call	?phexhl		; Output destination address
+	call	?space
+	pop	hl		; Pop Count
+	push	hl		; and re-save it
+	call	?pdec		; Output count in decimal
+	pop	bc
+	pop	de
+	pop	hl
+	ld	sp,(@dstack)	; Restore stack
+  endif
+
+	ld	(mvcnt),bc	; Byte Count to parameter block
+
+	ld	a,(@mdbnk)	; Destination logical 24-bit address in AHL
+	call	phyahl		; Convert to physical address
+	call	cnv12		; Convert to two 12-bit DMA format
+	ld	(mvdst),hl	; Save into parameter block
+	ld	(mvdst+2),de
+
+	ld	a,(@msbnk)
+	pop	hl		; Source logical 24-bit address in AHL
+	push	hl		; and put source back on stack
+	call	phyahl
+	call	cnv12
+	ld	(mvsrc),hl
+	ld	(mvsrc+2),de
+
+	ld	c,dal3		; Transfer it using DMA3
+	ld	hl, mvprog
+	call	dmaxfr
+
+	ld	bc,(mvcnt)	; Restore byte count
+
+	pop	hl		; Restore source
+	add	hl,bc		;  advance it by byte count
+	ex	de,hl		;  and put it back in DE
+	pop	hl		; Restore destination
+	add	hl,bc		;  and advance it too
+
+	xor	a		; Clear extended move flag
+	ld	(@xmflg),a
+
+	ret
+
+mvprog:	; DMA controller parameters
+mvdst:	defw	0000h		; Destination (low 12 bits)
+	defw	0000h		;  (high 12 bits)
+mvsrc:	defw	0000h		; Source (low 12 bits)
+	defw	0000h		;  (high 12 bits)
+mvcnt:	defw	0000		; Byte count
+	defw	dma$descriptor	; DMA controller descriptor
+
+;
+; MULTIO
+;
+;	Set multiple sector count
+;
+;	Saves passed count in @CNT as a hint for
+;	upcoming READ or WRITE requests, and @RWCNT
+;	which counts down the requests.
+;
+	bank0$segment
+
+multio:
+	ld	a,c
+	ld	(@cnt),a
+  if multi$sector$io
+	ld	(@rwcnt),a
+  endif
+	ret
+
+;
+; FLUSH
+;
+;	BIOS deblocking buffer flush.  Not implemented.
+;
+flush:
+	xor	a
+	ret
+
+;
+; ?USRSL
+;
+;	Select Bank for Z280 User-mode
+;
+	common$segment
+
+?usrsl:
+  if banked
+	ld	(@ubnk),a	; Save User-mode bank
+	ld	(selbnk),a
+;	ld	a,updr0		; Point MMU to User-PDR page 0
+	xor	a
+	jr	selpdr
+  endif
+;
+; SELMEM
+;
+;	Select memory bank (in A register)
+;
+selmem:
+  if banked
+	ld	(@cbnk),a	; Save new bank to current bank
+	ld	(selbnk),a
+	ld	a,spdr0		; Point MMU to System-PDR page 0
+
+selpdr:
+	push	hl		; Save registers
+	push	de
+	push	bc
+	call	pshiop		; Push current I/O page
+
+    if krnl$debug
+	push	af
+	ld	hl,sel$msg	; Output '?BNKSL Select Bank '
+	call	?pmsg
+	ld	a,(selbnk)
+	call	?phex
+	pop	af
+    endif
+
+	ld	l,mmup		; Select MMU I/O page
+	ld	c,iop
+	ldctl	(c),hl
+
+	out	(pdr),a		; Pointer to User or System-mode PDRs
+
+	ld	de,0		; Selected Bank to DE
+selbnk	equ	$-2		; (bank we're selecting modifies code)
+
+	ld	hl,ptablst	; Index into Page Table list
+	add	hl,de
+	add	hl,de
+	ldw	hl,(hl)		; Fetch address of PDRs to HL
+
+	ld	bc, 14*256+bmp	; Change PDRs 0..13 (Leave common PDRs alone)
+	otirw
+	outjmp
+
+	call	popiop		; Restore I/O Page register
+	pop	bc		;  and registers
+	pop	de
+	pop	hl
+  endif
+	ret
+
+  if banked
+;
+; MMU Page Table
+;
+;
+; For a Non-Banked system, we run everything in System-mode with all
+; of CP/M in Bank 00.  RAMdisk (if enabled) uses memory addresses
+; 080000..1FFFFF and is accessed using the built-in DMA3 controller.
+;
+; All interrupts are disabled.
+;
+; Memory Map (Non-Banked)
+;
+; System Bank
+;
+; 000000	Bank 00	0000-ffff	64KB contains TPA, BDOS and BIOS
+;
+; Not Used
+; 010000	Bank 01..07	0000-ffff
+;
+; RAMdisk
+; 080000	Bank 08..1F	0000-ffff	RAMdisk (1.5MB)
+;
+; ----------------------------------------------------------------
+;
+; For a Banked system, everything runs in System-mode for now. (Perhaps
+; later we can add support for User-mode)
+;
+; Inter-bank memory moves use the on-chip DMA3 controller.
+;
+; Memory Map (Banked)
+;
+; System Bank
+;
+; Physical	Bank	Logical		Description
+; Address		Address Range
+; 000000	00	0000-00ff	Used for loading CP/M
+; 000100	00	0100-0d7f	Copy of CCP.COM
+; 000d80	00	0d80-0fff	(reserved and currently not used)
+; 001000 	00	1000-11ff	Interrupt Trap Vector Table
+; 001200	00	1200-dfff	Banked part of CP/M BDOS/BIOS and
+;					and CP/M directory buffers
+; 00f000	All	e000-ffff	Common Memory (in all banks)
+;
+; TPA Bank
+; 010000	01	0000-00ff	CP/M Page 0 (JP vectors, FCBs)
+; 010100	01	0100-dfff	TPA (user programs) - extends into
+;					common memory up to BDOS entry
+;
+; CP/M-Plus Data Buffers
+; 01e000	02..03	0000-efff	CP/M Buffers
+;
+; Not-used
+; 03a000	04..08	0000-efff
+;
+; RAM Drive
+; 080000	09..1F	0000-ffff	RAMdisk (accessed via DMA3)
+;
+; Common memory contains only the Hardware Dependent buffer
+; space, Resident BDOS and Resident parts of the BIOS - including
+; future planned Interrupt Handlers and buffers.
+;
+;
+; Memory Management Unit PDR format
+;
+;+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+;|15  |14  |13  |12  |11  |10  | 9  | 8  | 7  | 6  | 5  | 4  | 3  | 2  | 1  | 0  |
+;|                 12-bit Page Frame Address                 |  V | WP |  C |  M |
+;+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+----+
+;
+; V = Valid, WP = Write-Protect, C = Cacheable, M = Modified
+;
+valid$noncacheable equ 1000b	; V (bit 3) and C (bit 1) in the PDR
+valid$cacheable	equ 1010b
+
+    if cache$on
+pdr$mode$bits equ valid$cacheable
+    else
+pdr$mode$bits equ valid$noncacheable
+    endif ; cache$on
+
+;
+; User-mode PDR select register value
+; (only used to set User-mode PDRs to TPA bank)
+;
+updr0	equ	00h	; Page 0 (0000..0FFF)
+
+;
+; System-mode PDR select register values
+;
+spdr0	equ	10h	; Page 0 (0000..0FFF)
+spdr1	equ	11h	; Page 1 (1000..1FFF)
+sprd2	equ	12h	; Page 2 (2000..2FFF)
+spdr3	equ	13h	; Page 3 (3000..3FFF)
+spdr4	equ	14h	; Page 4 (4000..4FFF)
+spdr5	equ	15h	; Page 5 (5000..5FFF)
+spdr6	equ	16h	; Page 6 (6000..6FFF)
+spdr7	equ	17h	; Page 7 (7000..7FFF)
+spdr8	equ	18h	; Page 8 (8000..8FFF)
+spdr9	equ	19h	; Page 9 (9000..9FFF)
+spdra	equ	1ah	; Page 10 (A000..AFFF)
+spdrb	equ	1bh	; Page 11 (B000..BFFF)
+spdrc	equ	1ch	; Page 12 (C000..CFFF)
+spdrd	equ	1dh	; Page 13 (D000..DFFF)
+spdre	equ	1eh	; Page 14 (E000..EFFF)
+spdrf	equ	1fh	; Page 15 (F000..FFFF)
+
+;
+; Memory Bank 0 Page Descriptors (used only by SLPDR macro)
+;
+pdr0	equ	000h*16+pdr$mode$bits
+pdr1	equ	001h*16+pdr$mode$bits
+pdr2	equ	002h*16+pdr$mode$bits
+pdr3	equ	003h*16+pdr$mode$bits
+pdr4	equ	004h*16+pdr$mode$bits
+pdr5	equ	005h*16+pdr$mode$bits
+pdr6	equ	006h*16+pdr$mode$bits
+pdr7	equ	007h*16+pdr$mode$bits
+pdr8	equ	008h*16+pdr$mode$bits
+pdr9	equ	009h*16+pdr$mode$bits
+pdr10	equ	00ah*16+pdr$mode$bits
+pdr11	equ	00bh*16+pdr$mode$bits
+pdr12	equ	00ch*16+pdr$mode$bits
+pdr13	equ	00dh*16+pdr$mode$bits
+pdr14	equ	00eh*16+pdr$mode$bits
+pdr15	equ	00fh*16+pdr$mode$bits
+
+; Macro to Select one of the above PDRs (for N = 0..15)
+; and define a word containing the PDR
+
+slpdr	macro	n
+	defw	pdr&n
+	endm
+
+; Macro to generate 16 PDR entries with the specified attribute
+; (Adjacent 4K pages starting at the Page Frame Address
+; plus the Common Memory PDRs)
+
+defpdr	macro	bank,attr
+	local	pf,pg,pn
+pf	aset	bank
+    if (pf lt 0) or (pf gt 17)
+	.printx	'Bank number out of range 0..17'
+	exitm
+    endif
+    if (pf gt 1)
+pf	aset	bank*16-(common$size shr 12)*(bank-1)
+    else
+pf	aset	bank*16
+    endif
+pn	aset	0
+  rept	16
+pg	aset	pf*16+attr
+    if pn lt (common$base shr 12)
+	defw	pg
+    else
+	slpdr	%pn
+    endif
+pf	aset	pf+1
+pn	aset	pn+1
+  endm
+	endm
+
+mmupdr:
+	; Bank 0 (16 pages) 000000..00FFFF (includes Common page)
+
+mmtab0:	defpdr	0,pdr$mode$bits
+
+	; Bank 0 - banked BDOS and BIOS routines and CP/M directory buffers.
+	; Bank 1 is the TPA bank, and Banks 2..3 contain CP/M data buffers.
+	; Banks 4..8 are not used (but can be viewed/cleared with the
+	; BIOSDBG module. Bank 9 is the first 56KB of the RAMDISK.
+
+mmtab1:	defpdr	1,pdr$mode$bits
+mmtab2:	defpdr	2,pdr$mode$bits
+mmtab3:	defpdr	3,pdr$mode$bits
+
+    if debug		; Allow debugging access to unused banks
+mmtab4:	defpdr	4,pdr$mode$bits
+mmtab5:	defpdr	5,pdr$mode$bits
+mmtab6:	defpdr	6,pdr$mode$bits
+mmtab7:	defpdr	7,pdr$mode$bits
+mmtab8:	defpdr	8,pdr$mode$bits
+mmtab9:	defpdr	9,pdr$mode$bits	;RAMDISK (first 56KB)
+    endif ; debug
+
+	; RAMdisk uses Physical addresses 080000..1FFFFF ( 1.5 Mb )
+
+;
+; Page Table List
+;
+ptablst:
+	defw	mmtab0
+	defw	mmtab1
+	defw	mmtab2
+	defw	mmtab3
+    if debug
+	defw	mmtab4
+	defw	mmtab5
+	defw	mmtab6
+	defw	mmtab7
+	defw	mmtab8
+	defw	mmtab9		; In RAMDISK memory
+    endif
+
+  endif ; banked
+
+  if 0	; Old routine replaced by PHYAHL
+	; but keep it here to show how to
+	; look this up.  The result can
+	; be used to program DMA transfer
+	; high 12-bit physical, low 12-bit
+	; is just low 12 bits of logical.
+;
+; PHYADR
+;
+;	Lookup the high 12-bit part of the physical address for
+;	the logical address passed in A (bank) and HL.
+;	Uses the Pagetable data for the MMU.
+;
+	common$segment
+
+phyadr:
+	push	hl		; Save logical address
+	ld	e,a		; Index into the Pagetable list
+	ld	d,0		; to fetch the MMU PDRs for the bank
+	ld	hl,ptablst
+	add	hl,de
+	add	hl,de
+	ldw	hl,(hl)		; Fetch MMTABn address to HL
+	pop	de		; Restore logical address to DE
+	ld	a,d
+	rrca			; Move high 4-bits into position
+	rrca			; (rotate 4 right and one left
+	rrca			;  to get word address offset)
+	and	1eh		; Mask these as an offset into PDRs
+	ld	e,a
+	ld	d,0
+	add	hl,de		; Point to PDR entry in the mmtabn
+	ldw	hl,(hl)		;  and load it into HL (high 12-bit physical)
+	ret
+  endif ; 0
+
+;
+; PHYAHL - Calculate Physical Address from Logical Address
+;
+; On Entry AHL contains the logical address (24 bits)
+;
+; Returns Physical address in AHL (24 bits)
+;
+; For Non-Banked, Physical and Logical addresses are the same.
+; For Banked, we take into account Common Memory.
+;
+	common$segment
+
+phyahl:
+  if banked
+	cp	00h+1		;Bank 0 has logical address
+	ret	c		; equal to physical address
+	cpw	hl,common$base	;Address below common ?
+	jr	c,bnc1		;Yes
+	xor	a		;No, Common is always Bank 0
+	ret
+bnc1:	cp	01h+1		;Bank 1?
+	ret	c		;Yes, logical = physical
+	dec	a		;Bank-1 to A
+	push	bc		;The following will work only
+	ld	b,a		; for banks up to bank 17
+				; so we are safe while we use 0..8
+				; for the CP/M Plus system
+adjust:	subw	hl,common$size	;Take off common memory size
+	djnz	adjust		; for each bank > 1
+	pop	bc
+  endif ; banked
+
+	ret
+
+;
+; CNV12 - Convert address in AHL to two words in "DMA address format"
+; (used for programming a DMA transfer)
+;
+; On exit, DE has the high 12 bits in 15..4 with low nibble all 1s
+; and HL has the low 12 bits in 11..0 with the high nibble all 1s
+;
+cnv12:	ld	d,a		; Bank address to D
+	ld	a,h		; keep bits 15..12
+	or	00001111b
+	ld	e,a		; DE now has high 12 bits
+	ld	a,h		; keeps bits 11.8
+	or	11110000b
+	ld	h,a		; HL now has low 12 bits
+	ret
+
+jmp	equ	0c3h
+
+  if	not ldrbios
+;
+; SETJUMPS
+;
+;	Write CP/M entry vectors (and selects the TPA bank)
+;
+	common$segment
+
+setjumps:
+  if banked
+	ld	a,tpa$bank
+	call	?bnksl
+  endif
+	ld	a,jmp
+	ld	(warmboot),a
+	ld	(bdos),a
+	ld	hl,?wboot
+	ld	(warmboot+1),hl
+	ld	hl,(@mxtpa)
+	ld	(bdos+1),hl
+	ret
+
+;
+; ?RLCCP
+;
+;	Reload the console command processor
+;	to the TPA at address 0100h
+;
+
+	common$segment	; boot loading must be done from common memory
+
+?rlccp:
+    if banked and ccp$in$mem
+	ld	c,dal2		; Use DMA2
+	ld	hl,rstccp	; Copy CCP from bank 0 to bank 1
+	jp	dmaxfr		;  using DMA and return
+    else
+	; Just fall through into ?LDCCP
+    endif
+
+;
+; ?LDCCP
+;
+;	Reads the CP/M Console Command Processor
+;	from the file named CCP.COM on the specified drive
+;
+?ldccp:
+    if banked
+	ld	a,(@cbnk)	; Save current bank on
+	push	af		;  the stack
+	ld	a,tpa$bank	; Select TPA bank
+	call	?bnksl
+    endif
+
+?ldagain:
+	xor	a		; A=0
+	ld	(ccp$fcb+15),a	; zero extent
+	ld	h,a
+	ld	l,a		; HL=0
+	ld	(fcb$nr),hl	; start at beginning of file
+	ld	de,ccp$fcb
+	call	bdos$open		; open file containing CCP
+	ld	de,open$msg	; point to error message
+	inc	a		; any error opening file?
+	jr	z,no$ccp	; yes, go print error message
+	ld	de,tpa
+	call	bdos$setdma		; start of TPA
+	ld	de,128
+	call	bdos$setmulti	; allow up to 16k bytes
+	ld	de,ccp$fcb
+	call	bdos$read
+	ld	de,read$msg	; point to error message
+	inc	a		; any error?
+	jr	z,no$ccp	; yes, report it
+
+    if	banked
+      if ccp$in$mem
+
+	; CCP.COM was just read into 010100..010D7Fh
+	; Save a copy to the CCP$COPY$BANK using DMA
+
+	ld	c,dal2
+	ld	hl,savccp	; Point to DMA parameter block
+	call	dmaxfr		; Copy using DMA2
+      endif
+	pop	af		; Restore bank and return
+	jp	?bnksl
+    else    
+	ret
+    endif
+
+no$ccp:
+	ld	hl,err$msg	; print '%BOOT-E '
+	call	?pmsg
+	ex	de,hl
+	call	?pmsg
+	ex	de,hl
+	call	?pmsg
+	call	?getch		; get a character
+	jp	?ldagain	; and try again
+
+    if	banked
+
+	; DMA Parameter block to restore CCP from bank 0 to bank 1
+	; (The ?LDCCP routine loads the CCP into Bank 0)
+
+rstccp:	dmapbw	tpa$bank,tpa	;  destination
+	dmapbw	ccp$copy$bank,tpa ;source
+	defw	ccp$len		;  length (bytes)
+	defw	dma$descriptor
+
+savccp:	dmapbw	ccp$copy$bank,tpa ;  destination
+	dmapbw	tpa$bank,tpa	;  source
+	defw	ccp$len		;  length (bytes)
+	defw	dma$descriptor
+    endif
+
+;
+; CP/M BDOS Function Interfaces
+;
+bdos$open:
+	ld	c,15		; open file control block
+	jr	bdosgo
+
+bdos$setdma:
+	ld	c,26		; set data transfer address
+	jr	bdosgo
+
+bdos$setmulti:
+	ld	c,44		; set record count
+	jr	bdosgo
+
+bdos$read:
+	ld	c,20		; read the file
+
+bdosgo:
+	jp	bdos		; read records
+
+open$msg:
+	defz	'Open'
+read$msg:
+	defz	'Read'
+err$msg:
+	defz	cr,lf,'%BOOT-E '
+	defz	' failed ',ccp$drive,':CCP.COM not loaded'
+
+ccp$fcb:
+	defb	ccp$drive-'@','CCP     ','COM',0,0,0,0
+	defs	16
+fcb$nr:	defb	0,0,0
+
+  endif	; not ldrbios
+
+;
+; DEVTBL
+;
+;	Return address of character device table
+;
+
+	common$segment
+
+devtbl:
+	ld	hl,@ctbl
+	ret
+
+;
+; CONOUT
+;
+;	Console Output.  Send character in <C>
+;			to all selected devices
+;
+	common$segment
+
+conout:	
+	ld	hl,(@covec)	; fetch console output bit vector
+	jr	out$scan
+
+;
+; AUXOUT
+;
+;	Auxiliary Output. Send character in <C>
+;			to all selected devices
+;
+auxout:
+	ld	hl,(@aovec)	; fetch aux output bit vector
+	jr	out$scan
+
+;
+; LIST
+;
+;	List Output.  Send character in <C>
+;			to all selected devices.
+;
+list:
+	ld	hl,(@lovec)	; fetch list output bit vector
+
+out$scan:
+	ld	b,0		; start with device 0
+co$next:
+	add	hl,hl		; shift out next bit
+	jr	nc,not$out$device
+	push	hl		; save the vector
+	push	bc		; save the count and character
+not$out$ready:
+	call	coster
+	or	a
+	jr	z,not$out$ready
+	pop	bc
+	push	bc		; restore and resave the character and device
+	call	?co		; if device selected, print it
+	pop	bc		; recover count and character
+	pop	hl		; recover the rest of the vector
+not$out$device:
+	inc	b		; next device number
+	ld	a,h
+	or	l		; see if any devices left
+	jr	nz,co$next	; and go find them...
+	ret
+
+;
+; CONOST
+;
+;	Console Output Status.  Return true if
+;		all selected console output devices
+;		are ready.
+;
+conost:
+	ld	hl,(@covec)	; get console output bit vector
+	jr	ost$scan
+
+;
+; AUXOST
+;
+;	Auxiliary Output Status.  Return true if
+;		all selected auxiliary output devices
+;		are ready.
+;
+auxost:
+	ld	hl,(@aovec)	; get aux output bit vector
+	jr	ost$scan
+
+;
+; LISTST
+;
+;	List Output Status.  Return true if
+;		all selected list output devices
+;		are ready.
+;
+listst:
+	ld	hl,(@lovec)	; get list output bit vector
+
+ost$scan:
+	ld	b,0		; start with device 0
+cos$next:
+	add	hl,hl		; check next bit
+	push	hl		; save the vector
+	push	bc		; save the count
+	ld	a,0ffh		; assume device ready
+	call	c,coster	; check status for this device
+	pop	bc		; recover count
+	pop	hl		; recover bit vector
+	or	a		; see if device ready
+	ret	z		; if any not ready, return false
+	inc	b		; next device number
+	ld	a,h
+	or	l		; see if any more selected devices
+	jr	nz,cos$next
+	or	0ffh		; all selected were ready, return true
+	ret
+
+coster:				; check for output device ready, including optional
+				; 	xon/xoff support
+	ld	l,b
+	ld	h,0		; make device code 16 bits
+	push	hl		; save it in stack
+	add	hl,hl
+	add	hl,hl
+	add	hl,hl		; create offset into device characteristics tbl
+	ld	de,@ctbl+6
+	add	hl,de		; make address of mode byte
+	ld	a,(hl)
+	and	mb$xon$xoff
+	pop	hl		; recover console number in <HL>
+	jp	z,?cost		; not a xon device, go get output status direct
+	ld	de,xofflist
+	add	hl,de		; make pointer to proper xon/xoff flag
+	call	cist1		; see if this keyboard has character
+	ld	a,(hl)
+	call	nz,ci1		; get flag or read key if any
+	cp	ctlq
+	jr	nz,not$q	; if its a ctl-Q,
+	ld	a,0ffh		; set the flag ready
+not$q:
+	cp	ctls
+	jr	nz,not$s	; if it's a ctl-S,
+	xor	a		; clear the flag
+not$s:
+	ld	(hl),a		; save the flag
+	call	cost1		; get the actual output status,
+	and	(hl)		; and mask with ctl-Q/ctl-S flag
+	ret			; return this as the status
+
+cist1:				; get input status with <BC> and <HL> saved
+	push	bc
+	push	hl
+	call	?cist
+pop$h$b$ret:
+	pop	hl
+	pop	bc
+	or	a
+	ret
+
+cost1:				; get output status, saving <BC> & <HL>
+	push	bc
+	push	hl
+	call	?cost
+	jr	pop$h$b$ret
+
+ci1:				; get input, saving <BC> & <HL>
+	push	bc
+	push	hl
+	call	?ci
+	jr	pop$h$b$ret
+
+;
+; CONST
+;
+;	Console Input Status.  Return true if
+;		any selected console input device
+;		has an available character.
+;
+const:
+	ld	hl,(@civec)	; get console input bit vector
+	jr	ist$scan
+
+;
+; AUXIST
+;
+;	Auxiliary Input Status.  Return true if
+;		any selected auxiliary input device
+;		has an available character.
+;
+auxist:
+	ld	hl,(@aivec)	; get aux input bit vector
+
+ist$scan:
+	ld	b,0		; start with device 0
+cis$next:
+	add	hl,hl		; check next bit
+	ld	a,0		; assume device not ready (don't affect C flag)
+	call	c,cist1		; check status for this device
+	or	a
+	ret	nz		; if any ready, return true
+	inc	b		; drop device number
+	ld	a,h
+	or	l		; see if any more selected devices
+	jr	nz,cis$next
+	xor	a		; all selected were not ready, return false
+	ret
+
+;
+; CONIN
+;
+;	Console Input.  Return character from first
+;		ready console input device.
+;
+conin:
+	ld	hl,(@civec)
+	jr	in$scan
+
+;
+; AUXIN
+;
+;	Auxiliary Input.  Return character from first
+;		ready auxiliary input device.
+;
+auxin:
+	ld	hl,(@aivec)
+
+in$scan:
+	push	hl		; save bit vector
+	ld	b,0
+ci$next:
+	add	hl,hl		; shift out next bit
+	ld	a,0		; assume device not ready (don't affect C flag)
+	call	c,cist1		; see if the device has a character
+	or	a
+	jr	nz,ci$rdy	; this device has a character
+	inc	b		; else, next device
+	ld	a,h
+	or	l		; see if any more devices
+	jr	nz,ci$next	; go look at them
+	pop	hl		; recover bit vector
+	jr	in$scan		; loop til we find a character
+
+ci$rdy:
+	pop	hl		; discard extra stack
+	jp	?ci
+
+;
+; Utility Subroutines
+;
+ipchl:				; vectored CALL point
+	jp	(hl)
+
+;
+; DMAXFR
+;
+;	Load Memory DMA registers with the values from the
+;	parameter block pointed to by HL and initiate a DMA
+;	transfer.
+;
+; C contains the DMA address low register I/O address (DALn n=0..3)
+;
+; HL ->	Destination address (24 bits) in 2 words (e.g 123456h as F456 123F)
+;	Source address (24 bits) in 2 words
+;	Block length (16 bits)
+;	Descriptor (16 bits)	See CONFIG.LIB to select between
+;				burst and continuos mode transfers.
+;				All transfers use byte counts.
+;
+dmaxfr:
+  if krnl$debug
+	ld	(@dstack),sp	; Save stack pointer
+	ld	sp,@dstack	; Use debug stack to guard
+				;  against stack overflow
+	push	ix
+	push	af
+	push	bc
+	push	de
+	push	hl
+	pop	ix		; Point IX to parameter block
+	push	hl
+	ld	hl,xfr$msg	; Output 'DMAXFR using DMA'
+	call	?pmsg
+	ld	a,c
+	cp	dal0		; Validate the DMA channel DAL address
+	jr	z,dmapok
+	cp	dal1
+	jr	z,dmapok
+	cp	dal2
+	jr	z,dmapok
+	cp	dal3
+	jr	z,dmapok
+	ld	hl,bad$dma$port	; Bad I/O port passed in C
+	call	?pmsg
+	ld	a,c		; Output bad port in hex
+	call	?phex
+	jr	dmas0
+
+dmapok:	and	18h		; Convert DAL pointer to DMA number
+	rrca
+	rrca
+	rrca
+	add	'0'
+	call	?putc		; Output it in ASCII
+
+dmas0:
+	ld	hl,from$msg	; Output Source and Destination
+	call	?pmsg		;  in the same order that MOVE
+	ldw	hl,(ix+6)	;  diagnostic messages show them
+	call	phex3h
+	ldw	hl,(ix+4)
+	call	phex3l
+
+	ld	hl,to$msg
+	call	?pmsg
+	ldw	hl,(ix+2)
+	call	phex3h
+	ldw	hl,(ix+0)
+	call	phex3l
+
+	ld	hl,cnt$msg	; Number of bytes in decimal
+	call	?pmsg
+	ld	hl,(ix+8)
+	call	?pdec
+	jr	dmasx
+
+phex3h:	ld	a,'P'		; Indicate physical address
+	call	?putc
+	ld	a,h		; print 3 high nibbles of HL in hex
+	call	?phex
+	ld	a,l
+	rrca
+	rrca
+	rrca
+	rrca
+hxputc:	and	0Fh
+	add	a,90h
+	daa
+	adc	a,40h
+	daa
+	jp	?putc
+
+phex3l:	ld	a,h		; print 3 low nibbles of HL
+	call	hxputc
+	ld	a,l
+	jp	?phex
+
+dmasx:	pop	hl
+	pop	de
+	pop	bc
+	pop	af
+	pop	ix
+	ld	sp,(@dstack)	; Restore stack
+  endif
+
+	call	iopdma		; Select DMA I/O page
+	ld	b,6		; Six *Words* to program DMA
+				; C contains the DMA DAL port address
+	dec	c		;  which is incremented below
+dmanext:
+	inc	c		; Advance port address
+	outiw			; Output next word (16 bits)
+	outjmp
+	jr	nz,dmanext
+
+dma$in$progress:
+	nop			; Do nothing for about a microsecond
+	nop
+	nop
+	inw	hl,(c)		; Read DMA Transaction Description register
+	bit	4,l		; Has the Terminal Count (TC) bit been set?
+	jr	z,dma$in$progress ; No, busy wait until it completes
+
+	; Fall into IOPDEF to Restore default I/O page and return
+
+;
+; I/O Page selection routines (preserves registers)
+;
+iopuart:
+iopct:
+iopdef:
+iopgfe:	push	hl
+	push	bc
+	ld	l,uartp
+	jr	seliop
+
+ioprrr:
+iopdma:
+iopmmu:
+	push	hl
+	push	bc
+	ld	l,mmup
+seliop:	ld	c,iop
+	ldctl	(c),hl
+	outjmp
+	pop	bc
+	pop	hl
+	ret
+
+iopwatch:
+iopcf:
+	push	hl
+	push	bc
+	ld	l,watchp
+	jr	seliop
+
+;
+; PSHIOP/POPIOP
+;
+;	Routine to push and pop the I/O page register to
+;	the stack.
+;
+;	Registers BC and HL are clobbered
+;
+popiop:
+	pop	hl		; Return address to HL
+	ex	(sp),hl		; Exchange it with I/O page on stack
+	ld	c,iop		; Re-select the saved I/O page
+	ldctl	(c),hl
+	outjmp
+	ret			;  and return
+
+pshiop:
+	ld	c,iop
+	ldctl	hl,(c)		; Fetch I/O Page number to HL
+	outjmp
+	ex	(sp),hl		; Exchange it with the return address
+	jp	(hl)		;  on the stack and return
+
+;
+; Disk I/O interface routines
+;
+
+	bank0$segment
+
+;
+; SELDSK
+;
+;	Select Disk Drive.  Drive code in <C>.
+;		Invoke login procedure for drive
+;		if this is first select.  Return
+;		address of disk parameter header
+;		in <HL>
+;
+seldsk:
+	ld	a,c
+	ld	(@adrv),a	; save drive select code
+	ld	l,c
+	ld	h,0
+	add	hl,hl		; create index from drive code
+	ld	bc,@dtbl
+	add	hl,bc		; get pointer to dispatch table
+	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a		; point at disk descriptor
+	or	h
+	ret	z		; if no entry in table, no disk
+	ld	a,e
+	and	1		; examine login bit and
+	ret	nz		;  return if already selected
+	push	hl
+	ex	de,hl		; put pointer to XDPH in <DE>
+	ld	hl,-2
+	add	hl,de
+	ld	a,(hl)
+	ld	(@rdrv),a	; get relative drive
+	ld	hl,-6
+	add	hl,de		; find LOGIN addr
+	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a		; get address of LOGIN routine
+	call	ipchl		; call LOGIN
+	pop	hl		; recover DPH pointer
+	ret
+
+;
+; HOME
+;
+;	Home selected drive.  Treated as SETTRK(0).
+;
+
+home:
+	ld	bc,0		; same as set track zero
+
+;
+; SETTRK
+;
+;	Set Track. Saves track address from <BC> 
+;		in @TRK for further operations.
+;
+settrk:
+	ld	(@trk),bc
+	ret
+
+;
+; SETSEC
+;
+;	Set Sector.  Saves sector number from <BC>
+;		in @sect for further operations.
+;
+
+setsec:
+	ld	(@sect),bc
+	ret
+
+;
+; SETDMA
+;
+;	Set Disk Memory Address.  Saves DMA address
+;		from <BC> in @DMA and sets @DBNK to @CBNK
+;		so that further disk operations take place
+;		in current bank.
+;
+
+setdma:
+	ld	(@dma),bc
+	ld	a,(@cbnk)	; default DMA bank is current bank
+				; fall through to set DMA bank
+
+;
+; SETBNK
+;
+;	Set Disk Memory Bank.  Saves bank number
+;		in @DBNK for future disk data
+;		transfers.
+;
+setbnk:
+	ld	(@dbnk),a
+	ret
+
+;
+; SECTRN
+;
+;	Sector Translate.  Indexes skew table in <DE>
+;		with sector in <BC>.  Returns physical sector
+;		in <HL>.  If no skew table (<DE>=0) then
+;		returns physical=logical.
+;
+	common$segment
+
+sectrn:
+	ld	l,c
+	ld	h,b
+	ld	a,d
+	or	e
+	ret	z
+	add	hl,de
+	ld	l,(hl)
+	ld	h,0
+	ret
+
+;
+; READ/WRITE for multi-sector I/O
+;
+  if multi$sector$io
+read:	
+	xor	a
+	ld	(@derflg),a
+	ld	a,(@cnt)
+	ld	hl,@rwcnt
+	cp	(hl)
+	call	z,diskrd		; Do only the first READ for MULTIO
+	ld	hl,@rwcnt
+	dec	(hl)
+	jr	nz,rdmult
+	ld	a,1
+	ld	(@cnt),a		; After the last skipped MULTIO read,
+	ld	(@rwcnt),a		;  reset counters to 1
+rdmult:
+	ld	a,(@derflg)
+	or	a
+	ret
+
+write:
+	xor	a			; Clear disk error flag
+	ld	(@derflg),a
+	ld	a,(@cnt)
+	ld	hl,@rwcnt
+	cp	(hl)
+	call	z,diskwr		; Do only the first WRITE if MULTIO
+	ld	hl,@rwcnt
+	dec	(hl)
+	jr	nz,wrmult
+	ld	a,1
+	ld	(@cnt),a		; After last skipped MULTIO write,
+	ld	(@rwcnt),a		;  reset counters to 1
+wrmult:
+	ld	a,(@derflg)		; Return with disk error flag
+	or	a
+	ret
+  endif ; multi$sector$io
+
+;
+; DISKRD
+;
+;	Read physical record from currently selected drive.
+;		Finds address of proper read routine from
+;		extended disk parameter header (XDPH).
+;
+  if multi$sector$io
+diskrd:
+  else
+read:
+diskrd	equ	read
+  endif
+
+  if krnl$debug
+	ld	hl,rd$msg	; Print "Read"
+	call	?pmsg
+  endif
+
+	ld	hl,(@adrv)
+	ld	h,0
+	add	hl,hl		; get drive code and double it
+	ld	de,@dtbl
+	add	hl,de		; make address of table entry
+	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a		; fetch table entry
+	push	hl		; save address of table
+	ld	de,-8
+	add	hl,de		; point to read routine address
+
+  if not ldrbios	; CPMLDR doesn't need to write
+
+	jr	rw$common		; use common code
+
+;
+; DISKWR
+;
+;	Write physical sector from currently selected drive.
+;		Finds address of proper write routine from
+;		extended disk parameter header (XDPH).
+;
+    if multi$sector$io
+diskwr:
+    else
+write:
+diskwr	equ	write
+    endif
+
+  if krnl$debug
+	ld	hl,wr$msg	; Print "Write"
+	call	?pmsg
+  endif
+
+	ld	hl,(@adrv)
+	ld	h,0
+	add	hl,hl		; get drive code and double it
+	ld	de,@dtbl
+	add	hl,de		; make address of table entry
+	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a		; fetch table entry
+	push	hl		; save address of table
+	ld	de,-10
+	add	hl,de		; point to write routine address
+  endif ; not ldrbios
+
+rw$common:
+
+	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a		; get address of routine
+	pop	de		; recover address of table
+	dec	de
+	dec	de		; point to relative drive
+	ld	a,(de)
+	ld	(@rdrv),a	; get relative drive code and post it
+	inc	de
+	ld	a,(de)		; also post drive type
+	ld	(@dtyp),a
+	inc	de		; point to DPH again
+
+  if krnl$debug
+	ld	(@dstack),sp	; Save stack in case of overflow
+	ld	sp,@dstack	;  outputting diagnostic messages
+	push	af
+	push	bc
+	push	de
+	push	hl
+	ld	hl,on$msg	; Show Disk Drive, Track and Sector
+	call	pdshow
+	ld	hl,dma$msg	; Output " DMA="
+	call	?pmsg
+	ld	hl,@dbnk	; Show 24-bit Disk I/O DMA address
+	ld	b,3
+shodma:	ld	a,(hl)
+	push	hl
+	call	?phex
+	pop	hl
+	dec	hl
+	djnz	shodma
+	pop	hl
+	pop	de
+	pop	bc
+	pop	af
+	ld	sp,(@dstack)	; Restore stack pointer
+  endif
+
+	jp	(hl)		; leap to driver
+
+  if ldrbios
+write	equ	dummy
+diskwr	equ	dummy		; DISKWR not implemented
+  endif ; ldrbios
+
+;
+; ?PHEXHL
+;
+;	Print the value in HL in dexadecimal to console
+;
+	common$segment
+
+?phexhl:
+	push	af
+	ld	a,h
+	call	?phex
+	ld	a,l
+	call	?phex
+	pop	af
+	ret
+
+;
+; ?PHEXM
+;
+;	Print byte addressed by HL followed by a space
+;
+?phexm:	push	hl
+	push	de
+	push	bc
+	push	af
+	ld	a,(hl)
+	call	?phex
+	call	?space
+popabdh:
+	pop	af
+	jr	popbdh
+
+;
+; ?PHEX
+;
+;	Print value in <A> in hexadecimal to console
+;
+?phex:	push	af
+	rrca
+	rrca
+	rrca
+	rrca
+	call	phexc
+	pop	af
+phexc:	and	0fh
+	add	a,90h
+	daa
+	adc	a,40h
+	daa
+	push	hl
+	push	de
+	push	bc
+	call	?putc
+	jr	popbdh
+
+;
+; ?PMSG
+;
+;	Print the null terminated text string pointed
+;	to by HL to the console.  Advance HL past it
+;	so calls can be chained to print next message.
+;
+;	Saves AF, BC and DE
+;
+?pmsg:	push	de
+	push	bc
+	push	af
+pmsglp:
+	ld	a,(hl)
+	inc	hl
+	or	a
+	jr	z,pmsgex
+	push	hl		; Save pointer to string
+	ld	c,a
+	call	conout
+	pop	hl
+	jr	pmsglp
+pmsgex:
+	pop	af
+	pop	bc
+	pop	de
+	ret
+
+;
+; ?PDERR/PDSHOW
+;
+;	Print Disk error message/Show Disk request to console
+;
+?pderr:	ld	hl,dskmsg
+  if krnl$debug
+pdshow:
+  endif
+	call	?pmsg
+	ld	a,(@adrv)
+	add	a,'A'
+	call	?putc
+	call	?pmsg
+	push	hl
+	ld	hl,(@trk)
+	call	?pdec
+	pop	hl
+	call	?pmsg
+	ld	hl,(@sect)
+	; fall through into ?PDEC
+
+;
+; ?PDEC
+;
+;	Output value in HL in decimal ASCII to console
+;
+;	Uses recursion (so watch stack usage)
+;
+?pdec:	ld	bc,-10
+pdec1:	ld	de,-1
+pdec2:	add	hl,bc
+	inc	de
+	jr	c,pdec2
+	push	hl
+	ex	de,hl
+	ld	a,h
+	or	l
+	call	nz,pdec1
+	pop	hl
+	ld	a,l
+	add	a,'0'+10
+	; fall through to ?PUTC
+
+;
+; ?PUTC
+;
+;	Output character in A to console
+;
+;	Preserves BC, DE and HL
+;
+?putc:	push	hl
+	push	de
+	push	bc
+	ld	c,a
+	call	conout
+popbdh:	pop	bc
+	pop	de
+	pop	hl
+	ret
+
+;
+; ?SPACE
+;
+;	Output a space to console
+;
+?space:	ld	a,' '
+	jr	?putc
+
+;
+; ?GECO
+;
+;	Get a character from console to A and echo it
+;
+;	Preserves BC, DE and HL
+;
+?geco:	call	?getch		; ?GETCH saves registers
+	push	af
+	call	?putc		; and so does ?PUTC
+	pop	af
+	ret
+
+;
+; ?GETCH
+;
+;	Get a character from the console to A
+;	and convert it to uppercase.
+;
+;	Preserves BC, DE and HL
+;
+?getch:	push	hl
+	push	de
+	push	bc
+gchr1:	call	const
+	or	a
+	jr	z,gchr2
+	call	conin
+	jr	gchr1
+gchr2:	call	conin
+	and	7fh
+	cp	'z'+1
+	jr	nc,gchr3
+	cp	'a'
+	jr	c,gchr3
+	sub	'a'-'A'
+gchr3:	jr	popbdh
+
+;
+	bank0$segment
+
+dskmsg:	defz	cr, lf, 'Disk error on '
+	defz	': T='
+	defz	' S='
+
+  if krnl$debug
+on$msg	equ	dskmsg+12	; points to " on" above
+  endif
+
+	common$segment
+
+xofflist:			; Device XON/XOFF flags
+	rept	16
+	defb	-1
+	endm
+;
+	common$segment
+
+@trynm:	defs	1		; Retry number for disk I/O
+;
+@dtyp:	defs	1		; Currently selected disk type
+@rdrv:	defs	1		; Controller relative drive number
+@adrv:	defs	1		; Current selected drive (0..15)
+@trk:	defs	2		; Current track number (word)
+@sect:	defs	2		; Current sector number (word)
+@cnt:	defb	1		; Record count for multi-sector transfer
+
+  if multi$sector$io
+@rwcnt:	defb	1		; Multi-sector remaining call count
+@derflg: defs	1		; Disk I/O error flag
+  endif
+
+; ** Do not change the order of @DMA and @DBNK - used for KRNL$DEBUG
+@dma:	defs	2		; Current disk DMA transfer address
+
+  if 0
+bzero:	; BOOT routine clears these to zero
+@dbnk:	defs	1		; Current disk DMA bank
+@cbnk:	defs	1		; Current bank for CPU access
+@ubnk:	defs	1		; Current bank for User-mode access
+@sumode: defs	1		; System-Mode (zero) or User-Mode (non-zero)
+@msbnk:	defs	2		; Memory move Source Bank
+@mdbnk	equ	@msbnk+1	; Memory move Destination Bank
+@xmflg:	defs	1		; XMOVE flag (non zero for interbank move)
+bzerol	equ	$-bzero
+  else
+	; Pre-initialised to zero
+@dbnk:	defb	0		; Current disk DMA bank
+@cbnk:	defb	0		; Current bank for CPU access
+@ubnk:	defb	0		; Current bank for User-mode access
+@sumode: defb	0		; System-Mode (zero) or User-Mode (non-zero)
+@msbnk:	defw	0		; Memory move Source Bank
+@mdbnk	equ	@msbnk+1	; Memory move Destination Bank
+@xmflg:	defb	0		; XMOVE flag (non zero for interbank move)
+  endif
+
+	common$segment
+
+  if krnl$debug
+;
+; Kernel debug messages and stack
+;
+rd$msg:	defz	cr, lf, 'READ'
+wr$msg:	defz	cr, lf, 'WRITE'
+dma$msg: defz	' DMA='
+mov$msg: defz	cr, lf, 'MOVE from '
+from$msg equ mov$msg+6
+to$msg:	defz	' to '
+xfr$msg: defz	cr, lf, 'DMAXFR using DMA'
+bad$dma$port: defz ' BAD PORT='
+cnt$msg: defz	' count '
+sel$msg: defz	cr, lf, '?BNKSL Select Bank '
+
+    if debug
+ALIGN	EQU ($ - BIOS + 16) AND 0Fh
+      if ALIGN ne 0
+	defs	16-align
+      endif
+
+	; Marked with D to see how much is used'
+	defb	'Debug StackDDDDDDDDDDDDDDDDDDDDD'
+	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
+	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
+    else
+	defs	48*2
+    endif
+@dstack: defs	2
+  endif
+
+;
+;
+; Temporary stack for BIOS modules wishing to change banks
+;
+  if banked
+    if debug
+	defb	'Temporary BIOS StackTTTTTTTTTTTT'
+	defb	'TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT'
+    else
+	defs	32*2		; 32-level stack
+    endif
+@tstack:
+	defs	2
+  endif
+
+;
+; Stack for BIOS use during COLD and WARM booting
+;
+  if debug
+	defb	'System-mode StackSSSSSSSSSSSSSSS'
+	defb	'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS'
+	defb	'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS'
+  else
+	defs	48*2
+  endif
+
+@stack:
+  if ldrbios
+	defs	2		; Place to save CPMLDR stack pointer
+  endif
+
+  if banked and int$enabled
+;
+; User-mode stack
+;
+    if debug
+	defb	'User-mode StackUUUUUUUUUUUUUUUUU'
+	defb	'UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU'
+	defb	'UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU'
+    else
+	defs	48*2
+    endif
+
+@ustack:
+  endif
+
+	end

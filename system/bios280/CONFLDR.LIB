@@ -1,0 +1,142 @@
+	.xlist		; Supress listing of this MACLIB
+
+;	+-----------------------+
+;	|			|
+;	|  C O N F I G . L I B	|
+;	|			|
+;	+-----------------------+
+
+	.z280
+
+config	macro	
+	defz	cr,lf,'Z280RC LDRBIOS 01-Nov-2018',cr,lf
+	endm
+
+true	equ	-1
+false	equ	not true
+
+debug	equ	false		; TRUE to include BIOSDBG module
+ldrbios equ	true		; TRUE to generate Loader BIOS 
+banked	equ	false		; TRUE for Banked memory
+cache$on equ	true		; TRUE to enable on-chip cache for Instr/Data
+multi$sector$io equ false	; TRUE to support MULTIO (not tested)
+
+; Interrupt mode and System/User mode not yet implemented
+int$enabled equ	false		; TRUE to enable interrupts (mode 3)
+
+krnl$debug equ	false		; TRUE to enable BIOSKRNL debug output
+
+idehd	equ	true		; Built-in IDE CardFlash disk
+partn8	equ	false		; TRUE for extra drives E:..H:
+ramdisk equ	false		; and RAMDISK drive M: (uses top 1.5Mb of RAM)
+
+clock$set$support equ false	; TRUE to include time set support in CLOCK
+
+dma$burst$mode equ false	; TRUE burst mode/FALSE continuous mode DMA
+
+  if dma$burst$mode
+dma$descriptor equ 1000000010000000b	; Burst mode for memory to memory
+		; EN (bit 15)=1
+		; auto-increment memory for source (bits 14..12)=000b
+		; no interrupt (bit 11)=0
+		; byte size (bits 10..9)=00b
+		; burst/continuous mode (bits 8..7)=01b/10b
+		; flowthrough (bits 6..5)=00b
+		; transfer complete (bit 4)
+		; auto-increment memory for destination (bits 3..1)=000b
+		; end-of-process signaled (bit 0)
+  else
+dma$descriptor equ 1000000100000000b	; Continuous mode
+  endif
+
+; Commonly used CP/M entry points
+
+bdos	equ	0005h		; BDOS entry jump vector
+warmboot equ	0000h		; Warm boot jump vector 
+tpa	equ	0100h		; TPA program load address
+
+ccp$drive equ	'A'		; CCP loaded from this drive
+ccp$len equ	(0d80h-tpa)	; CCP.COM program length
+ccp$size equ	ccp$len/128	; number of 128-byte records in CCP.COM
+
+; Character I/O devices
+;
+; Bits in vector are -
+;
+; UART		08000h	Z280 MCU On-chip UART
+; NULL		00000h	Null device
+;
+def$civec equ	08000h		; Console input UART
+def$covec equ	08000h		; Console output UART
+def$aivec equ	00000h		; Auxilary input NULL
+def$aovec equ	00000h		; Auxilary input NULL
+def$lovec equ	00000h		; List output NULL
+
+  if	banked
+common$base equ	0e000h		; Common memory base address
+ccp$in$mem equ	true		; TRUE for CCP warm boot from memory
+tpa$bank equ	1		; TPA is bank 1
+  else
+common$base equ	00000h		; No common memory
+ccp$in$mem equ	false		; FALSE for CCP loaded from disk each time
+  endif
+
+common$size equ	0-common$base	; Size of common memory
+
+  if	ccp$in$mem
+ccp$copy$bank equ	0	; CCP is copied into this Bank from 0100h to 0D80h
+  endif
+
+common$segment	macro
+	cseg
+	endm
+
+bank0$segment	macro
+  if banked
+	dseg
+  else
+	cseg
+  endif
+	endm
+
+  if	debug
+;
+; Macro to print a message and enter the BIOSDBG module
+;
+enter$debug	macro	textmsg
+	local	msg, dbg
+    ifnb <textmsg>
+	push	af		; Preserve registers
+	push	bc
+	push	hl
+	call	pshiop		; Push I/O page register
+	ld	hl,msg		; Print message (side-effect changes IOP)
+	call	?pmsg
+	call	popiop		; Restore I/O page register
+	pop	hl		; Restore registers
+	pop	bc
+	pop	af
+	jr	dbg
+msg:	defz	cr,lf,textmsg
+    endif
+dbg:	call	biosdbg		; Enter debugger
+	endm
+  endif ; debug
+
+  if	int$enabled
+int$mask equ	0		; No interrupts enabled
+int$debug equ	false		; Set TRUE to enable interrupt debug code
+  endif
+
+;
+; Non-printing characters
+;
+bell	equ	7
+lf	equ	10
+cr	equ	13
+ctlq	equ	'Q'-'@'
+ctls	equ	'S'-'@'
+ctlz	equ	'Z'-'@'
+esc	equ	27
+
+	.list

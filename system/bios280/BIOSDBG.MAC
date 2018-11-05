@@ -1,0 +1,739 @@
+	title	'Z280RC BIOS minimal debugger'
+;
+;		+-----------------------+
+;		|			|
+;		|     B I O S D B G	|
+;		|			|
+;		+-----------------------+
+;
+;
+;   BIOS Debug
+;
+;   This is a simple debug monitor to allow examination of
+;   Z280 registers and memory (with MMU bank selection support).
+;   It is invoked via a CALL BIOSDBG from other BIOS routines.
+;
+;   Author:	Tony Nicholson
+;		10-Aug-2018
+;
+;   Modification History
+;
+;
+
+	maclib	CONFIG.LIB
+	maclib	Z280RCIO.LIB
+
+	; The symbol DEBUG must be defined in CONFIG.LIB
+	; for this module to generate *any* object code.
+	; (This allows the module to be specified in the
+	; submit command file to build and link the system
+	; when debugging is disabled).
+
+  if debug
+	public	biosdbg		; Entrypoint to debugger
+
+	extrn	?bnksl,?usrsl	; Bank select
+	extrn	?phex,?phexhl	; Hexadecimal output
+	extrn	?phexm
+	extrn	?pmsg		; ASCII string output (NUL terminated)
+	extrn	?putc		; Console Output
+	extrn	?getch		; Get uppercase character
+	extrn	?geco		; Get character and echo
+
+    if banked
+	extrn	phyahl		; Logical to Physical Address conversion
+	extrn	iopmmu		; Select MMU I/O page
+	extrn	@cbnk		; Current bank (from BIOSKRNL module)
+	extrn	@ubnk		; Current User-mode bank
+	extrn	@sumode		; Current System/User mode
+    endif
+
+esc	equ	1bh
+del	equ	7fh
+
+	common$segment
+
+biosdbg:
+	ld	(exitsp),sp	; Save stack pointer for exit
+	ex	(sp),hl
+	ld	(pcsave),hl	; Save return address as PC
+	ex	(sp),hl
+	ld	(hlsave),hl	; Save HL
+	ld	(spsave),sp	; Save SP (could be Sys-SP or User-SP)
+	ld	sp,spsave	; Now change to local stack
+	push	iy		;  and save a copy of all registers
+	push	ix
+	exx
+	ex	af,af'
+	push	hl		; Save alternate registers
+	push	de
+	push	bc
+	push	af
+	exx
+	ex	af,af'
+	push	hl		; Save registers
+	push	de
+	push	bc
+	push	af
+	ld	(rsavsp),sp	; Save stack pointer (for ease
+				; of restoring state and returning)
+				; SP now points to DBGSTK
+
+    if banked
+	ld	a,(@cbnk)	; Save bank we entered from
+	ld	(bnksav),a
+	ld	a,(@ubnk)	; Save User-mode bank
+	ld	(usrsav),a
+	ld	a,(@sumode)	; Get System or User-mode status
+	ld	(susave),a	; and save it locally
+
+	or	a		; Are we in System-mode (=0)?
+	jr	z,bd00		; Yes
+
+      if 0 ; Only System-mode for now
+	xor	a		; No, then enter System-mode
+	sc	sc$sumode
+
+	ld	hl,(spsave)	; Previously saved SP was User-SP
+	ld	(uspsav),hl
+
+	ld	(spsave),sp	; We just switched into System-mode
+				; so we now can save the System-SP
+	jr	bd01
+      endif ; 0
+
+bd00:	ldctl	hl,usp		; We entered in System-mode, save User-SP
+	ld	(uspsav),hl
+
+bd01:	ld	sp,dbgstk	; Set Sys-SP for debugger
+
+    endif
+
+	xor	a		; Switch to Bank 0 (for access
+	call	?bnksl		;  to non-common debug routines)
+
+	jp	godbug		; Enter prompt mode in Bank 0
+				; (We're in System-mode and Sys-MMU
+				; now points to Bank 0)
+
+goexit:
+    if banked
+	ld	a,(bnksav)	; Restore the Bank and User-MMU PDRs
+
+	cp	a,(@cbnk)	; Current bank same as on entry?
+	jr	z,ge01		; Yes, no need to reselect it
+
+	call	?bnksl		; Re-select Bank we came from
+
+ge01:	ld	a,(susave)	; and System/User-mode state
+	or	a		; Do we need to change it?
+	jr	z,ge02		; No
+
+      if 0	; Only System-mode for now
+	sc	sc$sumode
+      endif ;0
+
+ge02:
+	ld	a,(usrsav)	; Restore User-mode bank
+	call	?usrsl		;  (this restores the User-mode MMU)
+
+    endif
+	ld	sp,(rsavsp)	; This is to quickly
+	pop	af		;  restore all registers
+	pop	bc
+	pop	de
+	pop	hl
+	ex	af,af'
+	exx
+	pop	af
+	pop	bc
+	pop	de
+	pop	hl
+	ex	af,af'
+	exx
+	pop	ix
+	pop	iy
+	ld	sp,(exitsp)	; Finally restore the entry SP and
+	ret			; go back to where we came from
+
+	bank0$segment
+
+	; Prompt mode and command processing is in Bank 0
+	; to minimise common memory usage in a Banked system
+
+godbug:	ld	c,msr		; Read the Z280 Master Status Register
+	ldctl	hl,(c)
+	ld	(msrsav),hl
+	ld	c,iop		; Read I/O page register
+	ldctl	hl,(c)
+	ld	(iopsav),hl
+	ld	c,itv		; Read Interrupt Trap Vector
+	ldctl	hl,(c)
+	ld	(itvsav),hl
+	ld	c,isr		; Read Interrupt Status
+	ldctl	hl,(c)
+	ld	(isrsav),hl
+	ld	c,tcr		; Read Trap Control
+	ldctl	hl,(c)
+	ld	(tcrsav),hl
+	ld	c,ccr		; Read Cache Control
+	ldctl	hl,(c)
+	ld	(ccrsav),hl
+
+    if banked
+	ld	a,(@ubnk)	; Get the current bank we entered from
+    else
+	xor	a		; Non-banked is Bank 0 always
+    endif
+
+svbank:	ld	(bnk),a		; Set current display bank
+	ld	hl,regmsg
+	call	?pmsg		; Output display bank
+	ld	a,(bnk)
+	call	?phex
+	ld	hl,0		; Set last (D)isplayed address to 0
+	ld	(lastaddr),hl
+prompt:	call	crlf
+	ld	a,'@'		; Output debugging "@" prompt
+	call	co
+	call	?geco		; Get debug command letter
+
+	cp	cr		; Return?
+	jr	z,prompt	; Yes, just prompt again
+    if banked
+	; To save space only include help for banked version
+	jr	z,help
+	cp	'?'
+    endif
+
+	cp	'B'		; change (B)ank (and switch mode)
+	jr	z,bank
+
+	cp	'D'		; (D)isplay memory in hex
+	jp	z,display
+
+	cp	'M'		; show (M)MU PDRs
+	jp	z,showmmu
+
+    if banked
+	cp	'P'		; Show (P)hysical address
+	jp	z,showphys
+    endif
+
+	cp	'C'		; (C)ontinue and return to BIOS
+	jr	z,continue
+
+	cp	'R'		; show (R)egisters
+	jr	z,registers
+
+    if banked
+	cp	'Z'		; (Z)ero memory
+	jp	z,zero
+    endif
+
+	ld	hl,unkcmdmsg
+	call	?pmsg
+
+    if banked
+help:	ld	hl,helpmsg
+	call	?pmsg
+    endif
+
+	jr	prompt
+
+continue:
+	call	crlf
+	ld	hl,(iopsav)	; Restore I/O page register
+	ld	c,iop
+	ldctl	(c),hl
+	jp	goexit		; Exit via common memory
+
+bank:
+    if banked
+	call	ghexnum		; Select Bank
+	ld	a,c
+	or	a
+	jr	z,prompt	; <ESC> or <DEL>
+	ld	a,b		; Anything entered?
+	dec	a
+	jr	z,setbnk	; No, default to Bank 0
+	ld	a,h		; Only allow banks 0..9
+	or	a
+	jr	nz,bankerr
+	ld	a,l
+	cp	9+1
+	jr	nc,bankerr
+
+setbnk:	call	?usrsl		; Change User-mode MMU
+
+	jr	svbank
+
+bankerr:
+	ld	hl,bankerrmsg
+	call	?pmsg
+	jr	prompt
+    else
+nobank:	ld	hl,nonbankedmsg
+	call	?pmsg
+	jr	prompt
+    endif
+
+registers:
+	ld	hl,regmsg	; Display all register values
+	call	?pmsg
+	ld	a,(bnk)		; (Display bank is User-mode one)
+	call	?phex
+	call	?pmsg
+    if banked
+	ld	a,(bnksav)	; CP/M bank on entry
+	call	?phex
+	call	?pmsg
+    endif
+	ex	de,hl
+	ld	hl,afsave
+	ld	b,19		; There are 19 register-pairs
+showlp:	inc	hl
+	ld	a,(hl)
+	call	?phex
+	dec	hl
+	ld	a,(hl)
+	call	?phex
+	inc	hl
+	inc	hl
+	ex	de,hl
+	call	?pmsg
+	ex	de,hl
+	djnz	showlp
+	ex	de,hl
+	call	?pmsg
+	jp	prompt
+
+    if banked
+showphys:
+	ld	hl,spamsg	; Prompt for Bank
+	call	?pmsg
+	ex	de,hl		; Message pointer to DE for later
+	call	ghexnum		; Get bank
+	ld	a,c
+	or	a
+	jp	z,prompt	; <ESC> or <DEL> terminator
+	ld	a,b		; Anything entered?
+	dec	a
+	jr	nz,shp01	; Yes
+	ld	l,0		; No, default to bank 0
+shp01:	ld	a,l
+	cp	9+1		; Logical to Physical only valid
+	jr	nc,bankerr	;  for banks 0..9
+	ex	de,hl		; Save bank in E (ignore D)
+	call	?pmsg		; and prompt for address
+	call	ghexnum
+	ld	a,c
+	or	a
+	jp	z,prompt	; <ESC> or <DEL> means abort
+	ld	a,b		; Anything entered?
+	dec	a
+	jr	nz,shp02	; Yes
+	ld	hl,0		; No default to 0000h
+shp02:	ld	a,e		; Bank to A, address in HL
+	call	phyahl		; Convert to physical address
+	push	hl
+	push	af
+	ld	hl,phymsg	; Display " P"
+	call	?pmsg
+	pop	af
+	call	?phex		; Physical bank
+	pop	hl
+	call	?phexhl		; Physical address
+	jp	prompt	
+    endif				
+
+    if banked
+zero:	ld	hl,zebmsg	; Zero memory up to common in
+	call	?pmsg		; selected bank (not bank 0)
+	call	ghexnum		; Get Bank number
+	ld	a,c		; Examine input terminator
+	or	a
+	jp	z,prompt	; <ESC> or <DEL>
+	ld	a,b
+	dec	a		; Anything entered?
+	jp	z,prompt	; No, abort back to prompt
+	ld	a,l		; Only allow Banks 1..9 to
+	or	a		; be cleared (Bank 9 is RAMDISK)
+	jp	z,bankerr
+	cp	9+1
+	jp	nc,bankerr
+	push	af		; Save Bank for printing later
+
+	call	?usrsl		; Select User-Mode bank
+
+	ld	hl,common$base	; Address Pointer
+	dec	hl		; Clear down to address 0000
+
+	cp	9		; Bank 9 is RAMDISK
+	jr	nz,ze00
+
+	ld	a,0e5h		; Clear RAMDISK directory
+	jr	ze01
+
+ze00:	xor	a
+
+ze01:	ldup	(hl),a		; Write via User-mode MMU
+	cpw	hl,0000h
+	jr	z,ze02
+	dec	hl
+	jr	ze01
+ze02:	ld	hl,zedmsg	; Display "Zeroed "
+	call	?pmsg
+	pop	af
+	jp	svbank		; Go and display Bank number
+				; and back to prompt
+    endif
+
+display:
+	call	ghexnum		; Display From address
+	ld	a,c		; Examine termination flag
+	or	a		; <ESC> or <DEL>?
+	jp	z,prompt	; Yes, abort back to prompt
+	ld	a,b		; Anything entered?
+	dec	a
+	jr	nz,di00		; Yes
+	ld	hl,(lastaddr)	; No, default to last address
+di00:	ex	de,hl		; Start address into DE
+	ld	hl,00ffh	; Default end-range is 256 bytes
+	add	hl,de
+	dec	c		; termination flag for space?
+	jr	z,getend	; Yes, get end-address
+	dec	c		; termination flag for <CR>?
+	jr	z,dispit	; Yes, use default end and display memory
+	push	de
+	ld	a,'-'		; terminator was a '-', save as end
+	call	co
+	call	ghexnum		; Get start address
+	ld	a,c
+	or	a
+	jr	z,poppr		; <ESC> or <DEL>
+	cp	2		; <CR>?
+	jp	nz,popper	; No - I'm confused	
+	ex	de,hl		; Start address to DE
+	pop	hl
+	jr	dispit
+
+poppr:	pop	de		; Clean up stack
+	jp	prompt
+
+getend:	call	space
+	call	ghexnum		; Get end address
+	ld	a,c
+	or	a
+	jp	z,prompt	; <ESC> or <DEL>
+	cp	2		; <CR>?
+	jp	nz,parmerr	; No
+
+dispit:	call	crlf
+	and	a		; Clear CY
+	inc	hl
+	ld	(lastaddr),hl	; Save End address+1
+	dec	hl
+	sbc	hl,de		; Subtract (Start) DE from (End) HL
+	ex	de,hl		; Start to HL and count in DE
+	inc	de
+di01:
+    if banked
+	ld	a,'L'		; Logical address
+    else
+	ld	a,'P'		; Physical address
+    endif
+	call	co
+	ld	a,(bnk)		; Output 24-bit address
+	call	?phex
+	call	?phexhl
+	ld	a,':'
+	call	co
+	call	space
+	ld	b,16		; 16 bytes per line
+	push	hl		; Save pointer to print ASCII later
+	ld	(count),de	; and the count
+
+	; Output up to 16 bytes
+di02:
+	ldup	a,(hl)		; Fetch via User-mode MMU
+	call	?phex		; Print a byte and a space
+	call	space	
+	inc	hl
+	dec	de
+	ld	a,d		; Count reached zero?
+	or	e
+	jr	z,di06		; Yes
+	djnz	di02
+	call	space		; Output an extra space
+	ld	b,16
+	pop	hl		; Now dump in printable ASCII
+di03:
+	ldup	a,(hl)		; Fetch via User-mode MMU
+	call	printable	; Output as printable ASCII
+	inc	hl
+	djnz	di03
+	call	crlf
+	jr	di01
+
+di06:	ld	de,(count)
+	ld	a,e		; Was count 16 at start of line?
+	cp	16
+	jp	z,di05		; Yes, do ASCII printable
+di07:	push	af
+	call	space		; Now, output spaces
+	call	space		; to ASCII column
+	call	space	
+	pop	af
+	inc	a		; Have we output enough?
+	cp	16
+	jr	c,di07
+di05:	call	space
+	ld	b,e		; and remaining printable ASCII
+	pop	hl
+di08:
+	ldup	a,(hl)
+	call	printable
+	inc	hl
+	djnz	di08
+	call	crlf
+	jp	prompt
+
+
+showmmu:			; Show MMU PDRs
+    if banked
+	call	iopmmu
+	ld	hl,mmupdrs	; Read all 32 MMU Page Description Registers
+	xor	a
+	out	(pdr),a		; Point to first User-mode PDR0
+	ld	bc,32*256+bmp	; Set-up for 32 PDRs, C-> Block Move Port
+	inirw
+
+	ld	hl,mmumsg	; Display "MMU PDRs"
+	call	?pmsg
+	ld	hl,mmupdrs
+	ld	b,16
+sm01:	call	phexwm		; User-mode PDRs
+	djnz	sm01
+	call	crlf
+	ld	b,16
+sm02:	call	phexwm		; System-mode PDRs
+	djnz	sm02
+	call	crlf
+	jp	prompt
+
+phexwm:	inc	hl
+	ld	a,(hl)
+	call	?phex
+	dec	hl
+	ld	a,(hl)
+	call	?phex
+	inc	hl
+	inc	hl
+	ld	a,b		; Is it last word on line?
+	cp	01h
+	ret	z		; Yes
+	jp	space		; No, output a space and return
+    else
+	jp	nobank		; Command not avaiable in Non-Banked config
+    endif
+
+cvtbin:	sub	'0'		; Convert hex ASCII digit to binary in A
+	cp	10
+	ret	c
+	sub	7
+	ret
+
+addahl:	add	hl,hl		; Add hex character in A
+	add	hl,hl		;  to the binary value in HL
+	add	hl,hl
+	add	hl,hl
+	call	cvtbin
+	add	a,l
+	ld	l,a
+	ret
+
+ghexnum: ld	hl,0		; Get hex number from console into HL
+	ld	bc,0100h	; B is character typed flag
+				; C is the number terminator flag
+gx3:	call	?getch		; Get a character without echo
+	call	validdgt	; Is it a valid hex digit?
+	jr	c,gx2		; No
+	call	co		; Yes, echo it
+	ld	b,a		; Update character typed flag
+	call	addahl		; Add this digit to HL
+	jr	gx3
+gx2:	cp	' '		; Space, '-', <ESC> or <DEL> terminate
+	jr	z,gx4
+	cp	cr
+	jr	z,gx5
+	cp	'-'
+	jr	nz,gx6
+	inc	c		; C=3 means '-'
+gx5:	inc	c		; C=2 means <CR>
+gx4:	inc	c		; C=1 means space
+	ret
+gx6:	cp	esc
+	ret	z		; C=0 means <ESC>
+	cp	del		; or <DEL>
+	ret	z
+	jr	gx3		; Ignore other characters
+
+
+validdgt:
+	cp	'0'		; Check for valid hex digit
+	ret	c		; CY flag set if invalid
+	cp	'9'+1
+	ccf
+	ret	nc
+	cp	'A'
+	ret	c
+	cp	'F'+1
+	ccf
+	ret
+
+printable:
+	cp	' '		; Anything < " " or > "~"
+	jr	c,pr01		; is shown as a "."
+	cp	'~'+1
+	jr	c,co
+pr01:	ld	a,'.'
+	jr	co
+
+space:	ld	a,' '		; Output a space
+	jr	co
+
+crlf:	ld	a,cr		; Output a new-line
+	call	co
+	ld	a,lf
+
+co:	push	af		; Output character from A
+	and	07fh		; Mask off parity bit
+	call	?putc		; (?PUTC preserves other registers)
+	pop	af
+	ret
+
+popper:
+	pop	hl		; Clean up stack
+parmerr:
+	ld	hl,parmerrmsg	; Output "Invalid parameter"
+	call	?pmsg
+	jp	prompt
+
+    if banked
+bankerrmsg:
+	defz	cr,lf,'Valid Bank is 0..9 (9=RAMDISK)',cr,lf
+mmumsg:
+	defz	cr,lf,'Current User/System MMU Page Description Registers',cr,lf
+    else
+nonbankedmsg:
+	defz	cr,lf,'No (B)ank or (M)MU for non-banked system',cr,lf
+    endif
+
+parmerrmsg:
+	defz	cr,lf,'Invalid hex address',cr,lf
+
+    if banked
+helpmsg:
+	defb	cr,lf,'BIOSDBG V1.0 Commands are'
+	defb	cr,lf
+	defb	cr,lf,' Bnn        - Set User MMU to access bank nn (0..9)'
+	defb	cr,lf,' C          - Continue and return to system'
+	defb	cr,lf,' Dxxxx yyyy - Display memory in hex and ASCII'
+	defb	cr,lf,' M          - Memory Management Registers'
+	defb	cr,lf,' Pnn xxxx   - Show Physical address for Lnnxxxx'
+	defb	cr,lf,' R          - Register display'
+	defb	cr,lf,' Znn        - Zero bank nn (1..8) writes E5s to bank 9'
+	defz	cr,lf
+
+spamsg:	defz	' Enter Bank? '
+	defz	' L Addr? '
+
+phymsg:	defz	' = P'
+
+zebmsg:	defz	'ero Bank? '
+
+zedmsg:	defz	cr,lf,'Zeroed'
+
+    endif
+
+unkcmdmsg:
+	defz	cr,lf,'Bad command',cr,lf
+regmsg:
+	defz	cr,lf,'Display Bank '
+    if banked
+	defz	'   from CP/M Bank '
+    endif
+	defz	cr,lf,'CPU Registers',cr,lf,'AF  '
+	defz	' BC  '
+	defz	' DE  '
+	defz	' HL  '
+	defz	cr,lf,"AF' "
+	defz	" BC' "
+	defz	" DE' "
+	defz	" HL' "
+	defz	cr,lf,'IX  '
+	defz	' IY  '
+	defz	' SP  '
+	defz	' PC  '
+	defz	cr,lf,'         MSR '
+	defz	' USP '
+	defz	' IOP '
+	defz	cr,lf,'ITV '
+	defz	' ISR '
+	defz	' TCR '
+	defz	' CCR '
+	defz	cr,lf
+
+	defb	0
+
+	common$segment		; Stack and storage is in
+				; Common Memory
+
+	defs	48*2		; System-mode stack
+dbgstk:				; (this is where SP points after
+				; we've finished saving registers)
+afsave:	defs	2
+bcsave:	defs	2
+desave:	defs	2
+hlsave:	defs	2
+af2sav:	defs	2
+bc2sav:	defs	2
+de2sav:	defs	2
+hl2sav:	defs	2
+ixsave:	defs	2
+iysave:	defs	2
+spsave:	defs	2		; Set stack to here to save registers
+pcsave:	defs	2		; PC on entry is retrieved from stack
+msrsav:	defs	2		; Master Status and User-SP are
+uspsav:	defs	2		;  saved only for display
+iopsav:	defs	2		; I/O Page register saved here
+itvsav:	defs	2		; Interrupt/Trap Vector
+isrsav:	defs	2		; Interrupt Status
+tcrsav:	defs	2		; Trap Control
+ccrsav:	defs	2		; Cache Control
+;
+rsavsp:	defs	2		; SP for restoring registers
+exitsp:	defs	2		; Save entry-point SP
+lastaddr: defs	2
+count:	defs	2
+bnk:	defb	0		; Current Bank
+
+    if banked
+susave:	defs	1		; System/User mode state
+bnksav:	defs	1		; System-mode code/data bank (System-PDRs)
+usrsav:	defs	1		; User-mode bank (for restoring User-PDRs)
+
+	bank0$segment		; No need for PDR values to be in common bank
+
+mmupdrs: defs	32*2		; MMU PDRs
+    endif
+
+	common$segment
+ec$dbg::			; End of Common for BIOSDBG
+	bank0$segment
+ed$dbg::			; End of Bank 0 for BIOSDBG
+
+  endif ; debug
+
+	end

@@ -1,0 +1,48 @@
+	title 'System Control Block Definition for CP/M3 BIOS'
+
+	public	scb$base
+	public	@civec, @covec, @aivec, @aovec, @lovec, @bnkbf
+	public	@crdma, @crdsk, @vinfo, @resel, @fx, @usrcd
+	public	@mltio, @ermde, @erdsk, @media, @bflgs
+	public	@date, @hour, @min, @sec, ?erjmp, @mxtpa
+
+scb$base equ	0fe00h		; Base of the SCB
+
+@civec	equ	scb$base+22h	; Console Input Redirection 
+				; Vector (word, r/w)
+@covec	equ	scb$base+24h	; Console Output Redirection 
+				; Vector (word, r/w)
+@aivec	equ	scb$base+26h	; Auxiliary Input Redirection 
+				; Vector (word, r/w)
+@aovec	equ	scb$base+28h	; Auxiliary Output Redirection 
+				; Vector (word, r/w)
+@lovec	equ	scb$base+2ah	; List Output Redirection 
+				; Vector (word, r/w)
+@bnkbf	equ	scb$base+35h	; Address of 128 Byte Buffer 
+				; for Banked BIOS (word, r/o)
+@crdma	equ	scb$base+3ch	; Current DMA Address 
+				; (word, r/o)
+@crdsk	equ	scb$base+3eh	; Current Disk (byte, r/o)
+@vinfo	equ	scb$base+3fh	; BDOS Variable "INFO" 
+				; (word, r/o)
+@resel	equ	scb$base+41h	; FCB Flag (byte, r/o)
+@fx	equ	scb$base+43h	; BDOS Function for Error 
+				; Messages (byte, r/o)
+@usrcd	equ	scb$base+44h	; Current User Code (byte, r/o)
+@mltio	equ	scb$base+4ah	; Current Multi-Sector Count
+				; (byte,r/w)
+@ermde	equ	scb$base+4bh	; BDOS Error Mode (byte, r/o)
+@erdsk	equ	scb$base+51h	; BDOS Error Disk (byte,r/o)
+@media	equ	scb$base+54h	; Set by BIOS to indicate
+				; open door (byte,r/w)
+@bflgs	equ	scb$base+57h	; BDOS Message Size Flag (byte,r/o)  
+@date	equ	scb$base+58h	; Date in Days Since 1 Jan 78 
+				; (word, r/w)
+@hour	equ	scb$base+5ah	; Hour in BCD (byte, r/w)
+@min	equ	scb$base+5bh	; Minute in BCD (byte, r/w)
+@sec	equ	scb$base+5ch	; Second in BCD (byte, r/w)
+?erjmp	equ	scb$base+5fh	; BDOS Error Message Jump
+				; (word, r/w)
+@mxtpa	equ	scb$base+62h	; Top of User TPA 
+				; (address at 6,7)(word, r/o)
+	end

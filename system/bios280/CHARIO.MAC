@@ -1,0 +1,164 @@
+	title 'Z280RC Character I/O handler for console UART'
+
+;		+-----------------------+
+;		|			|
+;		|     C H A R I O	|
+;		|			|
+;		+-----------------------+
+;
+;           CP/M-80 Version 3  --  Modular BIOS
+;
+;	 Character I/O for the Modular CP/M 3 BIOS
+;
+;
+;   Modification History:
+;
+;	27-Jun-2018	Tony Nicholson	Initial version for Z280RC
+;
+
+	maclib	CONFIG.LIB
+	maclib	Z280RCIO.LIB	; Define port addresses
+	maclib	MODEBAUD.LIB	; Define serial mode bits and baud rates
+
+	public	?cinit,?co,?cost
+	public	?ci,?cist
+	public	@ctbl
+
+max$devices equ 1	; Only Z280 UART for now
+
+	extrn	iopuart		; I/O Page select
+
+; Single Built-in UART
+;
+; UART Configuration Register (UCR) bits
+
+ucr$bcm	equ	11000000b ; BC field of UART control register
+ucr$5bv	equ	00000000b	; 5-bits per character
+ucr$6bv	equ	01000000b	; 6-bits
+ucr$7bv	equ	10000000b	; 7-bits
+ucr$8bv	equ	11000000b	; 8-bits
+ucr$pm	equ	00100000b ; P - Parity bit enable
+ucr$pv	equ	00100000b	; extra bit with parity
+ucr$eom	equ	00010000b ; E/O - parity even / odd
+ucr$ev	equ	00010000b	; Even Parity
+ucr$ov	equ	00000000b	; Odd Parity
+ucr$csm	equ	00001000b ; CS - Clock select
+ucr$ct1v equ	00001000b	; Use CT1 output for clock
+ucr$cexv equ	00000000b	; External clock input from CT1 input
+ucr$crm	equ	00000110b ; CR - Clock Rate multiplier
+ucr$x1v	equ	00000000b	; x1
+ucr$x16v equ	00000010b	; x16
+ucr$x32v equ	00000100b	; x32
+ucr$x64v equ	00000110b	; x64
+ucr$lbm	equ	00000001b ; LB - Loop Back Enable
+ucr$lbv	equ	00000001b	; Local Loop back mode
+
+; Transmitter Control/Status (TCS)
+; Receiver Control/Status (RCS)
+; Receiver Data Register (RDR)
+; Transmitter Data Register (TDR)
+
+ctrlz	equ	01ah		; CTRL-Z end-of-file character
+
+	common$segment	; All character I/O is in common memory
+
+?cinit:
+	ld	a,c
+	cp	max$devices	; Valid device code? (only 1)
+	ret	nc		; No, return
+
+	; Configure and Enable Console UART
+
+	call	iopuart		; Select UART I/O Page
+
+	; 8-bits, Odd parity, 1 stop bit, x16 external clock
+	; Fixed speed is 115200 bps
+
+	ld	a,ucr$8bv+ucr$pv+ucr$ov+ucr$x16v
+	out	(ucr),a
+
+	ld	a,uart$en	; Enable Transmitter
+	out	(tcs),a
+	out	(rcs),a		; and Receiver
+	outjmp
+
+	ret
+
+?ci:				; character input
+
+	ld	a,b
+	cp	max$devices
+	jr	nc,null$input
+ci1:
+	call	?cist
+	jr	z,ci1		; wait for character ready
+
+	call	iopuart
+	ld	c,rdr
+ci2:	in	a,(c)		; get data
+	ret
+
+null$input:
+	ld	a,ctrlz		; return EOF (ctrl-Z) for NULL device
+	ret
+
+?cist:				; character input status
+
+	ld	a,b
+	cp	max$devices
+	jr	nc,null$status
+
+	call	iopuart
+	ld	c,rcs
+ci3:	in	a,(c)		; read from status port
+	and	rcsdav		; Receiver CA bit
+
+ci4:	ret	z		; return with zero
+
+null$status:
+	or	0ffh		; return indicating character available
+	ret
+
+?co:				; character output
+	ld	a,b
+	cp	max$devices
+	jr	nc,null$output
+	ld	a,c
+	push	af		; save character from <C>
+co$spin:
+	call	?cost
+	jr	z,co$spin	; wait for TxEmpty
+
+	call	iopuart
+	pop	af
+	push	bc
+	ld	c,tdr
+	out	(c),a		; send data
+	pop	bc
+
+null$output:
+				; swallow data
+	ret
+
+?cost:				; character output status
+	ld	a,b
+	cp	max$devices
+	jr	nc,null$status
+
+	call	iopuart
+	push	bc
+	ld	c,tcs
+	in	a,(c)		; get input status
+	pop	bc
+	and	tcstbe		; is TBE bit set in TCS?
+	ret	z		; test transmitter empty
+	or	0ffh
+	ret			; return true if ready
+
+@ctbl:	defb	'UART  '	; device 0, On-chip UART
+	defb	mb$in$out+mb$serial
+	defb	baud$none	; Fixed-speed 115200 bps 8O1
+
+	defb	0		; table terminator
+
+	end

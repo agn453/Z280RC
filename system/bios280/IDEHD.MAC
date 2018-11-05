@@ -1,0 +1,561 @@
+	title	'Z280RC IDE Hard Disk/CompactFlash disk handler'
+
+;		+-----------------------+
+;		|			|
+;		|      I D E H D	|
+;		|			|
+;		+-----------------------+
+;
+;           CP/M-80 Version 3  --  Modular BIOS
+;
+;	    Disk I/O Module for Z280RC IDE CompactFlash drive
+;
+;   Modification History:
+;
+;	27-Jul-2018	Tony Nicholson	Initial version for Z280RC.
+;	28-Jul-2018	Tony Nicholson	BANKED support using DMA via
+;					intermediate buffer (IDEBUF)
+;	29-Jul-2018	Tony Nicholson	If multi-sector I/O is
+;					selected, force it back to
+;					a single sector at a time.
+;
+
+	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
+	maclib	Z280RCIO.LIB	; System I/O Addresses
+	maclib	CONFIG.LIB	; Configuration Equates
+
+  if	banked
+	public	idebuf
+	extrn	dmaxfr, phyahl, cnv12
+  endif
+
+;
+; Disk drive dispatching tables for linked BIOS
+;
+	public	ide00		; all versions support disk unit 0
+
+	extrn	iopcf, iopdef	; I/O page selection
+
+  if	not ldrbios
+	public	ide01,ide02,ide03 ; Other disk units (partitions of IDE0)
+    if	partn8
+	public	ide04,ide05,ide06,ide07 ; eight partitions
+    endif
+  endif
+
+;
+; Variables containing parameters passed by BDOS
+;
+	extrn	@adrv, @rdrv
+	extrn	@dma, @trk, @sect
+	extrn	@dbnk, @dtyp, @cbnk
+
+  if multi$sector$io
+	extrn	@cnt, @rwcnt, @derflg
+  endif
+
+;
+; System Control Block variables
+;
+	extrn	@ermde		; BDOS error mode
+
+;
+; Utility routines in standard BIOS
+;
+	extrn	?wboot		; warm boot vector
+	extrn	?pmsg		; print message @<HL> up to 00, saves <BC> & <DE>
+	extrn	?pderr		; print BIOS disk error header
+	extrn	?geco		; console input with echo
+
+;
+;	Maximum disk sector size
+;
+hstsiz	equ	512		; CF Sector size
+spt	equ	256		; Sectors per "track"
+blksiz	equ	4096		; Blocksize of 4K
+spb	equ	blksiz/hstsiz	; Sectors per block
+drm	equ	512		; Directory entries (also see DPB)
+dsm	equ	63*(spt/spb)	; Number of 4K blocks per drive
+hdtype	equ	10h		; Media type for Hard Disk
+
+  if	hstsiz ne 512
+	; Block address calculations depend on this!
+	.printx	"Error: IDE sector size must be 512 bytes"
+  endif
+;
+; Disk Layout
+;
+;	CompactFlash Drive (about 32Mb used - the rest is not used at present)
+;
+;	Sector size 512 bytes
+;	Each track is 256 Sectors = 128 Kb
+;	Partition size is 8064 Kb (for CP/M 2.2 compatibility) = 63 Tracks
+;
+;	Partition 0 64 Tracks		Track 0 (boot), 1..63 (CP/M)
+;	Partition 1 64 Tracks		Track 64..127 (CP/M)
+;	Partition 2 64 Tracks		Track 128..191 (CP/M)
+;	Partition 3 64 Tracks		Track 192..255 (CP/M)
+;
+; If PARTN8 is TRUE, an extra 4 partitiions are defined as follows
+;
+;	Partition 4 64 Tracks		Track 256..319 (CP/M)
+;	Partition 5 64 Tracks		Track 320..383 (CP/M)
+;	Partition 6 64 Tracks		Track 384..447 (CP/M)
+;	Partition 7 64 Tracks		Track 448..511 (CP/M)
+;
+
+;
+; Extended Disk Parameter Headers (XPDHs)
+;
+; The format of these are similar to the Floppy Disk XDPH
+; except the last 2 bytes of the header are not used by these
+; routines.  The relative drive number is always 0 and the
+; "type" is 10h. The DPB's are set-up to skip over the
+; previous partitions using "reserved tracks" in each drive's
+; parameter block.
+;
+; The format of these XDPH headers is as described
+; in the CP/M Plus Operating System Guide sample BIOS
+; modules description - section 4
+;
+	bank0$segment	; Banked memory
+
+	defw	hd$write
+	defw	hd$read
+	defw	hd$login
+	defw	hd$init0
+	defb	0,hdtype
+  if	ldrbios
+	; The LDRBIOS doesn't get GENCPM to allocate buffer space
+	; so we need to define it here and in DIRBCB and DTABCB tables
+ide00:	defw	0
+	defb	0,0,0,0,0,0,0,0,0 ; 72 bit scratch
+	defb	0		; media flag
+	defw	dpb0		; address of DPH
+	defw	0		; No checksum vector (permanent drive)
+	defw	alv		; address of Disk Allocation bitmap
+	defw	dirbcb		; address of Directory BCB
+	defw	dtabcb		; address of data BCB
+	defw	0ffffh		; hashing table disabled
+	defb	0
+  else
+	; IDE0 partition 0 (sectors 0..63 - first track reserved for boot)
+ide00:
+	dph	0,dpb0,0	; No translation table, permanently mounted
+  endif
+
+  if	not ldrbios		; Other partitions visible
+	defw	hd$write
+	defw	hd$read
+	defw	hd$login
+	defw	hd$nop
+	defb	0,hdtype
+ide01:	dph	0,dpb1,0
+
+	defw	hd$write
+	defw	hd$read
+	defw	hd$login
+	defw	hd$nop
+	defb	0,hdtype
+ide02:	dph	0,dpb2,0
+
+	defw	hd$write
+	defw	hd$read
+	defw	hd$login
+	defw	hd$nop
+	defb	0,hdtype
+ide03:	dph	0,dpb3,0
+
+    if	partn8
+	defw	hd$write
+	defw	hd$read
+	defw	hd$login
+	defw	hd$nop
+	defb	0,hdtype
+ide04:	dph	0,dpb4,0
+
+	defw	hd$write
+	defw	hd$read
+	defw	hd$login
+	defw	hd$nop
+	defb	0,hdtype
+ide05:	dph	0,dpb5,0
+
+	defw	hd$write
+	defw	hd$read
+	defw	hd$login
+	defw	hd$nop
+	defb	0,hdtype
+ide06:	dph	0,dpb6,0
+
+	defw	hd$write
+	defw	hd$read
+	defw	hd$login
+	defw	hd$nop
+	defb	0,hdtype
+ide07:	dph	0,dpb7,0
+
+    endif
+
+  endif	; not ldrbios
+
+;
+; Disk Parameter Header blocks
+;
+
+	common$segment	; DPB must be resident
+
+	; Drive 0 is the boot drive (one reserved track)
+	; 512 byte sectors, 256 sectors per track (1024 x 128 byte
+	; logical sectors), 64 tracks per partition,
+	; blocksize 4096, 512 directory entries, track offset of 1,
+	; no checksum vector (non-removable)
+
+dpb0:	dpb	512,256,63,4096,512,1,8000h
+
+  if	not ldrbios
+
+	; Partitions 1..3 have no reserved track, but instead their
+	; size accounts for the previous partition (64 sectors) with
+	; reserved tracks to make it easy to address each sector in
+	; the READ and WRITE routines.
+
+dpb1:	dpb	512,256,127,4096,512,64,8000h
+
+dpb2:	dpb	512,256,191,4096,512,128,8000h
+
+dpb3:	dpb	512,256,255,4096,512,192,8000h
+
+    if	partn8
+dpb4:	dpb	512,256,319,4096,512,256,8000h
+
+dpb5:	dpb	512,256,383,4096,512,320,8000h
+
+dpb6:	dpb	512,256,447,4096,512,384,8000h
+
+dpb7:	dpb	512,256,511,4096,512,448,8000h
+    endif
+
+  endif
+
+	bank0$segment	; I/O routines in banked memory
+
+;
+; Disk I/O routines for standardized BIOS interface
+;
+; Initialization entry point.
+;
+;	called for first time initialization.
+;
+hd$init0:
+	; May need to reset the drive and make sure
+	; it is operating in 16-bit transfer mode
+
+  if 0	; It turns out that the Z280RC boot loader sets this up.
+	; The code is left here in case it is needed.
+
+	call	iopcf		; Select I/O page
+
+	; Spin until not BUSY (bit 7 clear) and Drive Ready (bit 6 on)
+loopcmdrdy:
+	in	a,(cfstat)
+	and	11000000b
+	xor	01000000b
+	jr	nz,loopcmdrdy
+
+	ld	a,10000001b	; Disable 8-bit mode
+	out	(cffeat),a
+	ld	a,11100000b	; Drive 0 (bit 4 off), LBA mode (bit 6 on)
+				; (bits 7 and 5 on as per ATA Std.)
+	out	(cf2427),a
+	ld	a,0efh		; Set Features command
+	out	(cfcmd),a
+	; Spin until not BUSY (bit 7 clear)
+ini$lp:	in	a,(cfstat)
+	and	10000000b
+	jr	nz,ini$lp
+	in	a,(cfstat)	; Error? (bit 0 set)
+	or	a
+  endif
+
+	; Fall through to following RET
+
+hd$nop:
+	; The other partitions do not need any
+	; initialisation so they reference this
+	; entry point which just returns.
+
+	; Fall through to following RET
+
+;
+; This entry is called when a logical drive is about to
+; be logged into for the purpose of density determination.
+;
+; It adjusts the parameters contained in the disk
+; parameter header pointed at by <DE>
+;
+hd$login:
+	ret		; Nothing to do (drive is not removable)
+
+;
+; Disk READ and WRITE entry points.
+;
+; These entries are called with the following arguments:
+;
+; relative drive number in @rdrv (8 bits)
+; absolute drive number in @adrv (8 bits)
+; disk transfer address in @dma (16 bits)
+; disk transfer bank	in @dbnk (8 bits)
+; disk track address	in @trk (16 bits)
+; disk sector address	in @sect (16 bits)
+; disk type		in @dtyp (8 bits)	
+; pointer to XDPH in <DE>
+;
+; They transfer the appropriate data, perform retries
+; if necessary, then return an error code in <A>
+;
+; There is no need to preserve BC, DE or HL
+;
+
+hd$read:
+	xor	a
+	ld	hl,rd$msg
+	jr	rw$common
+
+hd$write:
+  if	banked
+	; Copy the sector to be written to common buffer using DMA
+	ld	a,(@dbnk)	; Source bank
+	ld	hl,(@dma)
+	call	phyahl
+	call	cnv12
+	ld	(srcl),hl
+	ld	(srch),de
+
+	xor	a		; Destination bank is Common
+	ld	hl,idebuf	; (logical = physical address)
+	call	cnv12
+	ld	(dstl),hl
+	ld	(dsth),de
+
+	ld	c,dal3		; Transfer using DMA3
+	ld	hl,dmapb
+	call	dmaxfr
+  endif
+	or	0ffh
+	ld	hl,wr$msg
+
+;
+;
+;	R W $ C O M M O N   --  Preform final transfer processing.
+;
+;	ENTRY	A = Operation code (0h=read, 0FFh=write )
+;		HL = Address of operation type message
+
+rw$common:
+	ld	(rwflag),a	; Save operation code
+	ld	(op$name),hl	;  and message pointer
+
+  if multi$sector$io
+	ld	a,1		; Force multi-sector OFF
+	ld	(@cnt),a	; (IDEHD doesn't support it due to
+	ld	(@rwcnt),a	;  common memory transfer buffer)
+  endif
+	
+more$retries:
+	call	iopcf		; Select Card Flash I/O page	
+
+	; Spin until not BUSY (bit 7 clear)
+loopbusy:
+	in	a,(cfstat)
+	and	10000000b
+	jr	nz,loopbusy
+
+	ld	a,11100000b	; set Logical Addressing mode (bit 6 high)
+				; Unit number 0 (bit 4). Bits 7 and 5 are high
+				; for "backward compatibility" - see ATA std.
+	out	(cf2427),a	; and high order LBA bits 24..27
+	ld	hl,(@trk)	; Logical Track (16 bit) maps to the middle
+	ld	a,h
+	out	(cf1623),a	; MSB of track
+	ld	a,l
+	out	(cf815),a	; LSB of track
+	ld	a,(@sect)	; Each track has 256 native sectors
+	out	(cf07),a	; which map exactly to the low LBA address
+
+	ld	a,01h
+	out	(cfsectcnt),a	; One Sector
+
+  if	not banked
+	; We can read/write directly to the DMA address in Bank 0
+	ld	hl,(@dma)	; Get DMA address (ready for block word I/O)
+  else
+	; Else, for banked system, read/write it to/from buffer in common
+	ld	hl,idebuf
+  endif
+	ld	bc,cfdata	; B=0, C=CFDATA
+
+	; Spin until not BUSY (bit 7 clear) and Drive Ready (bit 6 on)
+loopcmdrdy2:
+	in	a,(cfstat)
+	and	11000000b
+	xor	01000000b
+	jr	nz,loopcmdrdy2
+
+	ld	a,(rwflag)	; Read or Write?
+	or	a
+	jr	nz,ide$write	; Write
+
+ide$read:
+	ld	a,020h		; Read command
+	out	(cfcmd),a
+
+	; Spin until not BUSY (bit 7 clear) and DRQ (bit 3 set)
+
+readdrq:
+	in	a,(cfstat)
+	and	10001000b
+	xor	00001000b
+	jr	nz,readdrq
+
+	in	a,(cfstat)	; Error? (bit 0 set)
+	and	00000001b
+	jp	nz,tryagain
+
+	inirw			; Read sector (256 Words = 512 bytes)
+
+  if	banked
+	; Copy the sector just read to the destination address using DMA
+	xor	a		; Source bank is common
+	ld	hl,idebuf
+	call	cnv12
+	ld	(srcl),hl
+	ld	(srch),de
+
+	ld	a,(@dbnk)	; Destination bank
+	ld	hl,(@dma)
+	call	phyahl
+	call	cnv12
+	ld	(dstl),hl
+	ld	(dsth),de
+
+	ld	c,dal3		; Transfer using DMA3
+	ld	hl,dmapb
+	call	dmaxfr
+  endif
+	jr	ide$done	; Return Success
+;
+ide$write:
+	ld	a,030h		; CF Write command
+	out	(cfcmd),a
+
+	; Spin until not BUSY (bit 7 clear) and DRQ (bit 3 set)
+
+readdrq2:
+	in	a,(cfstat)
+	and	10001000b
+	xor	00001000b
+	jr	nz,readdrq2
+
+	otirw			; Write sector
+
+	; Spin until not BUSY (bit 7 clear)
+
+loopnotbusy:
+	in	a,(cfstat)
+	and	10000000b
+	jr	nz,loopnotbusy
+
+	in	a,(cfstat)	; Error? (bit 0 set)
+	and	00000001b
+	jr	nz,tryagain
+;
+ide$done:
+	call	iopdef		; Point back to default I/O Page
+	xor	a		; Return goodstatus
+  if multi$sector$io
+	ld	(@derflg),a
+  endif
+	ret
+;
+tryagain:
+	ld	a,(@ermde)	; Suppress error messages?
+	cp	0ffh
+	jr	z,ide$error	; Return error to application
+
+	call	?pderr
+	ld	hl,(op$name)
+	call	?pmsg
+	ld	hl,er$msg	; Print "Retry (Y/N)?"
+	call	?geco
+	cp	'Y'
+	jp	z,more$retries
+;
+ide$error:
+	call	iopdef		; Back to default I/O page
+	xor	a		; Return a "Non recoverable media error"
+	or	1
+  if multi$sector$io
+	ld	(@derflg),a
+  endif
+	ret	
+;
+  if banked
+dmapb:			; DMA parameter block
+dstl:	defs	2
+dsth:	defs	2
+srcl:	defs	2
+srch:	defs	2
+	defw	hstsiz		; Always 512 bytes
+	defw	dma$descriptor
+  endif
+
+rwflag:
+	defs	1		; Read/write flag
+op$name:
+	defw	rd$msg
+
+rd$msg:	defz	cr,lf,'Read'
+wr$msg:	defz	cr,lf,'Write'
+er$msg:	defz	' error on IDE/CF device. Retry (Y/N) ?'
+
+  if	ldrbios
+;
+; Buffer Control Blocks for CPMLDR
+;
+dtabcb:	defb	0ffh	; DRV Drive with record in DTABUF
+	defb	0,0,0	; REC# Record Position in buffer
+	defb	0	; WFLG Buffer written flag
+	defb	0	; 00 BDOS scratch byte
+	defw	0	; TRACK Physical track location
+	defw	0	; SECTOR Physical sector location
+	defw	dtabuf	; BUFFAD Address of Data buffer
+	defb	0	; BANK Bank containing buffer
+	defw	0	; LINK Link to next BCB
+
+dirbcb:	defb	0ffh	; DRV Drive with record in DIRBUF
+	defb	0,0,0	; REC# Record Position in buffer
+	defb	0	; WFLG Buffer written flag
+	defb	0	; 00 BDOS scratch byte
+	defw	0	; TRACK Physical track location
+	defw	0	; SECTOR Physical sector location
+	defw	dirbuf	; BUFFAD Address of Directory buffer
+	defb	0	; BANK Bank containing buffer
+	defw	0	; LINK Link to next BCB
+
+dirbuf:	defs	hstsiz
+
+dtabuf:	defs	hstsiz
+
+alv:	defs	(dsm/4)+2
+  endif ; ldrbios
+
+  if banked
+
+	common$segment
+
+idebuf:	defs	hstsiz	; Common memory buffer (no DMA from IDE interface)
+
+  endif
+
+	end

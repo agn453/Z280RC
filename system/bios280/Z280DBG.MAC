@@ -1,0 +1,63 @@
+;
+; Z280DBG
+;
+;	Program to call the Z280RC Banked BIOS USERF entry-point
+;	to invoke the BIOSDBG routine (the Banked BIOS must be
+;	built with DEBUG enabled - otherwise the USERF entry-point
+;	just returns.
+;
+;	Tony Nicholson
+;	02-Nov-2018
+;
+;	Build with -
+;		M80 =Z280DBG
+;		LINK Z280DBG
+;
+;
+BDOS	equ	0005h
+;
+; CP/M Plus BDOS function codes
+;
+$print	equ	9
+$vers	equ	12
+$scb	equ	49
+$bios	equ	50
+;
+	.z80
+start:
+	ld	c,$vers		;Is this CP/M-Plus?
+	call	BDOS
+	cp	31h
+	jr	c,wrongv	; No
+
+	ld	c,$scb		;Banked?
+	ld	de,basescb
+	call	BDOS
+	ld	a,h		;Non-banked has zero
+	or	l		; common base address
+	jr	nz,versok	;Only allow Banked
+
+wrongv:	ld	de,badver
+	ld	c,$print	;Give them the bad news
+	jp	BDOS
+
+badver:	defb	13,10,'Error: Z280DBG requires Banked Z280RC CP/M-Plus$'
+
+versok:	
+	ld	c,$bios		;Call BIOS USERF entry
+	ld	de,biospb
+	call	BDOS
+	ret
+
+basescb:
+	db	05Dh		;Get SCB parameter block
+	db	0		; to fetch common memory
+	dw	0000h		; base address
+
+biospb:	defb	30		;BIOS USERF function number
+	defb	0aah		;areg
+	defw	0bbcch		;bcreg
+	defw	0ddeeh		;dereg
+	defw	01234h		;hlreg
+
+	end	start

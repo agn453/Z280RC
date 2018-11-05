@@ -1,0 +1,517 @@
+	title 'Z280RC CLOCK routines for CP/M 3 BIOS'
+
+;		+-----------------------+
+;		|			|
+;		|	C L O C K	|
+;		|			|
+;		+-----------------------+
+;
+;           CP/M-80 Version 3  --  Modular BIOS
+;
+;	      Real Time of Day Clock Routines
+;	      DS1302 clock without interrupts
+;
+;
+;   Modification History:
+;
+;	27-Jun-2018	Tony Nicholson	Initial Z280RC system support
+;					for DS1302 clock chip
+;
+; NB: Only dates after 31-Dec-2017 supported unless DBASE is changed.
+; Also there are hard-coded Leap Year values in the LEAPS table until 2056.
+;
+
+	maclib	Z280RCIO.LIB	; System I/O Addresses
+	maclib	CONFIG.LIB	; Configuration Equates
+
+	public	time		; Entry point
+
+dbase	equ	14610	; Days since 31-Dec-1978 for 31-Dec-2017
+
+base$year$bcd equ 17h	; Base year (in BCD)
+
+  if banked
+
+	; Uses BIOS stack to minimise common memory usage
+
+	extrn	@tstack, @cbnk, ?bnksl
+  endif
+
+  if ldrbios
+time:	ret		; Not implemented for LDRBIOS
+  else
+
+	; Date and Time values are in the SCB module
+	;
+	; @DATE is number of days since 31-Dec-1978
+	; @HOUR, @MIN, @SEC are the 2-digit BCD time of day
+
+	extrn	@date, @hour, @min, @sec
+
+	; Z280 I/O Port selection
+
+	extrn	iopwatch, pshiop, popiop
+
+;
+; TIME - Set time and date clock
+;
+	common$segment
+
+time:
+    if banked
+	ld	(@tstack),sp	; Switch to local BIOS stack
+	ld	sp,@tstack
+	ld	a,(@cbnk)	; Save current bank
+	push	af
+	xor	a		; Switch to bank 0
+	call	?bnksl
+	call	do$time		; Call the routine in bank 0
+	pop	af
+	call	?bnksl		; Restore caller's bank
+	ld	sp,(@tstack)	; Back to entry stack
+	ret
+
+	bank0$segment
+
+do$time:
+    endif
+
+	ld	a,c		; Has the clock just been
+	cp	0ffh		;  set? (C=0FFh)
+
+    if clock$set$support	; Setting the time adds considerable
+	jp	z,setclk	;  memory use for non-banked system
+    else
+	ret	z		; Yes - do nothing
+    endif
+
+getclk:	push	hl		; Save registers
+	push	de
+	push	bc
+	push	af
+	call	pshiop		; Also save I/O page register
+
+	call	iopwatch	; Select watch I/O page
+	ld	hl,watrdc	; Point to Read Command bytes
+	ld	de,timeblk	; Time values from clock go here
+gclklp:	ld	a,(hl)
+	or	a
+	jr	z,gclkdn	; Zero byte means done reading clock
+	push	de		; Save pointer to clock value
+	ld	d,a		; command byte to D
+	inc	hl
+	ld	a,00000010b	; enable DS1302 (nRST 1 SCLK 0)
+	out	(watch),a
+	ld	b,8		; counter to write 8 bits
+gclko:	ld	a,00000100b	; (nRST 1 SCLK 0) shifted left
+	srl	d		; move LSB into carry
+	rra			;  then into MSB (data bit)
+	out	(watch),a	; output bit (nRST 1 SCLK 0, data in bit 7)
+	or	00000001b	; raise SCLK to 1 to latch data output bit
+	out	(watch),a	; output bit (nRST 1 SCLK 1, data in bit 7)
+	outjmp
+	djnz	gclko		; repeat for each bit of command byte
+	push	hl
+	push	bc
+	ld	d,0		; initialise result
+	ld	c,watch
+	ld	b,8		; counter to read 8 bits
+gclki:	ld	a,10000010b
+	out	(watch),a	; output (nRST 1 SCLK 0) to latch input bit
+	inw	hl,(c)		; read bit into L (bit 7)
+	ld	a,10000011b
+	out	(watch),a	; output (nRST 1 SCLK 1)
+	rl	l		; shift data bit into CY
+	rr	d		; then into result
+	djnz	gclki		; repeat for each bit of read data
+	ld	a,d		; Result to A
+	pop	bc
+	pop	hl
+	pop	de		; Restore time value pointer
+	ld	(de),a		; Save the result byte
+	inc	de		; Point to next value to be read
+	ld	a,00000010b
+	out	(watch),a	; output (nRST 1 SCLK 0)
+	nop			; delay about a microsecond
+	nop
+	nop
+	ld	a,00000000b
+	out	(watch),a	; output (nRST 0 SCLK 0)
+	nop			; delay about a microsecond
+	nop
+	nop
+	jr	gclklp		; get next time value
+
+gclkdn:
+	; Convert date from BCD into CP/M-Plus date word
+
+	ld	c,base$year$bcd
+	ld	hl,dbase
+nexty:	ld	a,c		; Advance a year
+	add	a,01h
+	daa			; (in BCD)
+	ld	c,a
+
+	; Check for leap year (Year is in C)
+
+leapck:	push	hl
+	ld	de,365		; days in year
+	ld	a,28		; days in February
+	ld	(febday),a
+	ld	hl,leaps
+notlp:	ld	a,(hl)
+	cp	0ffh
+	jr	z,endltb
+	inc	hl
+	cp	c
+	jr	nz,notlp
+leapyr:	inc	de		; Leap year has 366 days
+	ld	a,29
+	ld	(febday),a
+endltb:	pop	hl
+	ld	a,(year)
+	cp	c		; Is this the correct year?
+	jr	z,thisyr	; Yes
+	add	hl,de		; No, add in number of days
+	jr	nexty		;  and check next year
+thisyr:	ld	a,(month)	; Convert BCD month to binary
+	call	bcdbin
+	ld	de,mdays
+	ld	b,0
+nextm:	dec	a		; Add in days per month
+	jr	z,thismn
+	push	af
+	ld	a,(de)
+	inc	de
+	ld	c,a
+	pop	af
+	add	hl,bc
+	jr	nextm
+thismn:	ld	a,(day)		; Convert BCD day to binary
+	call	bcdbin
+	ld	c,a
+	add	hl,bc		; Add in day
+	ld	(@date),hl	; Store days since epoch to SCB
+	ld	hl,(mins)	; Get minutes and hours
+	ld	a,h		; Swap byte order
+	ld	h,l
+	ld	l,a
+	ld	(@hour),hl	; Store Hours and Minutes to SCB
+	ld	a,(secs)
+	ld	(@sec),a	; Store Seconds to SCB
+
+clkdone:
+	call	popiop
+	pop	af		; All done, restore registers
+	pop	bc
+	pop	de
+	pop	hl
+	ret
+
+    if clock$set$support
+setclk:	push	hl		; Save registers
+	push	de
+	push	bc
+	push	af
+	call	pshiop		; Also save I/O page register
+
+	ld	hl,@date	; Fetch CP/M date word
+	ld	e,(hl)		;  into DE
+	inc	hl
+	ld	d,(hl)
+	inc	hl
+	ld	a,(hl)		; Copy Time from SCB
+	inc	hl		;  to TIMEBLK
+	ld	(hours),a
+	ld	a,(hl)
+	inc	hl
+	ld	(mins),a
+	ld	a,(hl)
+	ld	(secs),a
+	ex	de,hl		; Date word to HL
+	call	conv$date
+
+	; Date and time values now in TIMEBLK
+
+	ld	de,timeblk	; Copy time value into
+	ld	hl,wrsec	;  DS1302 command block
+	ld	b,7		; 7 bytes (sec,min,hour,dow,day,month,year)
+wrcpt:	ld	a,(de)
+	ld	(hl),a
+	inc	de
+	inc	hl
+	inc	hl		; Skip length and command bytes
+	inc	hl
+	djnz	wrcpt
+wrready:
+	call	iopwatch
+	ld	hl,wrcmds	; Point to write time commands
+wrloop:	ld	a,(hl)
+	or	a
+	jr	z,clkdone	; Done when we reach end-of-table
+	ld	a,00000010b	; Enable timekeeper, SCLK low, DATA low
+	out	(watch),a
+	outjmp
+	call	outbytes
+	ld	a,00000010b	; nRST high, SCLK low
+	out	(watch),a
+	nop			; delay about a microsecond
+	nop
+	nop
+	ld	a,00000000b	; nRST and SCLK low
+	out	(watch),a
+	nop			; delay about a microsecond
+	nop
+	nop
+	jr	wrloop
+
+;
+;	Convert CP/M date (number of days) to BCD values dd mm yy
+;	HL contains the number of days (1 = 1-Jan-1978)
+;
+conv$date:
+	call	compute$dow	; Calculate day of week (0..6)
+	inc	a		; Make it 1..7
+	ld	(dow),a
+	call	compute$year	; Compute year, return remaining days
+	ld	a,c
+	cp	99+1		; Year 2000 and beyond?
+	jr	c,cvd0		; No
+	sub	100		; Yes, correct to 2-digit year
+cvd0:	call	binbcd		; Convert to BCD
+	ld	(year),a
+	ld	e,0		; Leap year bias
+	ld	a,c
+	and	00000011b	; (Year & 3) == 0 ?
+	jr	nz,cvd1
+	sub	31+28+1		; ..and (rem days > 59) ?
+	ld	a,h		;   (after Feb 29 on leap year)
+	sbc	a,0
+	jr	c,cvd1
+	inc	e		; ..then leap bias = 1
+cvd1:	ld	c,e
+	call	compute$month
+	push	de
+	push	hl
+	ld	hl,mdoy		; Table for day of year per month
+	add	hl,de
+	add	hl,de
+	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a		; L = month_days[month]
+	ld	b,0
+	add	hl,bc		;     + leap bias
+	ex	de,hl
+	pop	hl
+	or	a
+	sbc	hl,de		; day = rem days - HL
+	ld	a,l
+	call	binbcd
+	ld	(day),a
+	pop	de
+	inc	de		; ++month (convert to base 1)
+	ld	a,e
+	call	binbcd
+	ld	(month),a
+	ret
+
+;		Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec
+mdoy:	defw	  0, 31, 59, 90,120,151,181,212,243,273,304,334
+
+binbcd:	push	bc
+	ld	b,10
+	ld	c,-1
+sb1:	inc	c
+	sub	b
+	jr	nc,sb1
+	add	a,b
+	sla	c
+	sla	c
+	sla	c
+	sla	c
+	or	c
+	pop	bc
+	ret
+
+;
+;	Compute day of week from number of days
+;
+compute$dow:
+	push	hl
+	dec	hl
+	ld	e,7		; Day of week = (days -1) mod 7
+
+	; Divide HL by E, remainder in A
+
+	ld	b,16+1		; 17 times thru loop
+	xor	a		; Clear remainder and carry
+div1:	adc	a,a		; Shift A left + carry
+	sbc	a,e		; Subtract divisor
+	jr	nc,div0		; Jump if it worked
+	add	a,e		; else restore A and carry
+div0:	ccf			; flip carry bit
+	adc	hl,hl		; shift and carry into dividend/quotient
+	djnz	div1		; loop until done
+
+	; Remainder (day of week) is in A
+
+	pop	hl
+	ret
+
+;
+;	Compute year from number of days, returns year in BC and
+;	remaining number of days in HL
+;
+compute$year:
+	ld	bc,78		; Base Year is 1978
+cy1:	ld	de,365		; Year length
+	ld	a,c
+	and	3		; Leap year?
+	jr	nz,cy2		; No
+	inc	de		; Yes, year length to 366
+cy2:	push	hl
+	dec	de
+	or	a
+	sbc	hl,de		; Rem days - year length
+	jr	c,cy3		; return if <= 0
+	pop	af	; Discard from stack???
+	dec	hl
+	inc	bc		; ++year
+	jr	cy1
+cy3:	pop	hl
+	ret
+
+;
+;	Compute month from remaining number of days
+;	On entry, C= leap bias, HL = remaining days
+;	Returns month in DE, remaining days in HL
+;
+compute$month:
+	push	hl
+	ld	de,11		; E = month (0..11), D = 0
+	ld	b,d		; B = 0
+cm1:	ld	a,e
+	cp	2		; Jan or Feb?
+	jr	nc,cm2
+	ld	c,b		; Leap bias = 0
+cm2:	ld	hl,mdoy
+	add	hl,de
+	add	hl,de
+	ld	a,(hl)
+	inc	hl
+	ld	h,(hl)
+	ld	l,a		; HL = month_days[month]
+	add	hl,bc		;      + leap bias
+	ex	de,hl
+	ex	(sp),hl		; HL = rem days
+	ld	a,e
+	sub	l
+	ld	a,d
+	sbc	a,h
+	ex	(sp),hl
+	ex	de,hl		; mdays[month] + leap_bias < rem days?
+	jr	c,cm3		; Return if yes
+	dec	e
+	jp	p,cm1
+cm3:	pop	hl
+	ret
+
+
+;
+; Bit bang output commands to timekeeper chip
+;
+outbytes:
+	ld	c,(hl)		; First byte is count
+	ld	a,c
+	or	a
+	ret	z		; Zero means no more command bytes
+	inc	hl
+outnextb:
+	ld	d,(hl)		; Fetch next byte
+	inc	hl
+	ld	b,8		; For each of the 8 bits
+outb1:	ld	a,00000100b	; nRST and SCLK bits are ready for RRA
+	srl	d		; Shift bit 0 into carry flag
+	rra			; then into bit 7 of A with nRST
+				;  and SCLK to their correct position
+	out	(watch),a	; Data bit is high bit, nRST=1, SCLK=0
+	or	00000001b	; Set SCLK=1
+	out	(watch),a	; This latches the data bit (on rising SCLK)
+	outjmp
+	djnz	outb1
+	dec	c
+	ret	z		; Return with SCLK=1, ready for inbyte
+	jr	outnextb	; Next byte
+
+
+wrcmds:	defb	2, 10001110b	; Control register 0, WP bit to zero
+wrctrl:	defb	0000000b
+	defb	2, 10010000b	; Write trickle-charge
+	defb	10100101b	;  for Diode and 2 kOhm
+	defb	2, 10000000b	; Write second
+wrsec:	defs	1
+	defb	2, 10000010b	; Write minute
+	defs	1
+	defb	2, 10000100b	; Write hour
+	defs	1
+	defb	2, 10001010b	; Write day of week
+	defs	1
+	defb	2, 10000110b	; Write day
+	defs	1
+	defb	2, 10001000b	; Write month
+	defs	1
+	defb	2, 10001100b	; Write year
+	defs	1
+	defb	2, 10001110b	; Control register WP bit ON
+	defb	10000000b
+	defb	0		; End-of-Table marker
+
+    endif ; clock$set$support
+
+bcdbin:	push	bc
+	ld	c,a
+	and	0fh
+	ld	b,a
+	ld	a,c
+	and	0f0h
+	rrca
+	rrca
+	rrca
+	ld	c,a
+	rlca
+	rlca
+	add	a,c
+	add	a,b
+	pop	bc
+	ret
+
+mdays:	defb	31		; Days per month
+febday: defb	28
+	defb	31,30,31,30,31,31,30,31,30,31
+
+leaps:	;  Leap years in BCD until 2056
+	defb	20h,24h,28h,32h,36h,40h,44h,48h,52h,56h
+	defb	0ffh	;  end of table
+
+watrdc:	defb	10000001b	; seconds
+	defb	10000011b	; minutes
+	defb	10000101b	; hours
+	defb	10001011b	; day of week
+	defb	10000111b	; day
+	defb	10001001b	; month
+	defb	10001101b	; year
+	defb	0 ; end of watch read command table
+
+timeblk:
+secs:	defb	0		; seconds
+mins:	defb	0		; minutes
+hours:	defb	0		; hours
+dow:	defb	0		; day of week
+day:	defb	0		; day
+month:	defb	0		; month
+year:	defb	0		; year
+
+  endif ; ldrbios
+
+	end

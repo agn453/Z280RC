@@ -10,16 +10,57 @@ wiki at
 
 The original software is located in zip files in the "original" subdirectory.
 
-My own modifications to the software are in the "system" subdirectory and
-below.
+My own modifications to Bill Shen's original CBIOS3 for CP/M 3 are in the
+"system" subdirectory and below.
 
 New Utilities are in the "utilities" subdirectory.
 
-As at 18-Jul-2018, only an updated Non-Banked CBIOS and a CP/M utility
-to support the on-board clock calendar timekeeping chip (TIME.MAC) have
-been added.
+Modification History (in reverse chronological order):
 
-The new CBIOS adds support for the DS1302 timekeeper to Non-Banked
+06-Nov-2018
+-----------
+
+My own version of a CP/M Plus BIOS for the Z280RC are in the "system/bios280"
+subdirectory.
+
+There are submit files that build Non-banked (working), Banked (still has
+problems - see below*) and Loader .COM files (not yet integrated into the
+boot loader track on the CompactFlash drive).
+
+The Y2K patched versions of the system page relocatable BDOS modules for
+CP/M 3 and the ZCPM3 system page relocatable compatible BDOS modules can
+be selected using DRI-CPM3.SUB or USE-ZPM3.SUB prior to building everything
+with BUILDALL.SUB.
+
+You'll need Hector Peraza's ZSM4 Z80/Z180/Z280 Macro-Assembler V4.0 beta 9
+or later as well as CP/M-Plus supplied LINK and GENCPM utilities too.
+
+ZSM4 is available from the RetroBrew Computers Forum at
+https://www.retrobrewcomputers.org/forum/index.php?t=msg&th=93&goto=3700&#msg_3700
+
+The BUILDALL.SUB build procedure produces a CPM3NBNK.SYS and CPM3BANK.SYS
+system image that can be copied to the boot drive user area 0 as TEST.SYS
+and loaded via a special version of the CP/M Loader - TEST.COM
+
+* Know problem with Banked version.  I've left my debugging enabled, so
+there is superfluous output for BIOS kernel routines, and a simple debugger
+is invoked prior to starting CP/M's console command processor.  This allows
+memory and register examination as well as memory management manipulation.
+The system seems to start find, and you can navigate different drives and
+run programs.  If I try to use PIP to copy large files from one of the
+CompactFlash drives (A: thru D:) to the RAM disk (drive M:) I get
+verification errors and from then on there appears to be a memory corruption.
+
+I suspect some issue with allocation of buffers (which I'll continue to look
+at) - however, if you see an obvious error, please raise it as a Git Hub
+issue.
+
+18-Jul-2018
+-----------
+
+Only an updated Non-Banked CBIOS3 and a CP/M utility to support the on-board
+clock calendar timekeeping chip (TIME.MAC) have been added.
+The new CBIOS3 adds support for the DS1302 timekeeper to Non-Banked
 CP/M-Plus as well as character I/O changes for DEVICE support and a fix
 to the RAM disk size (Z280RC only has 2Mb memory)
 
