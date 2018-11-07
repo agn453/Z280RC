@@ -1,4 +1,4 @@
-	.xlist		; Supress listing of this MACLIB
+	.xlist		; Suppress listing of this MACLIB
 
 ;	+-----------------------+
 ;	|			|
@@ -9,7 +9,7 @@
 	.z280
 
 config	macro	
-	defz	cr,lf,'Z280RC Non-banked BIOS 01-Nov-2018',cr,lf
+	defz	cr,lf,'Z280RC Non-banked BIOS 07-Nov-2018',cr,lf
 	endm
 
 true	equ	-1

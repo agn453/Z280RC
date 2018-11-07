@@ -51,6 +51,8 @@
 ;					interrupt routines and
 ;					skeleton System-mode/User-mode
 ;					code - INT$ENABLED option
+;	07-Nov-2018	Tony Nicholson	SELMEM (?BNKSL) was not saving
+;					the A register
 ;
 	page
 	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
@@ -229,6 +231,8 @@ bios:
 ;
 ;	Initial entry point for system startup
 ;
+;	No registers are saved
+;
 	bank0$segment	; This is only called on start-up in bank 0
 
 boot:	
@@ -253,8 +257,11 @@ bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
 	inc	hl
 	djnz	bz0
 
-	ld	c,1		; Set MULTIO variables to 1 sector
-	call	multio
+	inc	a		; Set MULTIO variables to 1 sector
+	ld	(@cnt),a
+    if multi$sector$io
+	ld	(@rwcnt),a
+    endif
   endif
 
 ;
@@ -341,6 +348,7 @@ bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
 	ld	c,mmcr		; MMU Master Control Register
 	outw	(c),hl		; Enable memory management unit
 
+	; MMU is now ON
   endif
 
 ;
@@ -703,6 +711,8 @@ iret2:	retil		; Pop MSR and return
 ;
 ;	Warm boot
 ;
+;	No registers are saved
+;
 	common$segment
 
 wboot:
@@ -736,6 +746,8 @@ wbsys:
 ;
 ;	Return address of Drive Table in HL
 ;
+;	No other registers are changed
+;
 	common$segment
 
 drvtbl:
@@ -750,6 +762,8 @@ dummy:	ret
 ;
 ; Entry		B = destination bank
 ;		C = source bank
+;
+;	No other registers are changed
 ;
 	common$segment
 
@@ -766,6 +780,9 @@ xmove:
 ;
 ;	Copies BC bytes from the address pointed
 ;	to by DE to the address pointed to by HL
+;
+;	On exit, DE and HL are advanced by BC bytes
+;	and BC is unchanged.  AF is set to 00h.
 ;
 	common$segment
 
@@ -796,7 +813,7 @@ bnkdif:
 	push	hl		; Save Dest again for printing
 	push	de		; Save Source again
 	ld	hl,mov$msg	; Output "MOVE from P"
-	call	?pmsg
+	call	?pmsg		;  (P is for physical address)
 	ld	a,(@msbnk)	; Output source bank
 	call	?phex		
 	pop	hl		; Pop Source
@@ -867,20 +884,26 @@ mvcnt:	defw	0000		; Byte count
 ;	upcoming READ or WRITE requests, and @RWCNT
 ;	which counts down the requests.
 ;
+;	All registers are saved
+;
 	bank0$segment
 
 multio:
+	push	af
 	ld	a,c
 	ld	(@cnt),a
   if multi$sector$io
 	ld	(@rwcnt),a
   endif
+	pop	af
 	ret
 
 ;
 ; FLUSH
 ;
 ;	BIOS deblocking buffer flush.  Not implemented.
+;
+;	On exit, A is set to 00h, no other registers changed
 ;
 flush:
 	xor	a
@@ -891,12 +914,15 @@ flush:
 ;
 ;	Select Bank for Z280 User-mode
 ;
+;	All registers saved.
+;
 	common$segment
 
 ?usrsl:
   if banked
+	push	af
 	ld	(@ubnk),a	; Save User-mode bank
-	ld	(selbnk),a
+	ld	(@sbnk),a
 ;	ld	a,updr0		; Point MMU to User-PDR page 0
 	xor	a
 	jr	selpdr
@@ -906,23 +932,27 @@ flush:
 ;
 ;	Select memory bank (in A register)
 ;
+;	All registers saved.
+;
 selmem:
   if banked
+	push	af		; Save AF to stack
+
 	ld	(@cbnk),a	; Save new bank to current bank
-	ld	(selbnk),a
+	ld	(@sbnk),a
 	ld	a,spdr0		; Point MMU to System-PDR page 0
 
 selpdr:
-	push	hl		; Save registers
+	push	hl		; Save other registers
 	push	de
 	push	bc
 	call	pshiop		; Push current I/O page
 
     if krnl$debug
 	push	af
-	ld	hl,sel$msg	; Output '?BNKSL Select Bank '
+	ld	hl,sel$msg	; Output 'SELMEM Select Bank '
 	call	?pmsg
-	ld	a,(selbnk)
+	ld	a,(@sbnk)
 	call	?phex
 	pop	af
     endif
@@ -934,7 +964,7 @@ selpdr:
 	out	(pdr),a		; Pointer to User or System-mode PDRs
 
 	ld	de,0		; Selected Bank to DE
-selbnk	equ	$-2		; (bank we're selecting modifies code)
+@sbnk	equ	$-2		; (bank we're selecting modifies code)
 
 	ld	hl,ptablst	; Index into Page Table list
 	add	hl,de
@@ -946,9 +976,10 @@ selbnk	equ	$-2		; (bank we're selecting modifies code)
 	outjmp
 
 	call	popiop		; Restore I/O Page register
-	pop	bc		;  and registers
+	pop	bc		;  and all registers
 	pop	de
 	pop	hl
+	pop	af
   endif
 	ret
 
@@ -1172,6 +1203,9 @@ ptablst:
 ;	the logical address passed in A (bank) and HL.
 ;	Uses the Pagetable data for the MMU.
 ;
+;	On exit, HL has the page table entry.
+;	Registers DE, BC and AF are not saved.
+;
 	common$segment
 
 phyadr:
@@ -1205,6 +1239,10 @@ phyadr:
 ; For Non-Banked, Physical and Logical addresses are the same.
 ; For Banked, we take into account Common Memory.
 ;
+;	On exit, A= physical bank (high 8 bits of address),
+;	HL= physical address (low 16 bits of address).
+;	Registers BC and DE are unchanged.
+;
 	common$segment
 
 phyahl:
@@ -1235,6 +1273,7 @@ adjust:	subw	hl,common$size	;Take off common memory size
 ;
 ; On exit, DE has the high 12 bits in 15..4 with low nibble all 1s
 ; and HL has the low 12 bits in 11..0 with the high nibble all 1s
+; BC is unchanged and AF is not saved.
 ;
 cnv12:	ld	d,a		; Bank address to D
 	ld	a,h		; keep bits 15..12
@@ -1291,15 +1330,14 @@ setjumps:
 ; ?LDCCP
 ;
 ;	Reads the CP/M Console Command Processor
-;	from the file named CCP.COM on the specified drive
+;	from the file named CCP.COM on the specified drive.
+;	Assumes that SETJUMPS has been called (so the correct
+;	bank is selected and the BDOS entry jump vector is
+;	valid).
+;
+;	No registers are saved.
 ;
 ?ldccp:
-    if banked
-	ld	a,(@cbnk)	; Save current bank on
-	push	af		;  the stack
-	ld	a,tpa$bank	; Select TPA bank
-	call	?bnksl
-    endif
 
 ?ldagain:
 	xor	a		; A=0
@@ -1332,11 +1370,8 @@ setjumps:
 	ld	hl,savccp	; Point to DMA parameter block
 	call	dmaxfr		; Copy using DMA2
       endif
-	pop	af		; Restore bank and return
-	jp	?bnksl
-    else    
-	ret
     endif
+	ret
 
 no$ccp:
 	ld	hl,err$msg	; print '%BOOT-E '
@@ -1418,6 +1453,8 @@ devtbl:
 ;	Console Output.  Send character in <C>
 ;			to all selected devices
 ;
+;	No registers are saved.
+;
 	common$segment
 
 conout:	
@@ -1430,6 +1467,8 @@ conout:
 ;	Auxiliary Output. Send character in <C>
 ;			to all selected devices
 ;
+;	No registers are saved.
+;
 auxout:
 	ld	hl,(@aovec)	; fetch aux output bit vector
 	jr	out$scan
@@ -1439,6 +1478,8 @@ auxout:
 ;
 ;	List Output.  Send character in <C>
 ;			to all selected devices.
+;
+;	No registers are saved.
 ;
 list:
 	ld	hl,(@lovec)	; fetch list output bit vector
@@ -1473,6 +1514,8 @@ not$out$device:
 ;		all selected console output devices
 ;		are ready.
 ;
+;	On exit, AF=status. No other registers are saved.
+;
 conost:
 	ld	hl,(@covec)	; get console output bit vector
 	jr	ost$scan
@@ -1484,6 +1527,8 @@ conost:
 ;		all selected auxiliary output devices
 ;		are ready.
 ;
+;	On exit, AF=status. No other registers are saved.
+;
 auxost:
 	ld	hl,(@aovec)	; get aux output bit vector
 	jr	ost$scan
@@ -1494,6 +1539,8 @@ auxost:
 ;	List Output Status.  Return true if
 ;		all selected list output devices
 ;		are ready.
+;
+;	On exit, AF=status. No other registers are saved.
 ;
 listst:
 	ld	hl,(@lovec)	; get list output bit vector
@@ -1578,6 +1625,8 @@ ci1:				; get input, saving <BC> & <HL>
 ;		any selected console input device
 ;		has an available character.
 ;
+;	On exit, AF=status. No other registers are saved.
+;
 const:
 	ld	hl,(@civec)	; get console input bit vector
 	jr	ist$scan
@@ -1588,6 +1637,8 @@ const:
 ;	Auxiliary Input Status.  Return true if
 ;		any selected auxiliary input device
 ;		has an available character.
+;
+;	On exit, AF=status. No other registers are saved.
 ;
 auxist:
 	ld	hl,(@aivec)	; get aux input bit vector
@@ -1613,6 +1664,8 @@ cis$next:
 ;	Console Input.  Return character from first
 ;		ready console input device.
 ;
+;	On exit, AF=character. No other registers are saved.
+;
 conin:
 	ld	hl,(@civec)
 	jr	in$scan
@@ -1622,6 +1675,8 @@ conin:
 ;
 ;	Auxiliary Input.  Return character from first
 ;		ready auxiliary input device.
+;
+;	On exit, AF=character. No other registers are saved.
 ;
 auxin:
 	ld	hl,(@aivec)
@@ -1667,6 +1722,8 @@ ipchl:				; vectored CALL point
 ;	Descriptor (16 bits)	See CONFIG.LIB to select between
 ;				burst and continuos mode transfers.
 ;				All transfers use byte counts.
+;
+;	On exit, no registers are saved.
 ;
 dmaxfr:
   if krnl$debug
@@ -1838,10 +1895,12 @@ pshiop:
 ; SELDSK
 ;
 ;	Select Disk Drive.  Drive code in <C>.
+;	Initial select flag in <E>.
+;
 ;		Invoke login procedure for drive
 ;		if this is first select.  Return
 ;		address of disk parameter header
-;		in <HL>
+;		in <HL> or 0 if non-existent drive.
 ;
 seldsk:
 	ld	a,c
@@ -2374,7 +2433,7 @@ to$msg:	defz	' to '
 xfr$msg: defz	cr, lf, 'DMAXFR using DMA'
 bad$dma$port: defz ' BAD PORT='
 cnt$msg: defz	' count '
-sel$msg: defz	cr, lf, '?BNKSL Select Bank '
+sel$msg: defz	cr, lf, 'SELMEM Select Bank '
 
     if debug
 ALIGN	EQU ($ - BIOS + 16) AND 0Fh
