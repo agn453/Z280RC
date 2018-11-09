@@ -9,7 +9,7 @@
 	.z280
 
 config	macro	
-	defz	cr,lf,'Z280RC Banked BIOS 07-Nov-2018',cr,lf
+	defz	cr,lf,'Z280RC Banked BIOS 08-Nov-2018',cr,lf
 	endm
 
 true	equ	-1
@@ -24,12 +24,16 @@ multi$sector$io equ false	; TRUE to support MULTIO (not tested)
 ; Interrupt mode and System/User mode not yet implemented
 int$enabled equ	false		; TRUE to enable interrupts (mode 3)
 
-krnl$debug equ	true		; TRUE to enable BIOSKRNL debug output
+krnl$debug equ	false		; TRUE to enable BIOSKRNL debug output
 				; for disk I/O and memory moves.
 
 idehd	equ	true		; Built-in IDE CardFlash disk
 partn8	equ	false		; TRUE for extra drives E:..H:
 ramdisk equ	true		; and RAMDISK drive M: (uses top 1.5Mb of RAM)
+
+use$disk$macros equ false	; TRUE use DPH and DPB macros in CPM3M80.LIB
+				; FALSE DPH and DPB are manually specified
+				; in the disk modules.
 
 clock$set$support equ true	; TRUE to include time set support in CLOCK
 

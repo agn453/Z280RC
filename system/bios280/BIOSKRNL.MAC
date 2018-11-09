@@ -51,9 +51,6 @@
 ;					interrupt routines and
 ;					skeleton System-mode/User-mode
 ;					code - INT$ENABLED option
-;	07-Nov-2018	Tony Nicholson	SELMEM (?BNKSL) was not saving
-;					the A register
-;
 	page
 	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
 	maclib	Z280RCIO.LIB	; Z280RC I/O Port definitions
@@ -920,7 +917,6 @@ flush:
 
 ?usrsl:
   if banked
-	push	af
 	ld	(@ubnk),a	; Save User-mode bank
 	ld	(@sbnk),a
 ;	ld	a,updr0		; Point MMU to User-PDR page 0
@@ -936,8 +932,6 @@ flush:
 ;
 selmem:
   if banked
-	push	af		; Save AF to stack
-
 	ld	(@cbnk),a	; Save new bank to current bank
 	ld	(@sbnk),a
 	ld	a,spdr0		; Point MMU to System-PDR page 0
@@ -979,7 +973,6 @@ selpdr:
 	pop	bc		;  and all registers
 	pop	de
 	pop	hl
-	pop	af
   endif
 	ret
 
@@ -1033,10 +1026,10 @@ selpdr:
 ;					common memory up to BDOS entry
 ;
 ; CP/M-Plus Data Buffers
-; 01e000	02..03	0000-efff	CP/M Buffers
+; 01e000	02..03	0000-dfff	CP/M Buffers
 ;
 ; Not-used
-; 03a000	04..08	0000-efff
+; 03a000	04..08	0000-dfff
 ;
 ; RAM Drive
 ; 080000	09..1F	0000-ffff	RAMdisk (accessed via DMA3)

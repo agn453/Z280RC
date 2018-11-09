@@ -18,6 +18,8 @@
 ;
 ;   Modification History
 ;
+;	08-Nov-2018	Tony Nicholson	Save and restore User-mode
+;					bank around call to ?usrsl
 ;
 
 	maclib	CONFIG.LIB
@@ -264,8 +266,9 @@ bank:
 	cp	9+1
 	jr	nc,bankerr
 
-setbnk:	call	?usrsl		; Change User-mode MMU
-
+setbnk:	push	af		; Save bank (clobbered by ?usrsl)
+	call	?usrsl		; Change User-mode MMU
+	pop	af		; Restore bank
 	jr	svbank
 
 bankerr:
@@ -369,6 +372,8 @@ zero:	ld	hl,zebmsg	; Zero memory up to common in
 	ld	hl,common$base	; Address Pointer
 	dec	hl		; Clear down to address 0000
 
+	pop	af		; Get back User-mode bank
+	push	af		; Save it back
 	cp	9		; Bank 9 is RAMDISK
 	jr	nz,ze00
 
@@ -384,8 +389,8 @@ ze01:	ldup	(hl),a		; Write via User-mode MMU
 	jr	ze01
 ze02:	ld	hl,zedmsg	; Display "Zeroed "
 	call	?pmsg
-	pop	af
-	jp	svbank		; Go and display Bank number
+	pop	af		; Recover saved User-mode bank
+	jp	svbank		; Go and display it
 				; and back to prompt
     endif
 

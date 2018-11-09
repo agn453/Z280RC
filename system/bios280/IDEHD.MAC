@@ -18,6 +18,10 @@
 ;	29-Jul-2018	Tony Nicholson	If multi-sector I/O is
 ;					selected, force it back to
 ;					a single sector at a time.
+;	08-Nov-2018	Tony Nicholson	Add the capabilty to manually
+;					define the DPH and DPB with
+;					a local allocation vectors
+;					for each drive.
 ;
 
 	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
@@ -76,6 +80,15 @@ blksiz	equ	4096		; Blocksize of 4K
 spb	equ	blksiz/hstsiz	; Sectors per block
 drm	equ	512		; Directory entries (also see DPB)
 dsm	equ	63*(spt/spb)	; Number of 4K blocks per drive
+dsm0	equ	62*(spt/spb)	; For boot drive we have 1 reserved track
+bsh	equ	5		; Block shift factor for 4K blocks
+blm	equ	00011111b	; Block mask for bsh bits
+exm	equ	1		; Extent mask
+al0	equ	11110000b	; First two bytes of allocation vector
+al1	equ	00000000b	; (reserve 4 groups for directory)
+psh	equ	2		; Physical record shift factor
+phm	equ	00000011b	; Block mask for psh bits
+
 hdtype	equ	10h		; Media type for Hard Disk
 
   if	hstsiz ne 512
@@ -125,10 +138,11 @@ hdtype	equ	10h		; Media type for Hard Disk
 	defw	hd$login
 	defw	hd$init0
 	defb	0,hdtype
+ide00:
   if	ldrbios
 	; The LDRBIOS doesn't get GENCPM to allocate buffer space
 	; so we need to define it here and in DIRBCB and DTABCB tables
-ide00:	defw	0
+	defw	0
 	defb	0,0,0,0,0,0,0,0,0 ; 72 bit scratch
 	defb	0		; media flag
 	defw	dpb0		; address of DPH
@@ -140,8 +154,20 @@ ide00:	defw	0
 	defb	0
   else
 	; IDE0 partition 0 (sectors 0..63 - first track reserved for boot)
-ide00:
+    if use$disk$macros
 	dph	0,dpb0,0	; No translation table, permanently mounted
+    else
+	defw	0		; No sector translation
+	defb	0,0,0,0,0,0,0,0,0 ; 9-bytes of BDOS scratch area
+	defb	0		; Media flag (no need to check for changes)
+	defw	dpb0		; Pointer to disk parameter block
+	defw	0		; No checksum vector (permanently mounted)
+	defw	alv0		; Pointer to allocation vector
+	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
+	defw	0FFFEh		; Pointer to data buffers (GENCPM)
+	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defb	0		; Hash table bank (GENCPM)
+    endif
   endif
 
   if	not ldrbios		; Other partitions visible
@@ -150,21 +176,66 @@ ide00:
 	defw	hd$login
 	defw	hd$nop
 	defb	0,hdtype
-ide01:	dph	0,dpb1,0
+
+ide01:
+  if use$disk$macros
+	dph	0,dpb1,0
+  else
+	defw	0		; No sector translation
+	defb	0,0,0,0,0,0,0,0,0 ; 9-bytes of BDOS scratch area
+	defb	0		; Media flag (no need to check for changes)
+	defw	dpb1		; Pointer to disk parameter block
+	defw	0		; No checksum vector (permanently mounted)
+	defw	alv1		; Pointer to allocation vector
+	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
+	defw	0FFFEh		; Pointer to data buffers (GENCPM)
+	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defb	0		; Hash table bank (GENCPM)
+  endif
 
 	defw	hd$write
 	defw	hd$read
 	defw	hd$login
 	defw	hd$nop
 	defb	0,hdtype
-ide02:	dph	0,dpb2,0
+
+ide02:
+  if use$disk$macros
+	dph	0,dpb2,0
+  else
+	defw	0		; No sector translation
+	defb	0,0,0,0,0,0,0,0,0 ; 9-bytes of BDOS scratch area
+	defb	0		; Media flag (no need to check for changes)
+	defw	dpb2		; Pointer to disk parameter block
+	defw	0		; No checksum vector (permanently mounted)
+	defw	alv2		; Pointer to allocation vector
+	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
+	defw	0FFFEh		; Pointer to data buffers (GENCPM)
+	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defb	0		; Hash table bank (GENCPM)
+  endif
 
 	defw	hd$write
 	defw	hd$read
 	defw	hd$login
 	defw	hd$nop
 	defb	0,hdtype
-ide03:	dph	0,dpb3,0
+
+ide03:
+  if use$disk$macros
+	dph	0,dpb3,0
+  else
+	defw	0		; No sector translation
+	defb	0,0,0,0,0,0,0,0,0 ; 9-bytes of BDOS scratch area
+	defb	0		; Media flag (no need to check for changes)
+	defw	dpb3		; Pointer to disk parameter block
+	defw	0		; No checksum vector (permanently mounted)
+	defw	alv3		; Pointer to allocation vector
+	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
+	defw	0FFFEh		; Pointer to data buffers (GENCPM)
+	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defb	0		; Hash table bank (GENCPM)
+  endif
 
     if	partn8
 	defw	hd$write
@@ -172,30 +243,89 @@ ide03:	dph	0,dpb3,0
 	defw	hd$login
 	defw	hd$nop
 	defb	0,hdtype
-ide04:	dph	0,dpb4,0
+
+ide04:
+      if use$disk$macros
+	dph	0,dpb4,0
+      else
+	defw	0		; No sector translation
+	defb	0,0,0,0,0,0,0,0,0 ; 9-bytes of BDOS scratch area
+	defb	0		; Media flag (no need to check for changes)
+	defw	dpb4		; Pointer to disk parameter block
+	defw	0		; No checksum vector (permanently mounted)
+	defw	alv4		; Pointer to allocation vector
+	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
+	defw	0FFFEh		; Pointer to data buffers (GENCPM)
+	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defb	0		; Hash table bank (GENCPM)
+      endif
 
 	defw	hd$write
 	defw	hd$read
 	defw	hd$login
 	defw	hd$nop
 	defb	0,hdtype
-ide05:	dph	0,dpb5,0
+
+ide05:
+      if use$disk$macros
+	dph	0,dpb5,0
+      else
+	defw	0		; No sector translation
+	defb	0,0,0,0,0,0,0,0,0 ; 9-bytes of BDOS scratch area
+	defb	0		; Media flag (no need to check for changes)
+	defw	dpb5		; Pointer to disk parameter block
+	defw	0		; No checksum vector (permanently mounted)
+	defw	alv5		; Pointer to allocation vector
+	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
+	defw	0FFFEh		; Pointer to data buffers (GENCPM)
+	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defb	0		; Hash table bank (GENCPM)
+      endif
 
 	defw	hd$write
 	defw	hd$read
 	defw	hd$login
 	defw	hd$nop
 	defb	0,hdtype
-ide06:	dph	0,dpb6,0
+
+ide06:
+      if use$disk$macros
+	dph	0,dpb6,0
+      else
+	defw	0		; No sector translation
+	defb	0,0,0,0,0,0,0,0,0 ; 9-bytes of BDOS scratch area
+	defb	0		; Media flag (no need to check for changes)
+	defw	dpb6		; Pointer to disk parameter block
+	defw	0		; No checksum vector (permanently mounted)
+	defw	alv6		; Pointer to allocation vector
+	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
+	defw	0FFFEh		; Pointer to data buffers (GENCPM)
+	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defb	0		; Hash table bank (GENCPM)
+      endif
 
 	defw	hd$write
 	defw	hd$read
 	defw	hd$login
 	defw	hd$nop
 	defb	0,hdtype
-ide07:	dph	0,dpb7,0
 
-    endif
+ide07:
+      if use$disk$macros
+	dph	0,dpb7,0
+      else
+	defw	0		; No sector translation
+	defb	0,0,0,0,0,0,0,0,0 ; 9-bytes of BDOS scratch area
+	defb	0		; Media flag (no need to check for changes)
+	defw	dpb7		; Pointer to disk parameter block
+	defw	0		; No checksum vector (permanently mounted)
+	defw	alv7		; Pointer to allocation vector
+	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
+	defw	0FFFEh		; Pointer to data buffers (GENCPM)
+	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defb	0		; Hash table bank (GENCPM)
+      endif
+    endif ; partn8
 
   endif	; not ldrbios
 
@@ -211,7 +341,20 @@ ide07:	dph	0,dpb7,0
 	; blocksize 4096, 512 directory entries, track offset of 1,
 	; no checksum vector (non-removable)
 
-dpb0:	dpb	512,256,63,4096,512,1,8000h
+dpb0:
+  if use$disk$macros
+	dpb	512,256,63,4096,512,1,8000h
+  else
+	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
+	defb	bsh, blm		; Block shift and mask
+	defb	exm			; Extent mask
+	defw	dsm0-1			; Maximum block number - 1
+	defw	drm-1			; Number of directory entries - 1
+	defb	al0,al1			; Allocation for directory
+	defw	8000h			; Permanently mounted drive
+	defw	1			; 1 reserved track
+	defb	psh,phm			; Physical record shift factor and mask
+  endif
 
   if	not ldrbios
 
@@ -220,22 +363,113 @@ dpb0:	dpb	512,256,63,4096,512,1,8000h
 	; reserved tracks to make it easy to address each sector in
 	; the READ and WRITE routines.
 
-dpb1:	dpb	512,256,127,4096,512,64,8000h
+dpb1:
+  if use$disk$macros
+	dpb	512,256,127,4096,512,64,8000h
+  else
+	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
+	defb	bsh, blm		; Block shift and mask
+	defb	exm			; Extent mask
+	defw	dsm-1			; Maximum block number - 1
+	defw	drm-1			; Number of directory entries - 1
+	defb	al0,al1			; Allocation for directory
+	defw	8000h			; Permanently mounted drive
+	defw	64			; 64 reserved tracks
+	defb	psh,phm			; Physical record shift factor and mask
+  endif
 
-dpb2:	dpb	512,256,191,4096,512,128,8000h
+dpb2:
+  if use$disk$macros
+	dpb	512,256,191,4096,512,128,8000h
+  else
+	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
+	defb	bsh, blm		; Block shift and mask
+	defb	exm			; Extent mask
+	defw	dsm-1			; Maximum block number - 1
+	defw	drm-1			; Number of directory entries - 1
+	defb	al0,al1			; Allocation for directory
+	defw	8000h			; Permanently mounted drive
+	defw	128			; 128 reserved tracks
+	defb	psh,phm			; Physical record shift factor and mask
+  endif
 
-dpb3:	dpb	512,256,255,4096,512,192,8000h
+dpb3:
+  if use$disk$macros
+	dpb	512,256,255,4096,512,192,8000h
+  else
+	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
+	defb	bsh, blm		; Block shift and mask
+	defb	exm			; Extent mask
+	defw	dsm-1			; Maximum block number - 1
+	defw	drm-1			; Number of directory entries - 1
+	defb	al0,al1			; Allocation for directory
+	defw	8000h			; Permanently mounted drive
+	defw	192			; 192 reserved tracks
+	defb	psh,phm			; Physical record shift factor and mask
+  endif
 
     if	partn8
-dpb4:	dpb	512,256,319,4096,512,256,8000h
+dpb4:
+      if use$disk$macros
+	dpb	512,256,319,4096,512,256,8000h
+      else
+	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
+	defb	bsh, blm		; Block shift and mask
+	defb	exm			; Extent mask
+	defw	dsm-1			; Maximum block number - 1
+	defw	drm-1			; Number of directory entries - 1
+	defb	al0,al1			; Allocation for directory
+	defw	8000h			; Permanently mounted drive
+	defw	256			; 256 reserved tracks
+	defb	psh,phm			; Physical record shift factor and mask
+      endif
 
-dpb5:	dpb	512,256,383,4096,512,320,8000h
+dpb5:
+      if use$disk$macros
+	dpb	512,256,383,4096,512,320,8000h
+      else
+	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
+	defb	bsh, blm		; Block shift and mask
+	defb	exm			; Extent mask
+	defw	dsm-1			; Maximum block number - 1
+	defw	drm-1			; Number of directory entries - 1
+	defb	al0,al1			; Allocation for directory
+	defw	8000h			; Permanently mounted drive
+	defw	320			; 320 reserved tracks
+	defb	psh,phm			; Physical record shift factor and mask
+      endif
 
-dpb6:	dpb	512,256,447,4096,512,384,8000h
+dpb6:
+      if use$disk$macros
+	dpb	512,256,447,4096,512,384,8000h
+      else
+	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
+	defb	bsh, blm		; Block shift and mask
+	defb	exm			; Extent mask
+	defw	dsm-1			; Maximum block number - 1
+	defw	drm-1			; Number of directory entries - 1
+	defb	al0,al1			; Allocation for directory
+	defw	8000h			; Permanently mounted drive
+	defw	384			; 384 reserved tracks
+	defb	psh,phm			; Physical record shift factor and mask
+      endif
 
-dpb7:	dpb	512,256,511,4096,512,448,8000h
-    endif
-
+dpb7:
+      if use$disk$macros
+	dpb	512,256,511,4096,512,448,8000h
+      else
+	; Manually construct DPB
+dpb0:	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
+	defb	bsh, blm		; Block shift and mask
+	defb	exm			; Extent mask
+	defw	dsm-1			; Maximum block number - 1
+	defw	drm-1			; Number of directory entries - 1
+	defb	al0,al1			; Allocation for directory
+	defw	8000h			; Permanently mounted drive
+	defw	448			; 448 reserved tracks
+	defb	psh,phm			; Physical record shift factor and mask
+      endif
+    endif ; partn8
   endif
 
 	bank0$segment	; I/O routines in banked memory
@@ -548,6 +782,22 @@ dirbuf:	defs	hstsiz
 dtabuf:	defs	hstsiz
 
 alv:	defs	(dsm/4)+2
+  else
+    if not use$disk$macro
+
+	; Manually allocate space for Allocation vectors
+
+alv0:	defs	(dsm0/4)+2	; Partition 0
+alv1:	defs	(dsm/4)+2	; Partition 1
+alv2:	defs	(dsm/4)+2	; Partition 2
+alv3:	defs	(dsm/4)+2	; Partition 3
+      if partn8
+alv4:	defs	(dsm/4)+2	; Partition 4
+alv5:	defs	(dsm/4)+2	; Partition 5
+alv6:	defs	(dsm/4)+2	; Partition 6
+alv7:	defs	(dsm/4)+2	; Partition 7
+      endif ; partn8
+    endif ; use$disk$macros
   endif ; ldrbios
 
   if banked

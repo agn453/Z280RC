@@ -23,6 +23,10 @@
 ;					of each for drive M: when doing
 ;					a GENCPM.  (The supplied BANKED.DAT
 ;					already has this set up).
+;	08-Nov-2018	Tony Nicholson	Add the capabilty to manually
+;					define the DPH and DPB with
+;					a local allocation vector.
+;
 
 	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
 	maclib	Z280RCIO.LIB	; System I/O Addresses
@@ -36,8 +40,11 @@
 ; For compatibility with CP/M 2.2 on the Z280RC, the normal starting
 ; address is 080000h.
 ;
-    ifndef ramdaddr
-ramdaddr equ 0800h	; Page address (high 16-bits) for start of RAMDISK
+    ifndef rampg$start
+rampg$start equ 0800h	; Page address (high 16-bits) for start of RAMDISK
+    endif
+    ifndef rampg$end
+rampg$end equ 2000h	; Page end address (high 16-bits) + 1
     endif
 
 ;
@@ -72,16 +79,25 @@ ramdaddr equ 0800h	; Page address (high 16-bits) for start of RAMDISK
 ;
 hstsiz	equ	512		; Sector size
 spt	equ	256		; Sectors per "track"
+ntrks	equ	((high rampg$end) - (high rampg$start))/2 ; Number of "tracks"
 blksiz	equ	4096		; Blocksize of 4K
 spb	equ	blksiz/hstsiz	; Sectors per block
 drm	equ	512		; Directory entries (also see DPB)
-dsm	equ	12*(spt/spb)	; Number of 4K blocks per drive
+dsm	equ	ntrks*(spt/spb)	; Number of 4K blocks per drive
+bsh	equ	5		; Block shift factor for 4K blocks
+blm	equ	00011111b	; Block mask for bsh bits
+exm	equ	1		; Extent mask
+al0	equ	11110000b	; First two bytes of allocation vector
+al1	equ	00000000b	; (reserve 4 groups for directory)
+psh	equ	2		; Physical record shift factor
+phm	equ	00000011b	; Block mask for psh bits
+
 hdtype	equ	20h		; Media Type for Memory Disk
 
-  if	hstsiz ne 512
+    if	hstsiz ne 512
 	; Block addressing relies on this
 	.printx	"Error: RAMDISK sector size must be 512 bytes"
-  endif
+    endif
 
 ;
 ; Extended Disk Parameter Headers (XPDHs)
@@ -99,7 +115,20 @@ hdtype	equ	20h		; Media Type for Memory Disk
 	defb	0,hdtype
 	; RAM0
 ram0:
+    if use$disk$macros
 	dph	0,dpb0,0	; No translation table, permanently mounted
+    else
+	defw	0		; No sector translation
+	defb	0,0,0,0,0,0,0,0,0 ; 9-bytes of BDOS scratch area
+	defb	0		; Media flag (no need to check for changes)
+	defw	dpb0		; Pointer to disk parameter block
+	defw	0		; No checksum vector (permanently mounted)
+	defw	alv0		; Pointer to allocation vector
+	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
+	defw	0FFFEh		; Pointer to data buffers (GENCPM)
+	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defb	0		; Hash table bank (GENCPM)
+    endif
 
 ;
 ; Disk Parameter Header blocks
@@ -113,7 +142,20 @@ ram0:
 	; logical sectors), 12 tracks, with blocksize 4096, 512
 	; directory entries and no checksum vector (non-removable).
 
-dpb0:	dpb	512,256,12,4096,512,0,8000h
+    if use$disk$macros
+dpb0:	dpb	hstsiz,spt,ntrks,blksiz,drm,0,8000h
+    else
+	; Manually construct DPB
+dpb0:	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
+	defb	bsh, blm		; Block shift and mask
+	defb	exm			; Extent mask
+	defw	dsm-1			; Maximum block number - 1
+	defw	drm-1			; Number of directory entries - 1
+	defb	al0,al1			; Allocation for directory
+	defw	8000h			; Permanently mounted drive
+	defw	0			; No reserved tracks
+	defb	psh,phm			; Physical record shift factor and mask
+    endif
 
 	bank0$segment
 
@@ -240,12 +282,17 @@ getadr:	ld	a,(@sect)
 	ld	a,(@trk)
 	rla			; Track*2 and shift in bit from CY
 	ld	h,a
-	addw	hl,ramdaddr	; Physical page address
+	addw	hl,rampg$start	; Physical page address
 	ld	a,h		; Bank to A
 	ld	h,l		; Address bits 15..8 to H
 	ld	l,00h		; Address bits 7..0 always zero
 	ret
 
+    if not use$disk$macros
+	; Allocation vector (in bank 0)
+
+alv0:	defs	(dsm/4)+2
+    endif
   endif ; ramdisk and (not ldrbios)
 
 	end

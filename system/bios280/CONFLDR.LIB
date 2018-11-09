@@ -9,7 +9,7 @@
 	.z280
 
 config	macro	
-	defz	cr,lf,'Z280RC LDRBIOS 07-Nov-2018',cr,lf
+	defz	cr,lf,'Z280RC LDRBIOS 08-Nov-2018',cr,lf
 	endm
 
 true	equ	-1
@@ -29,6 +29,10 @@ krnl$debug equ	false		; TRUE to enable BIOSKRNL debug output
 idehd	equ	true		; Built-in IDE CardFlash disk
 partn8	equ	false		; TRUE for extra drives E:..H:
 ramdisk equ	false		; and RAMDISK drive M: (uses top 1.5Mb of RAM)
+
+use$disk$macros equ false	; TRUE use DPH and DPB macros in CPM3M80.LIB
+				; FALSE DPH and DPB are manually specified
+				; in the disk modules.
 
 clock$set$support equ false	; TRUE to include time set support in CLOCK
 

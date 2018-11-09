@@ -16,7 +16,19 @@ My own modifications to Bill Shen's original CBIOS3 for CP/M 3 are in the
 New Utilities are in the "utilities" subdirectory.
 
 Modification History (in reverse chronological order):
+======================================================
 
+08-Nov-2018
+-----------
+
+Updated disk modules to use hard-coded disk parameter headers and disk
+parameter blocks with internal disk allocation vectors (rather than
+letting GENCPM set these up).  This is selectable via a USE$DISK$MACROS
+conditional equate in the CONF*.LIB files.  Unfortunately, this had no
+effect on the PIP file copying verification error under the banked
+system.  Non-banked and Loader configuratiosn work fine!
+
+ 
 06-Nov-2018
 -----------
 
@@ -42,7 +54,7 @@ The BUILDALL.SUB build procedure produces a CPM3NBNK.SYS and CPM3BANK.SYS
 system image that can be copied to the boot drive user area 0 as TEST.SYS
 and loaded via a special version of the CP/M Loader - TEST.COM
 
-* Know problem with Banked version.  I've left my debugging enabled, so
+* Known problem with Banked version.  I've left my debugging enabled, so
 there is superfluous output for BIOS kernel routines, and a simple debugger
 is invoked prior to starting CP/M's console command processor.  This allows
 memory and register examination as well as memory management manipulation.
@@ -52,7 +64,7 @@ CompactFlash drives (A: thru D:) to the RAM disk (drive M:) I get
 verification errors and from then on there appears to be a memory corruption.
 
 I suspect some issue with allocation of buffers (which I'll continue to look
-at) - however, if you see an obvious error, please raise it as a Git Hub
+at) - however, if you see an obvious error, please raise it as a GitHub
 issue.
 
 18-Jul-2018
