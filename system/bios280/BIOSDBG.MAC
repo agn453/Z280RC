@@ -20,6 +20,11 @@
 ;
 ;	08-Nov-2018	Tony Nicholson	Save and restore User-mode
 ;					bank around call to ?usrsl
+;	11-Nov-2018	Tony Nicholson	Set/clear global flag to
+;					indicate debugger is active.
+;					This is used to disable the
+;					<CTRL-P> test in the CHARIO
+;					module.
 ;
 
 	maclib	CONFIG.LIB
@@ -33,6 +38,7 @@
 
   if debug
 	public	biosdbg		; Entrypoint to debugger
+	public	@indbg		; Flag indicating debugger active
 
 	extrn	?bnksl,?usrsl	; Bank select
 	extrn	?phex,?phexhl	; Hexadecimal output
@@ -114,9 +120,14 @@ bd01:	ld	sp,dbgstk	; Set Sys-SP for debugger
 	xor	a		; Switch to Bank 0 (for access
 	call	?bnksl		;  to non-common debug routines)
 
+	inc	a		; Set flag
+	ld	(@indbg),a
+
 	jp	godbug		; Enter prompt mode in Bank 0
 				; (We're in System-mode and Sys-MMU
 				; now points to Bank 0)
+
+@indbg:	defb	0		; Flag in common to indicate debugger active
 
 goexit:
     if banked
@@ -140,6 +151,9 @@ ge02:
 	call	?usrsl		;  (this restores the User-mode MMU)
 
     endif
+	xor	a		; Clear debugger active flag
+	ld	(@indbg),a
+
 	ld	sp,(rsavsp)	; This is to quickly
 	pop	af		;  restore all registers
 	pop	bc

@@ -9,7 +9,7 @@
 	.z280
 
 config	macro	
-	defz	cr,lf,'Z280RC Banked BIOS 08-Nov-2018',cr,lf
+	defz	cr,lf,'Z280RC Banked BIOS 11-Nov-2018',cr,lf
 	endm
 
 true	equ	-1

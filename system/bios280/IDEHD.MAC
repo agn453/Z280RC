@@ -22,6 +22,10 @@
 ;					define the DPH and DPB with
 ;					a local allocation vectors
 ;					for each drive.
+;	11-Nov-2018	Tony Nicholson	Try IDEBUF as word-address
+;					aligned (which means it has
+;					to be defined externally in
+;					the BIOSKRNL module).
 ;
 
 	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
@@ -29,7 +33,7 @@
 	maclib	CONFIG.LIB	; Configuration Equates
 
   if	banked
-	public	idebuf
+	extrn	idebuf
 	extrn	dmaxfr, phyahl, cnv12
   endif
 
@@ -733,6 +737,17 @@ ide$error:
 	ld	(@derflg),a
   endif
 	ret	
+
+;
+rwflag:
+	defs	1		; Read/write flag
+op$name:
+	defw	rd$msg
+
+rd$msg:	defz	cr,lf,'Read'
+wr$msg:	defz	cr,lf,'Write'
+er$msg:	defz	' error on IDE/CF device. Retry (Y/N) ?'
+
 ;
   if banked
 dmapb:			; DMA parameter block
@@ -743,15 +758,6 @@ srch:	defs	2
 	defw	hstsiz		; Always 512 bytes
 	defw	dma$descriptor
   endif
-
-rwflag:
-	defs	1		; Read/write flag
-op$name:
-	defw	rd$msg
-
-rd$msg:	defz	cr,lf,'Read'
-wr$msg:	defz	cr,lf,'Write'
-er$msg:	defz	' error on IDE/CF device. Retry (Y/N) ?'
 
   if	ldrbios
 ;
@@ -777,11 +783,11 @@ dirbcb:	defb	0ffh	; DRV Drive with record in DIRBUF
 	defb	0	; BANK Bank containing buffer
 	defw	0	; LINK Link to next BCB
 
-dirbuf:	defs	hstsiz
+dirbuf:	defs	hstsiz		; Directory buffer
 
-dtabuf:	defs	hstsiz
+dtabuf:	defs	hstsiz		; Data buffer
 
-alv:	defs	(dsm/4)+2
+alv:	defs	(dsm/4)+2	; Allocation vector
   else
     if not use$disk$macro
 
@@ -799,13 +805,5 @@ alv7:	defs	(dsm/4)+2	; Partition 7
       endif ; partn8
     endif ; use$disk$macros
   endif ; ldrbios
-
-  if banked
-
-	common$segment
-
-idebuf:	defs	hstsiz	; Common memory buffer (no DMA from IDE interface)
-
-  endif
 
 	end

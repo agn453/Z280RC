@@ -51,6 +51,10 @@
 ;					interrupt routines and
 ;					skeleton System-mode/User-mode
 ;					code - INT$ENABLED option
+;	11-Nov-2018	Tony Nicholson	Align common-memory stacks and
+;					buffers on a word (even address)
+;					boundary.
+;
 	page
 	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
 	maclib	Z280RCIO.LIB	; Z280RC I/O Port definitions
@@ -264,7 +268,9 @@ bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
 ;
 ; Refresh Register defaults (taken from ZZMON)
 ;
-	call	ioprrr
+	ld	l,rrrp		; Select the RRR I/O page
+	ld	c,iop
+	ldctl	(c),hl
 	ld	a,10110000b	; 16 microsecond refresh
 				; Enable (bit 7) rate=48 (bits 5..0)
 	out	(rrr),a		; (this is an 8-bit byte port)
@@ -293,7 +299,7 @@ bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
 ;
 ; Set-up onchip DMA controllers
 ;
-;	call	iopdma	; I/O page for DMA is same as already set for RRR
+;	The I/O page for DMA is same as already set for RRR
 
 	ld	hl,0000000000000000b	; DMA Transaction Description
 		; Disable channel (bit 15 OFF)
@@ -318,7 +324,7 @@ bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
 ;
 ; Load the MMU page description registers
 ;
-;	call	iopmmu	; I/O page for MMU is the same as already set for DMA
+;	The I/O page for MMU is the same as already set for DMA
 
 	ld	hl,mmtab0	; Point System-mode PDRs to Bank 0
 	ld	a,spdr0
@@ -426,6 +432,15 @@ initd1:	pop	bc		; Next drive
 	im	3
 
 	ei			; Enable interrupts
+    else
+
+	ld	hl,1400h	; Clear 000000..0013ff
+clr00:	dec	hl
+	ld	(hl),0
+	ld	a,h
+	or	l
+	jr	nz,clr00
+	
     endif ; int$enabled
   endif ; banked
 
@@ -453,7 +468,7 @@ bootc:
 	call	?ldccp
 
     if debug
-	enter$debug	'BIOSDBG active. Use (C)ontinue to enter CP/M'
+	enter$debug	<'BIOSDBG active.',cr,lf,'Use (C)ontinue to enter CP/M.',cr,lf,'Typing <CTRL-P> re-enters BIOSDBG from console input.',cr,lf>
     endif ; debug
 
 	jp	tpa
@@ -548,8 +563,10 @@ acctrp:	pop	hl		; Discard MSR from stack
 	call	?phexhl		; Followed by the address in hex
 	ld	hl,pdrmsg	; then the MMU PDR in hex
 	call	?pmsg
-	call	iopmmu
-	inw	hl,(mmcr)
+	ld	l,mmup		; Select the MMU I/O page
+	ld	c,iop
+	ldctl	(c),hl
+	inw	hl,(mmcr)	; Get the MMU Master Control Register
 	ld	a,l
 	and	00011111b	; Lower 5 bits is PFI
 	call	?phex
@@ -573,7 +590,8 @@ nmint:	; Everything is lost if we get here
 ;
 ; Handle Privileged Instruction TRAP
 ;
-; Allow DI and EI, all others get diagnostic message and re-start
+; Allow DI, EI, and "LDCTL (C),HL" with C=IOP.
+; All others get diagnostic message and re-start
 ;
 privil:
 	pop	(msrsav)	; Save MSR from top of stack
@@ -783,20 +801,25 @@ xmove:
 ;
 	common$segment
 
-move:	push	hl		; Save destination
-	push	de		; Save source address
-				; HL has destination address
-				; BC has byte count
-
+move:
 	ld	a,(@xmflg)	; Is it an extended move?
 	or	a
 	jp	nz,bnkdif	; Yes
 
+  if 0 ; disable this and just use ldir for same bank
 	ld	a,(@cbnk)	; No, set source and destination banks
 	ld	(@msbnk),a	;  to the current bank
 	ld	(@mdbnk),a
+  else
+	ex	de,hl		;No, just block move in the current
+	ldir			; bank
+	ex	de,hl
+	ret
+  endif
 
 bnkdif:
+	push	hl		; Save destination
+	push	de		; Save source address
 
   if krnl$debug
 	ld	(@dstack),sp	; Save stack pointer
@@ -1230,7 +1253,9 @@ phyadr:
 ; Returns Physical address in AHL (24 bits)
 ;
 ; For Non-Banked, Physical and Logical addresses are the same.
-; For Banked, we take into account Common Memory.
+; For Banked, we take into account Common Memory, and logical
+; banks >9 are redirected to non-existent memory at P20xxxx
+; (above the installed 2MB RAM).
 ;
 ;	On exit, A= physical bank (high 8 bits of address),
 ;	HL= physical address (low 16 bits of address).
@@ -1248,17 +1273,24 @@ phyahl:
 	ret
 bnc1:	cp	01h+1		;Bank 1?
 	ret	c		;Yes, logical = physical
+	cp	9+1
+	jr	nc,badbank
 	dec	a		;Bank-1 to A
 	push	bc		;The following will work only
 	ld	b,a		; for banks up to bank 17
-				; so we are safe while we use 0..8
-				; for the CP/M Plus system
+				; so we are safe while we use 0..9
+				; for the CP/M Plus system. (Bank 9
+				; is the first 56KB of RAMDISK).
 adjust:	subw	hl,common$size	;Take off common memory size
 	djnz	adjust		; for each bank > 1
 	pop	bc
   endif ; banked
 
 	ret
+
+badbank:
+	ld	a,20h		;Force non-existent bank
+	ret			; (AHL is above 2Mb RAM = P20xxxx)
 
 ;
 ; CNV12 - Convert address in AHL to two words in "DMA address format"
@@ -1339,12 +1371,12 @@ setjumps:
 	ld	l,a		; HL=0
 	ld	(fcb$nr),hl	; start at beginning of file
 	ld	de,ccp$fcb
-	call	bdos$open		; open file containing CCP
+	call	bdos$open	; open file containing CCP
 	ld	de,open$msg	; point to error message
 	inc	a		; any error opening file?
 	jr	z,no$ccp	; yes, go print error message
 	ld	de,tpa
-	call	bdos$setdma		; start of TPA
+	call	bdos$setdma	; start of TPA
 	ld	de,128
 	call	bdos$setmulti	; allow up to 16k bytes
 	ld	de,ccp$fcb
@@ -2427,13 +2459,33 @@ xfr$msg: defz	cr, lf, 'DMAXFR using DMA'
 bad$dma$port: defz ' BAD PORT='
 cnt$msg: defz	' count '
 sel$msg: defz	cr, lf, 'SELMEM Select Bank '
+  endif ;
+
+alignw	equ ($ - bios) and 0001h
+
+  if alignw ne 0
+	defs	1	; Align to a Word (even address) boundary
+  endif
+
+  if idehd		; Define disk sector buffer here
+			;  to ensure it is on an even address
+    if banked
+
+	public	idebuf
+
+idebuf:	defs	512
+
+    endif
+  endif
+
+;
+; Kernel debug stack
+;
+  if krnl$debug
+
+	public	@dstack		; Show this in LINK map
 
     if debug
-ALIGN	EQU ($ - BIOS + 16) AND 0Fh
-      if ALIGN ne 0
-	defs	16-align
-      endif
-
 	; Marked with D to see how much is used'
 	defb	'Debug StackDDDDDDDDDDDDDDDDDDDDD'
 	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
@@ -2445,10 +2497,12 @@ ALIGN	EQU ($ - BIOS + 16) AND 0Fh
   endif
 
 ;
-;
 ; Temporary stack for BIOS modules wishing to change banks
 ;
   if banked
+
+	public	@tstack		; Show this in LINK map
+
     if debug
 	defb	'Temporary BIOS StackTTTTTTTTTTTT'
 	defb	'TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT'
@@ -2462,6 +2516,9 @@ ALIGN	EQU ($ - BIOS + 16) AND 0Fh
 ;
 ; Stack for BIOS use during COLD and WARM booting
 ;
+
+	public	@stack		; Show this in LINK map
+
   if debug
 	defb	'System-mode StackSSSSSSSSSSSSSSS'
 	defb	'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS'
@@ -2475,10 +2532,13 @@ ALIGN	EQU ($ - BIOS + 16) AND 0Fh
 	defs	2		; Place to save CPMLDR stack pointer
   endif
 
-  if banked and int$enabled
 ;
 ; User-mode stack
 ;
+  if banked and int$enabled
+
+	public	@ustack		; Show this in LINK map
+
     if debug
 	defb	'User-mode StackUUUUUUUUUUUUUUUUU'
 	defb	'UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU'

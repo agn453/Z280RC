@@ -14,6 +14,12 @@
 ;   Modification History:
 ;
 ;	27-Jun-2018	Tony Nicholson	Initial version for Z280RC
+;	11-Nov-2018	Tony Nicholson	When DEBUG is enabled, intercept
+;					CTRL-P input from the console
+;					to invoke the BIOSDBG routine.
+;					(This has a side-effect for
+;					CP/M enabling/disabling printer
+;					echo).
 ;
 
 	maclib	CONFIG.LIB
@@ -27,6 +33,11 @@
 max$devices equ 1	; Only Z280 UART for now
 
 	extrn	iopuart		; I/O Page select
+
+  if debug
+	extrn	biosdbg		; BIOS debugger
+	extrn	@indbg		; Debugger active flag
+  endif
 
 ; Single Built-in UART
 ;
@@ -58,6 +69,7 @@ ucr$lbv	equ	00000001b	; Local Loop back mode
 ; Receiver Data Register (RDR)
 ; Transmitter Data Register (TDR)
 
+ctrlp	equ	010h		; CTRL-P to enter BIOSDBG
 ctrlz	equ	01ah		; CTRL-Z end-of-file character
 
 	common$segment	; All character I/O is in common memory
@@ -96,6 +108,18 @@ ci1:
 	call	iopuart
 	ld	c,rdr
 ci2:	in	a,(c)		; get data
+
+  if debug
+	push	af
+	ld	a,(@indbg)	; If inside debugger, ignore <CTRL-P>
+	or	a
+	jr	z,brktst
+	pop	af
+	ret
+brktst:	pop	af
+	cp	ctrlp		; CTRL-P breaks to debugger
+	call	z,biosdbg
+  endif
 	ret
 
 null$input:

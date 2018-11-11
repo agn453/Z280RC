@@ -18,6 +18,17 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+11-Nov-2018
+-----------
+
+Added DEBUG capability to enter the debugger upon CTRL-P being typed
+at the console.  Also made a special banked configuration that supports
+only two banks (bank 0 and 1) with directory hashing disabled and only
+a single directory and data buffer for each drive in bank 0.  The
+resulting CPM3BNK1.SYS appears to be working (and I'm now convinced
+there's a problem with CP/M 3 PIP corrupting buffers).
+
+
 08-Nov-2018
 -----------
 
