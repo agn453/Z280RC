@@ -37,7 +37,7 @@ parameter blocks with internal disk allocation vectors (rather than
 letting GENCPM set these up).  This is selectable via a USE$DISK$MACROS
 conditional equate in the CONF*.LIB files.  Unfortunately, this had no
 effect on the PIP file copying verification error under the banked
-system.  Non-banked and Loader configuratiosn work fine!
+system.  Non-banked and Loader configurations work fine!
 
  
 06-Nov-2018
