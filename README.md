@@ -28,6 +28,10 @@ a single directory and data buffer for each drive in bank 0.  The
 resulting CPM3BNK1.SYS appears to be working (and I'm now convinced
 there's a problem with CP/M 3 PIP corrupting buffers).
 
+Also added CPM3ADD2.MAC which (when assembled and linked) will show
+information about the running system's BIOS, SCB and disk drive data
+(DPH and DPB).
+
 
 08-Nov-2018
 -----------
