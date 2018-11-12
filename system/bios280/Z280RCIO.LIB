@@ -200,6 +200,7 @@ outjmp	macro
 	nop
 	nop
 	nop
+	nop
 	endm
 
 	.list

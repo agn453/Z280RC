@@ -26,6 +26,10 @@
 ;					aligned (which means it has
 ;					to be defined externally in
 ;					the BIOSKRNL module).
+;	12-Nov-2018	Tony Nicholson	When USE$DMA$TO$COPY is FALSE
+;					use the User-mode MMU to copy
+;					the user disk buffer to/from
+;					IDEBUF.
 ;
 
 	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
@@ -34,7 +38,11 @@
 
   if	banked
 	extrn	idebuf
+    if use$dma$to$copy
 	extrn	dmaxfr, phyahl, cnv12
+    else
+	extrn	?usrsl, @ubnk	; Use MMU PDRs
+    endif
   endif
 
 ;
@@ -562,6 +570,7 @@ hd$read:
 
 hd$write:
   if	banked
+    if use$dma$to$copy
 	; Copy the sector to be written to common buffer using DMA
 	ld	a,(@dbnk)	; Source bank
 	ld	hl,(@dma)
@@ -579,6 +588,18 @@ hd$write:
 	ld	c,dal3		; Transfer using DMA3
 	ld	hl,dmapb
 	call	dmaxfr
+    else
+	ld	a,(@ubnk)	; Save old User-mode bank on stack
+	push	af
+	ld	a,(@dbnk)	; Copy buffer via User-mode PDRs
+	call	?usrsl
+	ld	bc,hstsiz
+	ld	hl,idebuf	; Destination is common memory buffer
+	ld	de,(@dma)	; Source is dma buffer
+	call	copy		; Copy it
+	pop	af		; Restore User-mode PDRs
+	call	?usrsl
+    endif
   endif
 	or	0ffh
 	ld	hl,wr$msg
@@ -663,6 +684,7 @@ readdrq:
 	inirw			; Read sector (256 Words = 512 bytes)
 
   if	banked
+    if use$dma$to$copy
 	; Copy the sector just read to the destination address using DMA
 	xor	a		; Source bank is common
 	ld	hl,idebuf
@@ -680,6 +702,18 @@ readdrq:
 	ld	c,dal3		; Transfer using DMA3
 	ld	hl,dmapb
 	call	dmaxfr
+    else
+	ld	a,(@ubnk)	; Save old User-mode bank on stack
+	push	af
+	ld	a,(@dbnk)	; Copy buffer via User-mode PDRs
+	call	?usrsl
+	ld	bc,hstsiz
+	ld	hl,(@dma)	; Destination is DMA buffer
+	ld	de,idebuf	; Source is common memory buffer
+	call	copy		; Copy it
+	pop	af		; Restore User-mode PDRs
+	call	?usrsl
+    endif
   endif
 	jr	ide$done	; Return Success
 ;
@@ -738,6 +772,22 @@ ide$error:
   endif
 	ret	
 
+  if banked and not use$dma$to$copy
+;
+; COPY - Copy BC bytes from (DE) to User-Mode MMU (HL)
+;
+copy:
+	ld	a,(de)
+	ldup	(hl),a
+	inc	hl
+	inc	de
+	dec	bc
+	ld	a,b
+	or	c
+	jr	nz,copy
+	ret
+  endif
+
 ;
 rwflag:
 	defs	1		; Read/write flag
@@ -749,7 +799,7 @@ wr$msg:	defz	cr,lf,'Write'
 er$msg:	defz	' error on IDE/CF device. Retry (Y/N) ?'
 
 ;
-  if banked
+  if banked and use$dma$to$copy
 dmapb:			; DMA parameter block
 dstl:	defs	2
 dsth:	defs	2

@@ -54,6 +54,15 @@
 ;	11-Nov-2018	Tony Nicholson	Align common-memory stacks and
 ;					buffers on a word (even address)
 ;					boundary.
+;	12-Nov-2018	Tony Nicholson	If USE$DMA$TO$COPY is true, use
+;					on-chip DMA to do memory MOVE,
+;					otherwise use MMU copy
+;					between banks.  Unroll DMAXFR
+;					loop to in-line code (suspect
+;					intermittent failure of DMA).
+;					Also make sure it is disabled
+;					before loading DMA address
+;					and transfer count registers.
 ;
 	page
 	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
@@ -80,7 +89,7 @@
 
 	public	dummy, ?pmsg, ?pderr, ?geco, ?getch
 	public	?phexm, ?phex, ?phexhl, ?putc
-  if debug
+  if banked
 	public	?usrsl
   endif
 
@@ -818,8 +827,6 @@ move:
   endif
 
 bnkdif:
-	push	hl		; Save destination
-	push	de		; Save source address
 
   if krnl$debug
 	ld	(@dstack),sp	; Save stack pointer
@@ -854,6 +861,9 @@ bnkdif:
 	ld	sp,(@dstack)	; Restore stack
   endif
 
+  if use$dma$to$copy
+	push	hl		; Save destination
+	push	de		; Save source address
 	ld	(mvcnt),bc	; Byte Count to parameter block
 
 	ld	a,(@mdbnk)	; Destination logical 24-bit address in AHL
@@ -881,12 +891,39 @@ bnkdif:
 	ex	de,hl		;  and put it back in DE
 	pop	hl		; Restore destination
 	add	hl,bc		;  and advance it too
+  else
 
+	; Move via User-mode MMU PDRs
+
+	ld	a,(@cbnk)	; Save current bank to stack
+	push	af
+	ld	a,(@msbnk)	; Select source bank
+	call	?bnksl
+	ld	a,(@ubnk)	; Save user-mode bank on stack
+	push	af
+	ld	a,(@mdbnk)	; Select destination bank
+	call	?usrsl		;  in User-mode
+
+moveit:	ld	a,(de)		; Copy BC bytes from source
+	ldup	(hl),a		;  to destination
+	inc	de		; Advance pointers
+	inc	hl
+	dec	bc
+	ld	a,c
+	or	b
+	jr	nz,moveit
+
+	pop	af		; Restore User-mode bank
+	call	?usrsl
+	pop	af		; Restore current bank
+	call	?bnksl
+  endif
 	xor	a		; Clear extended move flag
 	ld	(@xmflg),a
 
 	ret
 
+  if use$dma$to$copy
 mvprog:	; DMA controller parameters
 mvdst:	defw	0000h		; Destination (low 12 bits)
 	defw	0000h		;  (high 12 bits)
@@ -894,7 +931,7 @@ mvsrc:	defw	0000h		; Source (low 12 bits)
 	defw	0000h		;  (high 12 bits)
 mvcnt:	defw	0000		; Byte count
 	defw	dma$descriptor	; DMA controller descriptor
-
+  endif
 ;
 ; MULTIO
 ;
@@ -1745,13 +1782,16 @@ ipchl:				; vectored CALL point
 ;	Source address (24 bits) in 2 words
 ;	Block length (16 bits)
 ;	Descriptor (16 bits)	See CONFIG.LIB to select between
-;				burst and continuos mode transfers.
+;				burst and continuous mode transfers.
 ;				All transfers use byte counts.
 ;
 ;	On exit, no registers are saved.
 ;
 dmaxfr:
   if krnl$debug
+
+	; Display the call parameters
+
 	ld	(@dstack),sp	; Save stack pointer
 	ld	sp,@dstack	; Use debug stack to guard
 				;  against stack overflow
@@ -1836,23 +1876,61 @@ dmasx:	pop	hl
 	ld	sp,(@dstack)	; Restore stack
   endif
 
+	push	bc
+	push	hl
+
 	call	iopdma		; Select DMA I/O page
-	ld	b,6		; Six *Words* to program DMA
-				; C contains the DMA DAL port address
-	dec	c		;  which is incremented below
-dmanext:
-	inc	c		; Advance port address
-	outiw			; Output next word (16 bits)
-	outjmp
-	jr	nz,dmanext
+
+	ld	a,5		; Point to Transaction Descriptor register
+	add	c		;  (TDRn = DALn+5)
+	ld	c,a
+
+	; Stop the DMA channel while we program it (as per the Z280
+	; preliminary Technical Manual - page 9-15 section 9.5.7)
+
+	ld	hl,0000000000000000b
+		; Disable channel (bit 15 OFF)
+		; DMA Interrupts disabled (bit 11 OFF)
+	outw	(c),hl
+
+	pop	hl
+	pop	bc	
+
+	outiw			; Write DAL (increments HL by 2 too)
+	inc	c
+	outiw			; Write DAH
+	inc	c
+	outiw			; Write SAL
+	inc	c
+	outiw			; Write SAH
+	inc	c
+	outiw			; Write byte count
+	inc	c
+	outiw			; Write transaction descriptor
+				; (with enable bit set (bit 15 ON)
+
+	; The DMA controller is doing its thing now
 
 dma$in$progress:
-	nop			; Do nothing for about a microsecond
-	nop
-	nop
+	outjmp			; Do nothing for about a microsecond
 	inw	hl,(c)		; Read DMA Transaction Description register
 	bit	4,l		; Has the Terminal Count (TC) bit been set?
 	jr	z,dma$in$progress ; No, busy wait until it completes
+
+	dec	c		; Make sure the count register is zero
+	inw	hl,(c)
+	ld	a,h
+	or	l
+	jr	z,dma$done	; Yes
+
+  if debug
+	enter$debug	<'DMA signalled TC but count not zero'>
+  endif
+
+dma$done:
+	inc	c		; Point back to DMA TDR
+	ld	hl,0000000000000000b
+	outw	(c),hl		; Write zero to it (disables the channel)
 
 	; Fall into IOPDEF to Restore default I/O page and return
 
@@ -2036,43 +2114,68 @@ sectrn:
 	ld	h,0
 	ret
 
-;
-; READ/WRITE for multi-sector I/O
-;
   if multi$sector$io
+;
+; READ/WRITE routines for multi-sector I/O only call the
+; physical disk I/O routine once to transfer multiple
+; sectors (up to 16KB) in a single operation. Subsequent
+; I/O calls are counted down and ignored (since the data
+; has already been read/written).
+;
+; READ a sector from the specified drive
+;
+; Entry parameters:	NONE
+;
+; Returned values:	A=00h if no errors occurred
+;			A=01h if non-recoverable error occurred
+;			A=FFh if the media has changed
 read:	
 	xor	a
 	ld	(@derflg),a
 	ld	a,(@cnt)
 	ld	hl,@rwcnt
 	cp	(hl)
-	call	z,diskrd		; Do only the first READ for MULTIO
+	call	z,diskrd	; Do only the first READ for MULTIO
 	ld	hl,@rwcnt
 	dec	(hl)
 	jr	nz,rdmult
 	ld	a,1
-	ld	(@cnt),a		; After the last skipped MULTIO read,
-	ld	(@rwcnt),a		;  reset counters to 1
+	ld	(@cnt),a	; After the last skipped MULTIO read,
+	ld	(@rwcnt),a	;  reset counters to 1
 rdmult:
 	ld	a,(@derflg)
 	or	a
 	ret
 
+;
+; WRITE a sector to the specified disk
+;
+; Entry parameters:	C=Deblocking codes
+;				0 deferred write
+;				1 non-deferred write
+;				2 deferred write to first sector
+;				  of a new data block
+;
+; Returned values:	A=00h if no errors occurred
+;			A=01h if physical error occurred
+;			A=02h if drive is read-only
+;			A=FFh if the media has changed
+;
 write:
-	xor	a			; Clear disk error flag
+	xor	a		; Clear disk error flag
 	ld	(@derflg),a
 	ld	a,(@cnt)
 	ld	hl,@rwcnt
 	cp	(hl)
-	call	z,diskwr		; Do only the first WRITE if MULTIO
+	call	z,diskwr	; Do only the first WRITE if MULTIO
 	ld	hl,@rwcnt
 	dec	(hl)
 	jr	nz,wrmult
 	ld	a,1
-	ld	(@cnt),a		; After last skipped MULTIO write,
-	ld	(@rwcnt),a		;  reset counters to 1
+	ld	(@cnt),a	; After last skipped MULTIO write,
+	ld	(@rwcnt),a	;  reset counters to 1
 wrmult:
-	ld	a,(@derflg)		; Return with disk error flag
+	ld	a,(@derflg)	; Return with disk error flag
 	or	a
 	ret
   endif ; multi$sector$io
@@ -2081,8 +2184,16 @@ wrmult:
 ; DISKRD
 ;
 ;	Read physical record from currently selected drive.
-;		Finds address of proper read routine from
-;		extended disk parameter header (XDPH).
+;	Finds the address of device read routine from
+;	extended disk parameter header (XDPH).
+;
+; Entry parameters:	NONE
+;
+; Returned values:	A=00h if no errors occurred
+;			A=01h if non-recoverable error occurred
+;			A=FFh if the media has changed
+;
+; No other registers are saved.
 ;
   if multi$sector$io
 diskrd:
@@ -2117,8 +2228,21 @@ diskrd	equ	read
 ; DISKWR
 ;
 ;	Write physical sector from currently selected drive.
-;		Finds address of proper write routine from
-;		extended disk parameter header (XDPH).
+;	Finds the address of device write routine from
+;	extended disk parameter header (XDPH).
+;
+; Entry parameters:	C=Deblocking codes
+;				0 deferred write
+;				1 non-deferred write
+;				2 deferred write to first sector
+;				  of a new data block
+;
+; Returned values:	A=00h if no errors occurred
+;			A=01h if physical error occurred
+;			A=02h if drive is read-only
+;			A=FFh if the media has changed
+;
+; No other registers are saved.
 ;
     if multi$sector$io
 diskwr:
@@ -2147,7 +2271,6 @@ diskwr	equ	write
   endif ; not ldrbios
 
 rw$common:
-
 	ld	a,(hl)
 	inc	hl
 	ld	h,(hl)
@@ -2163,7 +2286,7 @@ rw$common:
 	inc	de		; point to DPH again
 
   if krnl$debug
-	ld	(@dstack),sp	; Save stack in case of overflow
+	ld	(@dstack),sp	; Save stack in case it overflows
 	ld	sp,@dstack	;  outputting diagnostic messages
 	push	af
 	push	bc
@@ -2188,11 +2311,27 @@ shodma:	ld	a,(hl)
 	ld	sp,(@dstack)	; Restore stack pointer
   endif
 
+  if debug and banked
+	; We should be in Bank 0, since the driver code is also in bank 0
+	push	af
+	ld	a,(@cbnk)
+	or	a
+	jr	z,bank0$is$selected
+
+	enter$debug	<'Wrong Bank for disk READ/WRITE (see A register)'>
+	
+bank0$is$selected:
+	pop	af
+  endif
+
 	jp	(hl)		; leap to driver
 
   if ldrbios
+
+	; WRITE not implemented for LDRBIOS
+
 write	equ	dummy
-diskwr	equ	dummy		; DISKWR not implemented
+diskwr	equ	dummy
   endif ; ldrbios
 
 ;
