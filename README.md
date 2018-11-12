@@ -28,7 +28,7 @@ that the DMA transfers using the Z280's on-chip controllers were dodgy!
 I changed the DMAXFR routine in the BIOSKRNL module to in-line program
 the DMA channel without looping.
 
-The Banked memory versionusing just bank 0 and 1 (CPM3BNK1.SYS) now seems
+The Banked memory version using just bank 0 and 1 (CPM3BNK1.SYS) now seems
 to be working.
 
 
