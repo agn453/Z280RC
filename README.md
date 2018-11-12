@@ -23,12 +23,13 @@ Modification History (in reverse chronological order):
 
 Added USE$DMA$TO$COPY configuration equate.  If set to FALSE then extended
 memory moves using the BIOS MOVE routine will use the memory management unit
-to copy data from one bank to another.  Using this setting I can confirm
+to copy data from one bank to another.  Using this setting I confirmed
 that the DMA transfers using the Z280's on-chip controllers were dodgy!
 I changed the DMAXFR routine in the BIOSKRNL module to in-line program
 the DMA channel without looping.
 
-The two bank Banked memory version (CPM3BNK1.SYS) now seems to be working.
+The Banked memory versionusing just bank 0 and 1 (CPM3BNK1.SYS) now seems
+to be working.
 
 
 11-Nov-2018
