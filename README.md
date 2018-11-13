@@ -41,9 +41,9 @@ and NONBANK.DAT in CPM3NBNK.SYS).
 I'll update the DMAXFR routine soon to remedy the problem (described above)
 shortly. In the meantime enjoy a Banked version of CP/M-Plus on the Z280RC!
 
-PS; I've included a ZIP file containing all of the system/bios280 files
-as https://github.com/agn453/Z280RC/system/bios280/bios280.zip to assist
-those not wanting to download the whole GitHub repository.
+PS; I've included a ZIP file containing all of the system/bios280 files as
+https://github.com/agn453/Z280RC/blob/master/system/bios280/bios280.zip
+to assist those not wanting to download the whole GitHub repository.
 
 
 12-Nov-2018
