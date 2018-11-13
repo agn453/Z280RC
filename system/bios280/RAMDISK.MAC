@@ -26,6 +26,11 @@
 ;	08-Nov-2018	Tony Nicholson	Add the capabilty to manually
 ;					define the DPH and DPB with
 ;					a local allocation vector.
+;	13-Nov-2018	Tony Nicholson	Switch to using MMU and the common
+;					memory buffer to overcome the
+;					disk transfer buffer (@dma) crossing
+;					over the common-memory fence on
+;					a banked system.
 ;
 
 	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
@@ -73,6 +78,11 @@ rampg$end equ 2000h	; Page end address (high 16-bits) + 1
 ;
 	extrn	dmaxfr
 	extrn	cnv12, phyahl
+
+  if banked
+	extrn	?usrsl, @ubnk
+	extrn	cmnbuf		; Common memory buffer
+  endif
 
 ;
 ;	Maximum disk sector size
@@ -206,22 +216,48 @@ hd$read:
 	ld	(srcl),hl	;  DMA register format
 	ld	(srch),de
 
-	ld	a,(@dbnk)
-	ld	hl,(@dma)
-
-    if	banked
-	; Need to calculate physical address for DMA
-	call	phyahl
+    if banked
+	xor	a
+	ld	(rwflag),a	; Flag cleared (for READ)
+	ld	hl,cmnbuf	; Read into common buffer
+    else
+	ld	a,(@dbnk)	; Read directly into bank 0
+	ld	hl,(@dma)	;  user buffer
     endif
+
 	jr	rw$common	; Start DMA and Return
 
 hd$write:
-	ld	a,(@dbnk)
-	ld	hl,(@dma)
 
     if	banked
-	; Need to calculate physical address for DMA
-	call	phyahl
+	or	0FFh		; Set flag (for WRITE)
+	ld	(rwflag),a
+
+	ld	a,(@ubnk)	; Save old User-mode bank on
+	push	af		;  the stack
+	ld	a,(@dbnk)	; Prepare to copy the data
+	call	?usrsl		;  from the user buffer to common
+
+	ld	bc,hstsiz	; byte count
+	ld	de,cmnbuf	; dest
+	ld	hl,(@dma)	; source
+
+copywr:	ldup	a,(hl)		; Copy data to cmnbuf
+	ld	(de),a
+	inc	de
+	inc	hl
+	dec	bc
+	ld	a,c
+	or	b
+	jr	nz,copywr
+
+	pop	af		; Restore User-mode PDRs
+	call	?usrsl
+	xor	a
+	ld	hl,cmnbuf	; Write from cmnbuf
+    else
+	ld	a,(@dbnk)
+	ld	hl,(@dma)
     endif
 
 	call	cnv12		; Convert to 2 words in
@@ -239,22 +275,61 @@ rw$common:
 	ld	(desth),de
 
   if multi$sector$io
+    if banked
+	ld	a,1		; Force multi-sector OFF
+	ld	(@cnt),a	; (RAMDISK doesn't support it due to
+	ld	(@rwcnt),a	; using the common memory buffer
+	ld	hl,hstsiz	; on a banked system).
+    else
 	ld	a,(@cnt)	; Multi-sector count
 	ld	h,a		; Multiply by 512
 	ld	l,0		; (NB: assumes HSTSIZ is 512)
 	add	hl,hl
+    endif
   else
 	ld	hl,hstsiz	; Always 512 bytes
   endif
+
 	ld	(count),hl
 
 	ld	c,dal2		; Use DMA2 to transfer sector(s)
 	ld	hl,xfer
 	call	dmaxfr
 
-	; Always success
+  if banked
+	ld	a,(rwflag)	; Did we do a read or write?
+	or	a
+	jr	nz,success	; Write - so done!
+
+	ld	a,(@ubnk)	; Read, so copy data from common
+	push	af		;  buffer to users buffer
+	ld	a,(@dbnk)
+	call	?usrsl
+
+	ld	bc,hstsiz	; byte count
+	ld	de,cmnbuf	; source
+	ld	hl,(@dma)	; dest
+
+copyrd:	ld	a,(de)
+	ldup	(hl),a
+	inc	de
+	inc	hl
+	dec	bc
+	ld	a,c
+	or	b
+	jr	nz,copyrd
+
+	pop	af
+	call	?usrsl
+success:
+  endif
+
 	xor	a		; Return success
 	ret
+
+  if banked
+rwflag:	ds	1
+  endif
 
 ; Hardware DMA parameter block
 

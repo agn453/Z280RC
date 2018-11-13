@@ -9,7 +9,7 @@
 ;   BIOS Kernel module supporting Bill Shen's Z280RC single
 ;   board computer with RC2014 bus interface.  This system
 ;   has a Zilog Z280 MPU with 2 MBytes of memory, a DS1302
-;   timekeeper and built-in IDE CardFlash interface with
+;   timekeeper and built-in IDE CompactFlash interface with
 ;   a single serial console interface.
 ;
 ;   This sourcefile is written in Z280 assembly language and
@@ -67,7 +67,7 @@
 	page
 	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
 	maclib	Z280RCIO.LIB	; Z280RC I/O Port definitions
-	maclib	CONFIG.LIB	; Configuation
+	maclib	CONFIG.LIB	; Configuration
 	maclib	MODEBAUD.LIB	; Serial port control definitions
 
 	; BIOS entry points
@@ -210,23 +210,23 @@ bios:
 @dtbl:
   if idehd
     if ldrbios
-	; Only IDEHD CardFlash drive A: for booting
+	; Only IDEHD CompactFlash drive A: for booting
 	dtbl	<ide00>
     else
       if ramdisk
 	if partn8
-	; Drives A:..H: on IDEHD CardFlash, M: is RAMDISK
+	; Drives A:..H: on IDEHD CompactFlash, M: is RAMDISK
 	  dtbl	<ide00,ide01,ide02,ide03,ide04,ide05,ide06,ide07,,,,,ram0>
 	else
-	; Drives A:..D: on IDEHD CardFlash, M: is RAMDISK
+	; Drives A:..D: on IDEHD CompactFlash, M: is RAMDISK
 	  dtbl	<ide00,ide01,ide02,ide03,,,,,,,,,ram0>
 	endif ; partn8
       else
 	if partn8
-	; Drives A:..H: on IDEHD CardFlash
+	; Drives A:..H: on IDEHD CompactFlash
 	  dtbl	<ide00,ide01,ide02,ide03,ide04,ide05,ide06,ide07>
 	else
-	; Drives A:..D: on IDEHD CardFlash
+	; Drives A:..D: on IDEHD CompactFlash
 	  dtbl	<ide00,ide01,ide02,ide03>
 	endif ; partn8
       endif ; ramdisk
@@ -2610,9 +2610,9 @@ alignw	equ ($ - bios) and 0001h
 			;  to ensure it is on an even address
     if banked
 
-	public	idebuf
+	public	cmnbuf
 
-idebuf:	defs	512
+cmnbuf:	defs	512
 
     endif
   endif

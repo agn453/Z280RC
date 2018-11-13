@@ -18,6 +18,34 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+13-Nov-2018
+-----------
+
+DMAXFR is not copying memory to memory when the source or destination
+physical address crosses one of the logical address bank boundaries.
+This is what has been causing interbank moves and disk I/O to fail
+when more than two banks have been configured. (Bank 0 and Bank 1 work
+because there is no difference between physical and logical addresses
+up to the common boundary in Bank 1 - i.e. 01DFFFF).  The CP/M 3 PIP
+program was using memory across this boundary - hence why a copy with
+verify was failing for large files.
+
+Anyhow, I've modified the MOVE and Disk I/O routines to use the MMU
+to shuffle data between Banks (using just logical addresses) and everything
+now works.  The Banked configuration (CONFBANK.LIB and BANKED.DAT) now
+has Debugging disabled and is using Banks 1..3 with a 60KB TPA (CPM3BANK.SYS).
+I've left the Bank0/1 version with the debugger enabled (CONFBNK1.LIB
+and BANKED1.DAT resulting in CPM3BNK1.SYS) and the non-banked (CONFNBNK.LIB
+and NONBANK.DAT in CPM3NBNK.SYS).
+
+I'll update the DMAXFR routine soon to remedy the problem (described above)
+shortly. In the meantime enjoy a Banked version of CP/M-Plus on the Z280RC!
+
+PS; I've included a ZIP file containing all of the system/bios280 files
+as https://github.com/agn453/Z280RC/system/bios280/bios280.zip to assist
+those not wanting to download the whole GitHub repository.
+
+
 12-Nov-2018
 -----------
 

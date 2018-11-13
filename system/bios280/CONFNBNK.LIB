@@ -8,8 +8,10 @@
 
 	.z280
 
-config	macro	
-	defz	cr,lf,'Z280RC Non-banked BIOS 12-Nov-2018',cr,lf
+; This date is included in the sign-on message
+
+build$date macro
+	defb	'13-Nov-2018'
 	endm
 
 true	equ	-1
@@ -25,21 +27,86 @@ multi$sector$io equ false	; TRUE to support MULTIO (not tested)
 int$enabled equ	false		; TRUE to enable interrupts (mode 3)
 
 krnl$debug equ	false		; TRUE to enable BIOSKRNL debug output
+				; for disk I/O and memory moves.
 
-idehd	equ	true		; Built-in IDE CardFlash disk
+idehd	equ	true		; Built-in IDE CompactFlash disk
 partn8	equ	false		; TRUE for extra drives E:..H:
 ramdisk equ	true		; and RAMDISK drive M: (uses top 1.5Mb of RAM)
 
 use$disk$macros equ true	; TRUE use DPH and DPB macros in CPM3M80.LIB
 				; FALSE DPH and DPB are manually specified
 				; in the disk modules.
-use$dma$to$copy equ false	; TRUE to copy disk buffer to user buffer
+use$dma$to$copy equ true	; TRUE to copy disk buffer to user buffer
 				; using DMA, FALSE to copy using MMU
 				; (only applies when BANKED is TRUE)
 
 clock$set$support equ false	; TRUE to include time set support in CLOCK
 
 dma$burst$mode equ false	; TRUE burst mode/FALSE continuous mode DMA
+
+; Now construct the sign-on message
+
+config	macro	
+	defb	cr,lf,'Z280RC '
+  if ldrbios
+	defb	'Loader '
+  else
+    if banked
+	defb	'Banked '
+    else
+	defb	'Non-Banked '
+    endif
+	defb	'BIOS '
+  endif
+	build$date
+	defb	cr,lf
+  	defb	'Built with '
+  if debug
+	defb	'Debug '
+  endif
+  if cache$on
+	defb	'Cache '
+  else
+	defb	'NoCache '
+  endif
+  if multi$sector$io
+	defb	'MultIO '
+  endif
+  if banked
+    if use$dma$to$copy
+	defb	'MOVE-w/DMA '
+    else
+	defb	'MOVE-w/MMU '
+    endif
+  endif
+  if dma$burst$mode
+	defb	'Burst-DMA '
+  else
+	defb	'Cont.-DMA '
+  endif
+  if not ldrbios
+    if not use$disk$macros
+	defb	'Alloc-CSV'
+    endif
+  endif
+	defb	cr,lf
+	defb	'Drives '
+  if idehd
+    if ldrbios
+	defb	'CompactFlash A: '
+    else
+      if partn8
+	defb	'CompactFlash A:..H: '
+      else
+	defb	'CompactFlash A:..D: '
+      endif
+    endif
+  endif
+  if ramdisk
+	defb	'RamDisk M:'
+  endif
+	defz	cr,lf
+	endm
 
   if dma$burst$mode
 dma$descriptor equ 1000000010000000b	; Burst mode for memory to memory
@@ -54,6 +121,7 @@ dma$descriptor equ 1000000010000000b	; Burst mode for memory to memory
 		; end-of-process signaled (bit 0)
   else
 dma$descriptor equ 1000000100000000b	; Continuous mode
+;dma$descriptor equ 1000000000000000b	; Singe transaction mode
   endif
 
 ; Commonly used CP/M entry points
