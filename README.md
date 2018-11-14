@@ -18,6 +18,18 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+14-Nov-2018
+-----------
+
+Added a modified version of XMODEM 2.7 (for file transfer via the console
+serial port).  This now includes routines to drive the built-in Z280
+UART directly.  To select the internal routines use the /X3 switch on
+the XMODEM command line (or make it the default by having the XMZ280RC.CFG
+in the default directory). You'll find these files in the utilities folder
+or you can download a ZIP containing them directly from 
+https://github.com/agn453/Z280RC/blob/master/utilities/xm27z280.zip
+
+
 13-Nov-2018
 -----------
 

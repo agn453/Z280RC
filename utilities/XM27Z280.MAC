@@ -1,0 +1,3212 @@
+; This is XMODEM27 with Z280 console UART drivers built-in.
+; 
+; Assemble with "ZSM4 =XM27Z280/DZ280RC" to enable them,
+; and link with "LINK XMZ280=XM27Z280".  Special care has
+; been taken to preserve the program size - so that without
+; the Z280RC define a standard (unpatched) XMODEM27 is built.
+;
+; To use on the Z280RC, use the accompanying XMZ280RC.CFG
+; file (on your system drive with SYS protection) or
+; remember to include the /X3 switch to enable the built-in
+; (non-interrupt) Z280 UART I/O routines.
+;
+; Tony Nicholson  14-Nov-2018
+;
+	.z80
+	aseg
+
+  ifdef z280rc
+tcs	equ	12h	; Z280 UART transmitter control/status
+rcs	equ	14h	; Z280 UART receiver control/status
+rdr	equ	16h	; Z280 UART receiver data
+tdr	equ	18h	; Z280 UART transmitter data
+tcstbe	equ	00000001b ; tcs transmitter buffer empty bit
+rcsdav	equ	00010000b ; rcs data available bit
+  endif
+
+;==============================================================
+;               CP/M XMODEM by Martin Eberhard 
+;==============================================================
+;A command line and/or configuration file-driven program for
+;transferring files to and from a CP/M 1.4 or 2.2 system using
+;the XMODEM protocol, supporting both the original XMODEM
+;checksum protocol and the newer XMODEM-CRC protocol.
+;
+;This program has been tested at 115.2 K Baud, running on a
+;4 MHz Z80 with 0-wait state memory, and performing direct I/O
+;via a CCS 2719A serial board (which is based on the Z80-DART).
+;Calculations show that a 2 MHz 8080 ought to be able to send
+;and receive up to 76.8K baud (with for example a Cromemco
+;TU-ART), so long as there are not too many wait states.
+;
+; To use XMODEM, type:
+;   XMODEM <filename> {option list}
+;
+; A file name is madatory, and can be any legal CP/M file
+; name. If you are receiving with XMODEM and the file already
+; exists, then you will be asked if it should be overwritten.
+; If you are sending, then the file must exist, obviously.
+;
+; XMODEM first looks for a file called XMODEM.CFG on CP/M's
+; default drive. If found, then this file is parsed for
+; options, the same as the command line. XMODEM.CFG is parsed
+; first, so that options that are set on the command line will
+; override those set in XMOODEM.CFG.
+;
+; XMODEM.CFG and the command line both support the following
+; options (though some are less useful on the command line.)
+;
+;  /R Specifies Receive mode
+;
+;  /S Specifies Send mode
+;
+;     If neither /R nor /S is specified then you will be asked.
+;
+;  /C Selects checksum error checking when receiving;
+;     otherwise receiving uses CRC error checking. When
+;     sending, the error-checking mode is set by the receiver.
+;
+;  /E Specifies an enhanced RDR routine that returns with the
+;     Z flag set if no character is waiting. Note that this
+;     option does not actually select the RDR device as the
+;     transfer port. (/X2 does.)
+;
+;  /In h0 h1 h2... (max h7) Defines assembly code for the
+;      custom I/O port (used by the /X3 option), using Intel
+;      8080 machine language.
+;
+;        n = 0 specifies initialization code, to be run when
+;              command line and config file parsing are done.
+;              All registers may be trashed. This is useful
+;              for setting the baud rate, etc.
+;
+;        n = 1 installs a transmit byte routine.
+;              on entry to this routine, the character to send
+;              is in c. do not trash de or hl. Sample custom
+;              transmit routine (for SOLOS):
+;              48        mov   b,c    ;SOLOS wants chr in b
+;              3e 01     mvi   a,1    ;serial pseudoport
+;              cd 1c c0  call  AOUT   ;output character
+;            Encode as follows:
+;              /I1 48 3E 01 CD 1C C0
+;
+;        n = 2 installs a receive status subroutine, which
+;              should return with the Z flag set if no
+;              character is waiting. Do not trash any registers
+;              except psw. Sample routine:
+;              3e 01     mvi   a,1    ;serial pseudoport
+;              cd 22 c0  call  AINP   ;input character,
+;                                     ;Z set if none
+;            Encode as follows:
+;              /I2 3E 01 CD 22 C0
+;
+;        n = 3 installs a receive character routine, assuming a
+;              character is waiting. Returns the character in
+;              a. Trashes no registers except psw. If no
+;              routine is required (e.g.  for SOLOS), then no
+;              /I3 option is required.
+;
+;  /M Print message on console. This lets you tell the user
+;     e.g. what port is set up for direct I/O in XMODEM.CFG
+;
+;  /O Specifies an output sequence for an I/O port, intended to
+;     initialize the direct I/O port. The form of this
+;     option is:
+;       /O pp h1 h2 ... hn
+;     where pp is the port address, and all the subsequent
+;     bytes are sent to that port. You can have more than
+;     one /O option, allowing you e.g. to initialize the
+;     UART and also to set the baud rate.
+;
+;  /P Defines the direct I/O transfer port (used by the /X2
+;     option). The form of this command is:
+;       /P ss dd qq rr tt
+;       where:
+;          ss is the status port (for Rx and Tx)
+;          dd is the data port (for both Rx and tx)
+;          qq is 00 if the ready bits are true when low
+;            and 01 if the ready bits are true when high
+;          rr is the receive-ready bit mask
+;          tt is the transmit-ready bit mask
+;
+;     XMODEM assumes that the receive port works like this:
+;       RXWAIT: in       <status port>
+;               ani      <Rx Mask>
+;               jz/jnz   RXWAIT
+;               nop
+;               in       <data port>
+;
+;     ..and the transmit port works like this:
+;               push     psw
+;       TXWAIT: in       <status port>
+;               ani      <Tx Mask>
+;               jz/jnz   TXWAIT
+;               pop      psw
+;               out      <data port>
+;
+;     Any port that can work with these templates will work
+;     with XMODEM's /X2 option.
+;
+;  All variables for the /O and /P commands are in hexidecimal,
+;  and must be exactly two characters long. Legal characters
+;  are: {0,1,2,3,4,5,6,7,8,9,A,B,C,D,E,F}
+;
+;  /Q Specifies quiet mode, preventing messages and pacifiers
+;     from being printed on the console during transfer. This
+;     is particularly useful if the port you are using is also
+;     the port used for CP/M's console. Otherwise, a '+' will
+;     be printed on CON for every succesful block, and a '-'
+;     will be printed for every block retry.
+;
+;  /Xn Specifies the transfer port:
+;      n=0 uses CP/M's CON device. Contrary to CP/M specs,
+;          the CON input port must not strip parity.
+;
+;      n=1 uses CP/M'd RDR and PUN devices. Contrary to CP/M
+;          specs, the RDR input port must not strip parity.
+;          Also use /E if the RDR driver has been enhanced
+;          to return with the Z flag set when no character is
+;          waiting. (Otherwise, no timeout is possible when
+;          waiting for a RDR character.)
+;
+;      n=2 uses direct I/O, which can be set up using the /P
+;          option. If no /P option is entered, then /X2 will
+;          select a MITS 88-SIO port.
+;
+;      n=3 uses custom-patched I/O routines, set with the
+;          /I option. If no /I option is entered then
+;          transfers with /X3 will just cause errors.
+;
+;  /Zn Specifies CPU speed in MHz - n is between 1 and 9.
+;      The default is 2 MHz. This is used for timeouts while
+;      sending or receiving. The default is 2 MHz for an 8080,
+;      and 4 MHz for a Z80. (Xmodem can tell the difference.)
+;
+;   A semicolon begins a comment on a new line. All characters
+;   from the ';' until the end of the line will be ignored.
+;
+; Here is a sample XMODEM.CFG file:
+;
+;    /MDirect I/O is configured for 88-2SIO port B
+;    /P 12 13 01 01 02	;set up for an 88-2SIO Port B
+;    /O 12 03 15	;8 bits, 1 stop, no parity
+;    /X2		;use direct I/O
+;
+; You can usually abort a transfer with ^C on the console.
+;
+; The /P option modifies code in the direct I/O transmit and
+; receive routines. This is because the 8080 has no command to
+; IN or OUT to a port that is specified by a register value -
+; so self-modifying code is the only way.
+;
+; Code that is only used during initialization is at the end,
+; and gets overwritten by the block buffer. XMODEM uses all
+; available RAM (past its 2K runtime code, up through CP/M's
+; CCP) for buffering received and transmitted data, to speed up
+; transfers by minimizing disk accesses. This allows XMODEM to
+; run comfortably in (for example) a 16K-byte CP/M system
+; (with 10K of user memory), and still have a decent 8K data
+; buffer and reasonably robust options and messages.
+;
+; This program will display correctly on screens that are 16X64
+; or larger.
+;
+; Assemble with Digital Research's ASM Assembler
+;
+;==============================================================
+; Thanks to Ward Christensen for inventing XMODEM and keeping
+;   it simple.
+; Thanks to John Byrns for the XMODEM-CRC extension, which was
+;   adopted in Windows Hyperterm.
+; Thanks to Keith Petersen, W8SDZ, for a few ideas I borrowed
+;   from his XMODEM.ASM V3.2
+;==============================================================
+;Revision History:
+;
+; 1.0x  06 APR 2013 through 27 SEP 2014 M. Eberhard
+;  Command-line driven versions Based on XMODEM for CDOS
+;  (Z-80), version 1.03 by M. Eberhard
+;
+; 2.0  1 OCT 2014   M. Eberhard
+;  New major release:
+;   + Supports a configuration file (XMODEM.CFG), with same
+;     options as on the command line
+;   + combine features of all 1.0x assembly options
+;   + Define direct I/O port in XMODEM.CFG (or on command line)
+;   + User-set CPU speed (/Z), overrides 8080/Z80 defaults
+;   + Option to delete file on /R, if it already exists
+;   + Include which port we are using in announcement prior to
+;     Xmodem file transfer
+;   + A few new timeouts, to prevent hanging in odd situations
+;   + Several other minor enhancements
+;
+; 2.1  3 Oct 2014  M. Eberhard
+;  Fix bug in reporting the source of an error
+;  Speed up RDR/PUN
+;  require CR after "Y" on overwrite question
+;
+; 2.2  7 Oct 2014  M. Eberhard
+;  fix error-reporting bug, increase stack size for BDOS
+;
+; 2.3  9 Oct 2014 M. Eberhard
+;  Eliminate intermediate data buffer. Support CP/M 1.4
+;
+; 2.4  4 August 2016  M. Eberhard
+;  Fix bug in TXLOOP that would cause sending with checksums
+;  to fail. Fix bug causing a spurious block after the 1st
+;  buffer-full of received data. (Thanks to Bob Bell for
+;  helping find and fix these bugs.) Add /I cmd, and add /X3
+;  option for custom port routine patching. (This makes it
+;  possible to call external I/O routines, such as SOLOS or
+;  POLEX.) Also cleaned up comments.
+;
+; 2.5  9 May 2017  M. Eberhard
+;  Clean up file name in FCB if a command option was crammed
+;  against the file name (no spaces) on the command line.
+;
+; 2.6  10 September 2017
+;  Significant speed up by using table-driven CRC algorithm.
+;  Make the initialization code modify the jump addresses in
+;  RXBYTE and TXBYTE based on the type of transfer port
+;  selected, eliminated some subroutine calls, and a few other
+;  speed optimizations. Ask user for direction if no /R or /S
+;  was specified. Use all RAM (even more than 32K) for the
+;  buffer. perform initial buffer fill on Sends (before
+;  determining error checking mode), while the disk is still
+;  spinning. Flush a byte from the receiver port at the
+;  beginning, if possible. Squeeze a bit to keep disk file
+;  smaller than 4K-bytes. Tidy up comments and labels.
+;
+; 2.7 9 October 2017  M. Eberhard
+;  Fix stack bug when switching stacks
+;
+;To Do (maybe in some future version):
+;  Support Y-Modem (file name in block 0, 1K blocks, etc.)
+;  Terminal mode for port testing/modem setup
+;  Support for S-100 internal modem
+; (If any of these would be useful to you, let me know...)
+;
+; 2.7-z280rc 14-Nov-2018  Tony Nicholson
+;  Converted to Zilog mnemonics (via XIZ).
+;  The CP/M Plus BIOS console I/O routines were easily
+;  overrun at 115200 bps in receive mode since there
+;  is no hardware handshaking. The Z280 UART routines are
+;  hard-coded in the /I patch area if Z280RC is defined.
+;  /X3 selects them.
+;
+;==============================================================
+;---------------------------
+;This code's revision number
+;---------------------------
+version equ	0207h		; High byte = major revision number
+				; Low byte = minor version
+
+false	equ	0
+true	equ	not false
+
+errlim	equ	10		; Max error-retries. 10 is standard.
+
+;Timeout values in seconds. Values in parenthesis are
+;XMODEM standard values.
+
+sohto	equ	10		; (10)sender to send SOH 
+nakto	equ	90		; (90)receiver to send init NAK
+ackto	equ	60		; (60)receiver to ACK (or NAK)
+				; (time to write to disk)
+
+blksiz	equ	128		; Bytes per XMODEM block
+				; DO NOT CHANGE. BLKSIZ must be 128
+
+secsiz	equ	128		; CP/M logical-sector size must be 128
+
+;Progress pacifiers printed on the console
+
+pacack	equ	'+'		; Sent/Received a good block
+pacnak	equ	'-'		; Sent/Received a NAK
+paclin	equ	60		; Pacifiers per line
+
+;The following cycle values are used in the timing loops for
+;timeouts when transferring via the CON or the RDR and PUN.
+;It is ok if they are imperfect - the XMODEM protocol is quite
+;tolerant of timing variations. The example BIOS Code below was
+;used to estimate these cycle counts for CSTIME and CRTIME.
+
+cstime	equ	85		; Number of CPU cycles that BIOS uses to
+				; ..return CON status
+crtime	equ	95		; Number of cpu cycles that BIOS uses to
+				; ..return with no chr ready for custom
+				; ..RDR driver
+
+extime	equ	135		; Number of cycles an external receive
+				; Routine (e.g. SOLOS) will use for testing
+				; Status, when a chr is not ready.
+
+;===Example BIOS Code==========================================
+;Timing est. for getting reader status via custom RDR driver.
+;Assume the IOBYTE is implemented, and assume RDR=UR1
+;(the desired RDR port)
+;This takes 95 8080 cycles.
+
+;	jmp	RDRIN		;(10) BIOS jump vector
+
+;	...
+
+;RDRIN:	lda	IOBYTE		;(13) which reader port?
+;	ani	0Ch		;(7)
+;	jz	<not taken>	;(10) not RDR=TTY
+;	cpi	8		;(7)
+;	jc	<not taken>	;(10) not RDR=HSR
+;	jz	UR1ST		;(10) RDR=UR1
+
+;	...
+	
+;UR1ST:	in	<port>		;(10) get reader stat 
+;	ani	<mask>		;(7) test, set Z
+;	rz			;(11) return from BIOS
+
+;===Example BIOS Code==========================================
+;Timing estimate for getting console status.
+;Assume the IOBYTE is implemented, and assume CON=CRT
+;This takes 85 8080 cycles.
+
+;	jmp	CONST		;(10) BIOS jump vector
+
+;	...
+
+;RDRIN:	lda	IOBYTE		;(13) which CON port?
+;	ani	03h		;(7)
+;	jz	<not taken>	;(10) not CON=TTY
+;	cpi	2		;(7)
+;	jc	CRTST		;(10) CON=CRT
+
+;	...
+	
+;CRTST:	in	<port>		;(10) get reader stat 
+;	ani	<mask>		;(7) test, set Z
+;	rz			;(11) return from BIOS
+;==============================================================
+
+;**************
+; CP/M Equates
+;**************
+;------------------------------------------
+;BDOS Entry Points and low-memory locations
+;------------------------------------------
+wboot	equ	0000h		; Jump to BIOS warm boot
+wboota	equ	wboot+1		; Address of Warm Boot
+iobyte	equ	wboot+3
+;CDISK	equ	WBOOT+4		;Login drive
+bdos	equ	wboot+5		; BDOS Entry Point
+bdosa	equ	wboot+6		; First address of BDOS
+				; (can overlay up to here)
+
+fcb	equ	wboot+5ch	; CP/M file control blk
+fcbdr	equ	fcb		; Drive Descriptor
+fcbfn	equ	fcb+1		; File name (8 chrs)
+fcbft	equ	fcb+9		; File Type (3 chrs)
+fcbnl	equ	11		; File name length
+fcbext	equ	fcb+12		; File extent within FCB
+fcbclr	equ	24		; # of bytes to clear,
+				; Starting at FCBEXT
+combuf	equ	wboot+80h	; Disk & cmd line buffer
+usarea	equ	wboot+100h	; User program area
+
+;------------------------------------------
+;BDOS Function Codes, passed in register C
+;Note: CON, RDR, and PUN I/O is done via
+;direct BIOS calls, not BDOS calls.
+;------------------------------------------
+;BRESET	equ	0		;System Reset
+bconin	equ	1		; Read Console Chr
+;BCONOT	equ	2		;Type Chr on Console
+;BRDRIN	equ	3		;Read Reader Chr
+;BPUNOT	equ	4		;Write Punch Chr
+bprint	equ	9		; Print $-terminated String
+brdcon	equ	10		; Get Line from Console
+;BCONST	equ	11		;Console Status (<>0 IF CHR)
+;BDRST	equ	13		;Reset Disk
+bsdisk	equ	14		; Select disk
+bopen	equ	15		; Disk File Open
+bclose	equ	16		; Close disk file, FCB at de
+bserch	equ	17		; Search dir for file, FCB at de
+bdelet	equ	19		; Delete file, FCB at (de)
+bread	equ	20		; Read from Disk, 0=OK, <>0=EOF
+bwrite	equ	21		; Write next record, 0=OK, <>0=ERR
+bmake	equ	22		; Make new file, 0FFH=BAD
+bcdisk	equ	25		; Get current disk
+bstdma	equ	26		; Set disk buffer to (de)
+
+;--------------------------------------------
+;BIOS Entry Points, relative to the base
+;address in WBOOT. BIOS calls are used
+;(instead of BDOS calls) where speed matters.
+;--------------------------------------------
+const	equ	06h		; Console Status
+conin	equ	09h		; Console Input
+conout	equ	0ch		; Console output
+punch	equ	12h		; Punch output
+reader	equ	15h		; Reader input
+
+;-----------------------------------
+;Altair 88-SIO Registers and Equates
+;(Used as a default direct port.)
+;-----------------------------------
+siosta	equ	00h		; Status port
+siodat	equ	01h		; Data port
+
+siordf	equ	00000001b	; -RX Data register full
+siotde	equ	10000000b	; -TX Data register empty
+
+;----------------
+;ASCII Characters
+;----------------
+soh	equ	1		; Start of 128-byte block
+;STX	equ	2		;Start of 1K-byte block
+ctrlc	equ	3		; Control-C for user-abort
+eot	equ	4		; End XMODEM session
+ack	equ	6		; XMODEM block acknowledge
+tab	equ	9		; Horizontal tab
+lf	equ	0ah		; Linefeed
+cr	equ	0dh		; Carriage return
+nak	equ	15h		; XMODEM block negative ACK
+eof	equ	1ah		; ^Z end of XMODEM.CFG file
+selcrc	equ	'C'		; Selects CRC mode at initiation
+
+;*********************
+;* Beginning of Code *
+;*********************
+	org	usarea		; Normal place for CP/M programs
+
+;*******************************
+;Run-time stack is in the COMBUF
+;(which is just below USAREA)
+;*******************************
+rstack:
+
+;---------------------------------------------------------
+;Initialize, using code that gets wiped out by the BUFFER.
+;INIT returns with a=0 for receive, 1 for send. During the
+;transfer, the stack is located in the COMBUF. But until
+;then, the COMBUF contains the command line options.
+;---------------------------------------------------------
+	ld	sp,istack	; Initialization stack
+	call	init
+
+;---------------------------------
+;Send or receive, based on a=XMODE
+;---------------------------------
+	dec	a		; 1 means transmit	
+	jp	nz,rxfile	; 0 means receive
+
+;Fall into TXFILE
+
+;***Function**********************
+;Send a CP/M file in XMODEM format
+;On Entry:
+;  FCB is valid
+;  BUFCNT = 0
+;  XBLOCK = 0
+;*********************************
+txfile:	call	fopen		; Open file specified in FCB
+				; & print message on console
+
+	ld	sp,rstack	; Run-time stack in COMBUF
+
+;-------------------------------------------------------
+;Do initial buffer fill while the disk is still spinning
+;-------------------------------------------------------
+	call	filbuf		; Fill the buffer from disk
+
+;Get the transfer error checking mode from the receiver
+
+	call	gtmode		; Wait for NAK or SELCRC to
+				; ..determine cksum or CRC mode
+
+	ld	hl,ackerr	; Timeout return address
+	ld	(rtoret),hl	; ..for RXBYTE
+
+;---------------------------------------------------------
+;Transmit the entire file in 128-byte blocks. Whenever the
+;buffer is empty, refill it from disk and test for EOF.
+;---------------------------------------------------------
+txloop:	ld	hl,(bufcnt)	; Block count in buffer
+	ld	a,h		; 16-bit test for 0
+	or	l
+	call	z,filbuf	; Empty? go read disk
+				; Returns BLKPTR=BUFFER
+				; ..and hl=BUFCNT=blocks in buf
+				; Exit directly if no more data
+
+	dec	hl		; One fewer block in
+	ld	(bufcnt),hl	; ..the buffer
+
+	ld	hl,(xblock)	; Inc 16-bit XMODEM block #
+	inc	hl
+	ld	(xblock),hl
+
+;---------------------------------------
+;(Block send retry re-entry point)
+;Send the block header: SOH, 8-bit Block
+;number, Complimented 8-bit block number
+;On Entry:
+;  XBLOCK=16-bit XMODEM block number
+;---------------------------------------
+txrtry:	ld	a,soh		; SOH first
+	call	txbyte
+
+	ld	a,(xblock)	; 8-bit block number
+	call	txbyte		; (preserves a)
+
+	cpl			; Complimented block
+	call	txbyte
+
+;-------------------------------------------
+;Send the next BLKSIZ-byte block from BUFFER
+;On Entry:
+;  BLKPTR=DMA address
+;On Exit:
+;  Data checksum is in c
+;  16-bit data CRC is in de
+;  hl=BLKPTR+128
+;-------------------------------------------
+	ld	bc,blksiz*256+0	; B=bytes/block,
+				; ...clear checksum in c
+
+	ld	d,c		; Clear CRC for new block
+	ld	e,c
+
+	ld	hl,(blkptr)	; (hl) = data in BUFFER
+
+txblup:	ld	a,(hl)		; Get a data byte
+	call	txbyte		; Send it
+
+;------------------------------------------------------
+;(Inline for speed)
+;Update the 16-bit CRC and 8-bit checksum with one more
+;data byte. Speed matters here. For speed, this code
+;assumes that the CRC table is on a page boundary, and
+;that the table is split, with the high bytes in the
+;first half and the low bytes in the second half.
+;   a has the byte just transmitted
+;   c has checksum so far
+;   de has the CRC so far
+;------------------------------------------------------
+	push	hl		; (11)
+
+	ld	h,high crctab	; (7)CRC table addr high byte
+
+	xor	d		; (4)compute lookup address
+	ld	l,a		; (5)low byte of lookup
+
+	xor	d		; (4)recover original byte
+	add	a,c		; (4)update checksum too
+	ld	c,a		; (5)
+
+	ld	a,(hl)		; (7)compute new CRC high byte			
+	xor	e		; (4)using the table
+	ld	d,a		; (5)
+
+	inc	h		; (5)low bytes are in the
+	ld	e,(hl)		; (5)..other half of the table
+
+	pop	hl		; (10)
+
+;------------------------------------------------------------
+;CRC is done. Next byte, unless we have transmitted them all.
+;------------------------------------------------------------
+	inc	hl		; Next byte
+	dec	b
+	jp	nz,txblup	; Loop through block
+
+;--------------------------------------------
+;Send checksum or 16-bit CRC, based on CRCFLG
+;  c= 8-bit checksum
+;  de = CRC16
+;  CRCFLG <>0 if CRC mode enabled
+;  hl=BLKPTR+128
+;--------------------------------------------
+	ld	a,(crcflg)	; Checksum or CRC?
+	or	a		; Clear Z if CRCFLG
+	jp	z,txcksm	; Jump to send checksum
+
+	ld	a,d
+	call	txbyte		; Send byte in a
+	ld	c,e		; Now the 2nd CRC byte
+
+txcksm:	ld	a,c		; A=cksum or CRC 2nd byte 
+	call	txbyte		; Send byte in a
+
+;-------------------------------------------
+;Wait for the ACK. If none arrives by the
+;end of the timeout, or if a NAK is received
+;instead of an ACK, then resend the block.
+;  hl=BLKPTR+128
+;-------------------------------------------
+	call	getack		; Wait for the ACK
+				; A=0, Z set if ACK
+	jp	nz,txrtry	; NZ: timeout or NAK
+
+	ld	(errcnt),a	; A=0: restart error count
+	ld	(blkptr),hl	; Next block in the buffer
+
+;----------------------------------------------------
+;Ack received. Print pacifier, and go send next block
+;----------------------------------------------------
+	ld	a,(paccnt)	; Pacifiers enabled?
+	inc	a		; PACCNT=FFh means no
+	call	nz,pacok	; Pacifier if allowed
+
+	jp	txloop
+
+;***Function**************************
+;Receive XMODEM file & save it to disk
+;On Entry:
+;  XBLOCK=0
+;  FCB is valid
+;*************************************
+rxfile:	ld	hl,rxserr	; Timeout return address
+	ld	(rtoret),hl	; ..for RXBYT1 and RXBYTE
+
+	call	create		; Create & open file on disk
+				; ..and Send initial ACK or C
+
+	ld	sp,rstack	; Run-time stack in COMBUF
+
+;-------------------------------------------------------
+;Receive & validate a block, and see if we got an EOT
+;  XBLOCK=16-bit block number of the last block received
+;-------------------------------------------------------
+rxloop:	xor	a
+	ld	(errcnt),a	; Clear error count
+
+;---------------------------------------
+;Wait for SOH from sender to start
+;reception, go investigate anything else
+;---------------------------------------
+
+;Bad block retry re-entry point
+
+rxrtry:	ld	a,sohto*2	; Timeout for SOH
+	call	rxbyte
+
+	cp	soh		; Did we get an SOH?
+	jp	nz,notsoh	; If not, see what we got
+
+;------------------------------------------------
+;Got an SOH at beginning of the block. Now get
+;the rest of the block header: 8-bit Block number
+;followed by the complemented 8-bit block number
+;------------------------------------------------
+	ld	a,nak		; We have received
+	ld	(nakchr),a	; ..at least one SOH
+
+	call	rxbyt1		; Get block number
+	ld	d,a		; Save block number
+
+	ld	a,(xblock)	; 8-bit previous block number
+	ld	e,a		; ..for later
+
+	call	rxbyt1		; Complimented block number
+	cpl			; (4)compliment to compare
+
+	cp	d		; (4)
+	jp	nz,purge	; (10)No match: error
+
+;---------------------------------------------------
+;Calculate and remember the difference between this
+;block number and the previous block's block number.
+;(We calculate this here because we have the time.)
+;---------------------------------------------------
+	sub	e		; (4)calc the difference
+				; 0 means same block
+				; 1 means next block
+	ld	(rxbdif),a	; (7)Save block number diff
+
+;-----------------------------------------------------
+;Loop to receive BLKSIZ bytes and store them in the
+;next slot in the buffer, computing both the checksum
+;and the CRC along the way. Throughout the RXCHR loop:
+;  b is the byte counter
+;  c accumulates the checksum
+;  de accumulates the CRC
+;  hl is the buffer memory pointer
+;----------------------------------------------------
+	ld	bc,blksiz*256+0	; (10)b=bytes, c=0 checksum
+	ld	d,c		; (5)Clear CRC too
+	ld	e,c		; (5)
+
+	ld	hl,(blkptr)	; (16)next block in the buffer
+
+
+rxchr:	call	rxbyt1		; (17+118)Get one byte of data
+
+	ld	(hl),a		; (7)Store byte in buffer
+
+;-------------------------------------------------------------
+;(Inline for speed: this is the critical path when receiving.)
+;Update the 16-bit CRC and 8-bit checksum with one more data
+;byte. For speed, this code assumes that the CRC table is on
+;a page boundary, and that the table is split, with the high
+;bytes in the first half and the low bytes in the second half.
+;   a has the newly received byte
+;   c has checksum so far
+;   de has the CRC so far
+;(This loop uses 238 8080 cycles IN-to-IN for direct I/O. with
+;a 4 MHz Z80, this will require about 60 uS per byte. 115.2K
+;baud sends a byte every 86.8 uS, so we have enough headroom.)
+;-------------------------------------------------------------
+	push	hl		; (11)
+
+	ld	h,high crctab	; (7)CRC table addr high byte
+
+	xor	d		; (4)compute lookup address
+	ld	l,a		; (5)low byte of lookup
+
+	xor	d		; (4)recover original byte
+	add	a,c		; (4)update checksum too
+	ld	c,a		; (5)
+
+	ld	a,(hl)		; (7)compute new CRC high byte			
+	xor	e		; (4)..using the table
+	ld	d,a		; (5)
+
+	inc	h		; (5)low bytes are in the
+	ld	e,(hl)		; (5)..other half of the table
+
+	pop	hl		; (10)
+
+;--------------------------------------------------------------
+;Next byte, unless we have received all the data for this block
+;--------------------------------------------------------------
+	inc	hl		; (5)next byte
+	dec	b		; (5)
+	jp	nz,rxchr	; (10)
+
+;-------------------------------------------------------
+;We've received all the block's data bytes. Now verify
+;either the checksum in c or CRC in de, based on CRCFLG.
+;  hl=next buffer address
+;-------------------------------------------------------
+	ld	a,(crcflg)	; CRC mode?
+	or	a		; 0 means cksum
+	jp	z,rxcksm
+
+	call	rxbyt1		; Get 1st byte of CRC
+
+	cp	d		; Test the 1st CRC byte
+	jp	nz,rxcerr	; Fail: try again, but
+				; ..first, purge 2nd CRC
+
+	ld	c,e		; Put 2nd CRC byte in c
+
+rxcksm:	call	rxbyt1		; 2nd CRC byte or cksum
+
+	cp	c		; Does it match?
+	jp	nz,rxserr	; No: error
+
+;---------------------------------------------------
+;Got an error-free block. See if is the block number
+;we expected, based on the prior block's number.
+;  hl=next buffer address
+;  RXBDIF = this block's block number minus the
+;    previous block's block number.
+;---------------------------------------------------
+	ld	a,(rxbdif)	; Difference between this
+				; Block's number & the
+				; Prior block's number
+	dec	a
+	jp	nz,blkord	; Not sequential?
+
+;------------------------------------------------
+;Correct block received. Bump pointers and see if
+;the buffer is full, requiring a flush to disk.
+;  hl=next buffer address
+;------------------------------------------------
+	ld	(blkptr),hl	; Next slot in BUFFER
+	ld	a,(bdosa+1)	; High byte of BDOS
+	cp	h		; Full buffer?
+
+;Bump 16-bit buffer block count (doesn't affect Z)
+
+	ld	hl,(bufcnt)
+	inc	hl
+	ld	(bufcnt),hl
+
+;Test for full buffer, and flush it if it's full
+
+	call	z,wflush
+	
+	ld	hl,(xblock)	; Inc 16-bit XMODEM block #
+	inc	hl
+	ld	(xblock),hl
+
+;Print good-block pacifier on the console, if enabled
+
+	ld	a,(paccnt)	; Pacifiers enabled?
+	inc	a		; PACCNT=FFh means no
+	call	nz,pacok	; Pacifier if allowed
+
+;-------------------------------------------
+;Send ACK and loop back to get another block
+;-------------------------------------------
+ackblk:	call	txack		; Send XMODEM ACK
+	jp	rxloop		; LOOP until EOF
+
+;========================
+;Receive Error Processing
+;========================
+;-------------------------------------------------------
+;Non-sequential block received without a checksum or CRC
+;error. a=FFh if this block has the same block number as
+;the previous block (and should be ignored). Otherwise
+;abort because a block has been irretrievably lost.
+;-------------------------------------------------------
+blkord:	inc	a		; Was it FFh?
+	jp	z,ackblk	; Y: ignore repeated block
+
+	ld	de,lbmsg	; Lost block
+	jp	abort
+
+;---------------------------------------
+;Got something besides an SOH. If it
+;was an EOT then quit directly to RXEOT.
+;---------------------------------------
+notsoh:	cp	eot
+	jp	z,rxeot		; Done with reception
+
+;-------------------------------------------------------
+;No SOH or EOT - this was an invalid header. Eat the
+;rest of this block (up to 256 received bytes) until
+;the line is quiet for 1 second. (RXBYT1 timeout will
+;jump to the address in RTORET, which should be RXSERR.)
+;-------------------------------------------------------
+purge:	ld	b,0		; Allow 256 babbling chrs
+
+prglup:	call	rxbyt1		; Receive w/ 1-sec timeout
+	dec	b
+	jp	nz,prglup	; RXBYT1 times out to RXSERR
+
+;The transmitter is babbling, unable to synchronize
+;with the incoming data stream. Abort with message.
+
+	ld	de,synmsg	; Sync error message
+	jp	abort		; Too many bogus bytes
+
+;--------------------------------
+;Error on 1st CRC byte. Flush 2nd
+;CRC byte, and indicate an error.
+;--------------------------------
+rxcerr:	call	rxbyt1		; Get and chuck 2nd CRC byte
+
+;-----------------------------------------------
+;Send a NAK to indicate receive error. If we are
+;waiting to start and we are in CRC mode (NAKCHR
+;=SELCRC), then send SELCRC instead of NAK
+;-----------------------------------------------
+rxserr:	call	pacerr		; Opportunity to abort,
+				; Pacifier if allowed
+				; Trashes hl
+
+	ld	a,(nakchr)	; Current NAK chr
+	call	txbyte
+
+;Bump error count, and abort if too many errors.
+;otherwise, retry the block.
+
+	ld	hl,errcnt	; Clear error count
+	inc	(hl)		; Bump error count
+
+	ld	a,(hl)		; Too many errors?
+	cp	errlim
+	jp	c,rxrtry	; No: try again
+
+	ld	de,elemsg	; Error limit exceeded
+	jp	abort
+
+;***Subroutine*********************************
+;Write all data in BUFFER to disk
+;On Entry:
+;  BUFCNT = count of blocks currently in BUFFER
+;  FCB describes the open file
+;On Exit:
+;  BUFCNT=0
+;  BLKPTR = BUFFER
+;Trashes all registers
+;**********************************************
+wflush:	ld	hl,buffer	; Reset BLKPTR
+	ld	(blkptr),hl
+
+wfloop:	ex	de,hl		; De=start of block data
+
+	ld	hl,(bufcnt)	; Blocks in buffer
+	ld	a,h		; End of buffer already?
+	or	l
+	ret	z		; Return if so
+
+	dec	hl		; Next block
+	ld	(bufcnt),hl
+
+	ld	c,bstdma	; CP/M SET DMA function
+	call	gobdos		; De = DMA address
+
+	ex	de,hl		; Pointer to hl, free de
+
+	ld	de,fcb
+	ld	c,bwrite	; Write from buf to disk
+	call	gobdos
+
+	ld	de,ewfmsg
+	or	a		; BDOS returns 0 if okay
+	jp	nz,abort	; Oops, write error
+
+				; Hl = address in BUFFER
+	ld	de,blksiz	; De=block size
+	add	hl,de		; (hl)=next block data
+
+	jp	wfloop		; Until all blocks sent
+
+;***Subroutine*****************************************
+;Get an ACK from the receiver. If we get a NAK, then
+;print the NAK pacifier on the console. Opportunity for
+;user to abourt (with ^C) if timeout waiting for ACK.
+;On Entry:
+;  RTORET = ACKERR (RXBYTE eror return adress)
+;On Exit:
+;  a=0, Z set and Carry clear if ACK received
+;  Z clear and Carry clear if NAK received
+;  Z clear, Carry set and ERRCNT bumped if timeout
+;    or too many bogus chrs received
+;  If too many errors, abort
+;Good ack: trashes a
+;Bad ack: trashes a,bc,e,hl
+;******************************************************
+getack:	
+
+;-----------------------------------------
+;Get a received byte, or timeout. Return
+;with Z set and carry clear if it's an ACK
+;-----------------------------------------
+	ld	a,ackto*2	; ACK-wait timeout value
+	call	rxbyte		; Go get a character
+				; Timeout will "return"
+				; ..to ACKERR
+
+	xor	ack		; Did we get an ACK?
+	ret	z		; Y: return w/ a=0, Z set
+				; ..and carry cleared
+
+;-----------------------------------------
+;If NAK, print pacifier, and return with
+;Carry & Z cleared, unless the user aborts
+;-----------------------------------------
+	cp	nak xor ack	; NAK?
+	jp	nz,ackerr	; NZ: bad byte received
+
+	call	pacerr		; Opportunity to abort,
+				; Pacifier if allowed
+				; Trashes hl
+
+	or	0ffh		; NAK: Clear Z & carry
+	ret
+
+;----------------------------------------------------------
+;Timeout or bogus chr while waiting for ACK/NAK. Bump error
+;count & check limit. Set carry and clear Z for return.
+;----------------------------------------------------------
+ackerr:	call	cctrlc		; User abort?
+
+	ld	hl,errcnt	; Bump error count
+	inc	(hl)
+
+	ld	a,(hl)		; Too many errors?
+	cp	errlim
+	ret	c		; N: Return w/ carry set
+				; ..and Z cleared for timeout
+
+;--------------------------------------
+;Abort waiting for ACK: Too many errors
+;--------------------------------------
+	ld	de,taemsg	; Too many ack errors
+	jp	abort
+
+;***Subroutine*****************************
+;Close CP/M disk file 
+;(This is required after writing to a file)
+;On Exit:
+;  de = FCB
+;Trashes psw
+;******************************************
+fclose:	ld	de,fcb		; FCB describes the file
+	ld	c,bclose	; CP/M CLOSE FILE function
+	call	gobdos
+	inc	a		; -1 meant close error
+	ret	nz
+
+;--------------------------------------
+;Error closing file: abort with message
+;--------------------------------------
+	call	cmsgxt
+	defb	'FILE CLOSE ERROR! May be corrupt.$'
+
+;***Subroutine**************************************
+;Read more blocks from the disk and put them in the
+;buffer until it is full or there are no more blocks
+;On Entry at BUFCNT:
+;  BUFCNT = 0
+;  Buffer start address = BUFFER
+;On Entry at FILBF1:
+;  hl=buffer starting address
+;  BUFCNT = 0
+;On Exit:
+;  BLKPTR = buffer start address
+;  BUFCNT=number of 128-byte blocks in the buffer
+;  hl=(BUFCNT)
+;  EOFLAG set if EOF encountered
+;  direct exit to TXEOF if no more data
+;Trashes all registers
+;***************************************************
+
+;--------------------------------------------------------
+;BUFFER is empty: read 128-byte logical disk sectors into
+;the buffer until EOF or the buffer is full (up to BDOS)
+;--------------------------------------------------------
+filbuf:	ld	a,(eoflag)	; Already seen the EOF?
+	or	a
+	jp	nz,txeof	; Y: no more data.
+
+	ld	hl,buffer
+
+;--------------------
+;Entry for first fill
+;--------------------
+filbf1:	ld	(blkptr),hl	; Reset pointer for exit
+
+	ex	de,hl		; De=address in BUFFER
+
+fbloop:	ld	c,bstdma	; De=CP/M DMA address
+	call	gobdos		; Trashes no registers
+
+	ex	de,hl		; Pointer to hl, free de
+
+	ld	de,fcb
+	ld	c,bread		; Logical sector into BUFFER
+	call	gobdos		; Trashes no registers
+	or	a		; Read ok?
+	jp	nz,fbeof	; EOF from CP/M?: no more data
+
+
+	ld	de,secsiz	; Logical sector size
+	add	hl,de		; Next logical sector's address
+	ex	de,hl		; ..into de
+
+	ld	hl,(bufcnt)	; Count blocks in buffer. Note:
+	inc	hl		; This assumes blocks are the
+	ld	(bufcnt),hl	; Same size as logical sectors.
+
+	ld	a,(bdosa+1)	; High byte of BDOS address
+	cp	d		; All full?
+	jp	nz,fbloop	; N: go until all space used
+
+	ret			; With hl=BUFCNT
+
+;-------------------------------------------
+;We got an EOF from CP/M. If we received 0
+;logical sectors, then send the EOF and end.
+;On Entry:
+;  a<>0
+;  count-down on stack
+;  BUFCNT = # of blocks read from disk
+;On Exit:
+;  hl=(BUFCNT)
+;-------------------------------------------
+fbeof:	ld	(eoflag),a	; Set EOF flag
+
+	ld	hl,(bufcnt)	; Zero blocks?
+	ld	a,h
+	or	l
+	ret	nz		; N: ret with hl=BUFCNT
+
+;Fall into TXEOF to end transmission
+
+;***Exit************************************************
+;File send completed. Send EOT'S until we get an ACK
+;Then print happy message, report block count anbd exit.
+;On Entry:
+;  XBLOCK=16-bit block number of the last block sent
+;*******************************************************
+txeof:	ld	a,eot		; Send an EOT
+	call	txbyte
+
+	call	getack		; Wait for an ACK
+	jp	nz,txeof	; Loop until we get an ACK
+
+	call	cilprt		; Report success
+	defb	'OK',cr,lf
+	defb	'Sent',' '+80h
+
+	jp	repcnt		; Print block count, goto CP/M
+
+;***Subroutine************************
+;Receive a byte, with 1-second timeout
+;On Entry:
+;  RTORET = error return address
+;On Exit:
+;  exit to RTORET if timeout
+;  a = received byte if no timeout
+;*************************************
+rxbyt1:	ld	a,2		; 1-second timeout
+
+;Fall into RXBYTE
+
+;***Subroutine***************************************
+;Receive a byte from the transfer port - either the
+;CON or RDR device or a direct I/O port
+;
+;This routine gets modified by /T,/E, and /P options.
+;On Entry:
+;  RXROUT has been patched by the initialization code
+;  a = timeout value in half-seconds
+;  RTORET = error return address
+;On Exit:
+;  exit to RTORET if timeout
+;  a = received byte if no timeout
+;(118 8080 cycles for direct I/O)
+;****************************************************
+rxbyte:	ld	(timrh),a	; (13)Timer high byte
+	push	hl		; (11)
+	ld	hl,(timrld)	; (16)start timeout timer
+
+rxrout:	jp	exit		; (10)This gets modified with
+				; ..the routine address
+
+;---RX Byte Routine--------------------------
+;Receive a transfer byte from CON
+;On Entry:
+;  hl = timer low word
+;  TIMRH = timer high byte
+;  prior hl is on the stack
+;RXBCON loop: 179+CRTIME cycles, and round up
+;-->Entry is at RXBCON <---
+;--------------------------------------------
+conto	equ	50000/((195+crtime+9)/10)
+rxclup:	dec	hl		; (5)
+	ld	a,l		; (5)
+	or	h		; (4)
+	call	z,rxtimr	; (11) Timeout?
+
+rxbcon:	ld	a,const		; (7)get console status
+	call	gobios		; (116+17+CRTIME)
+	or	a		; (4)nz means chr ready
+	jp	z,rxclup	; (10)Go get the chr
+
+	ld	a,conin		; Get console chr
+	jp	crdone
+
+;---RX Byte Routine--------------
+;Receive a transfer byte from RDR
+;On Entry:
+;  hl = timer low word
+;  TIMRH = timer high byte
+;  prior hl is on the stack
+;--------------------------------
+rxrdr:	ld	a,reader	; BIOS routine offset
+
+;Fall into CRDONE
+
+;----------------------------------
+;Get character from BIOS and return
+;On Entry:
+;  a = BIOS routine offset
+;  prior hl is on the stack
+;----------------------------------
+crdone:	pop	hl		; Chuck timer
+
+;Fall into GOBIOS
+
+;***Subroutine*********************
+;Go call a BIOS driver directly
+;On Entry:
+;  c=value for BIOS routine, if any
+;  a = BIOS call address offset
+;On Return:
+;  psw as BIOS left it
+;  all other regs preserved
+;(116 cycles + BIOS time)
+;**********************************
+gobios:	push	hl		; (11)
+	push	de		; (11)
+	push	bc		; (11)
+
+	call	dobios		; (17+26+BIOS time)
+
+	pop	bc		; (10)
+	pop	de		; (10)
+	pop	hl		; (10)
+	ret			; (10)done
+
+;***Subroutine*********************
+;Go call a BIOS driver directly
+;On Entry:
+;  c=value for BIOS routine, if any
+;  a = BIOS call address offset
+;On Return:
+;  all regs as BIOS left them
+;(26 cycles + BIOS time)
+;**********************************
+dobios:	ld	hl,(wboota)	; (16)get BIOS base address
+	ld	l,a		; (5)a has jump vector
+
+	jp	(hl)		; (5) 'call' BIOS routine
+
+;---RX Byte Routine---------------------------------------
+;Receiver from enhanced RDR routine, which returns with Z
+;set if no character is waiting - allowing a timeout here.
+;On Entry:
+;  hl = timer low word
+;  TIMRH = timer high byte
+;  prior hl is on the stack
+;RXERDR loop: 175+CRTIME cycles, and round up
+;--> Entry is at RXERDR <--
+;---------------------------------------------------------
+rdrto	equ	50000/((175+crtime+9)/10)
+rxerlp:	dec	hl		; (5)
+	ld	a,l		; (5)
+	or	h		; (4)
+	call	z,rxtimr	; (11) Timeout?
+
+rxerdr:	ld	a,reader	; (7)BIOS routine offset
+	call	gobios		; (116+17+BIOS time)
+	jp	z,rxerlp	; (10)nz means chr ready
+
+	pop	hl
+	ret
+
+;---RX Byte Routine-------------------------------
+;Generic direct transfer port Input Routine - gets
+;modified by INIT based on selected transfer port
+;On Entry:
+;  hl = timer low word
+;  TIMRH = timer high byte
+;  prior hl is on the stack
+;--> Entry is it RXDRCT <--
+; WAITRX loop = 53 cycles. 0.5S / 53 uS = 9434
+;-------------------------------------------------
+dirto	equ	9434
+waitrx:	dec	hl		; (5)
+	ld	a,l		; (5)
+	or	h		; (4)
+	call	z,rxtimr	; (11) Timeout?
+
+rxdrct:
+
+;The relative position of the following instructions must not
+;change because MODIO assumes the positions of the bytes it
+;modifies.
+
+imodfy:	in	a,(siosta)	; (10+1)status port (modified)
+	and	siordf		; (7)test ready (clear carry) (modified)
+	jp	nz,waitrx	; (10)high when chr ready (modified)
+
+	pop	hl		; (10)here for IMODFY
+	in	a,(siodat)	; (10)data port (modified)
+	ret			; (10)
+
+;---RX Byte Routine--------------------------------
+;Custom Receive Subroutine
+;On Entry:
+;  hl = timer low word
+;  TIMRH = timer high byte
+;  prior hl is on the stack
+;--> Entry is at RXCUST <---
+;Assume WATCRX loop time is 80 cycles, and round up
+;--------------------------------------------------
+  ifdef z280rc
+custo	equ	50000/((100)/10) ; no external time
+  else
+custo	equ	50000/((80+extime+9)/10)
+  endif
+watcrx:	dec	hl		; (5)
+	ld	a,l		; (5)
+	or	h		; (4)
+	call	z,rxtimr	; (11) Timeout?
+
+rxcust:
+;Wait for data to be ready
+;(Up to 8 bytes will be written here by /I2)
+
+crstat:
+  ifdef z280rc
+	in	a,(rcs)		; (10)
+	and	rcsdav		; (7)
+	jp	z,watcrx	; (10)
+	pop	hl		; (10)
+	in	a,(rdr)		; (10)
+	ret			; (10)
+	nop		
+  else
+	ld	de,upmsg	; Default causes error
+	jp	abort
+	nop
+	nop
+	jp	z,watcrx
+	pop	hl
+  endif
+
+;Get the received data byte
+;(Up to 8 bytes will be written here by /I3)
+
+crdat:
+  ifdef z280rc
+	in	a,(rdr)		; (10)
+	ret			; (10)
+  else
+	ret			; Just make default faster
+	ret
+	ret
+  endif
+	ret
+	ret
+	ret
+	ret
+	ret
+
+	ret
+
+;---Local Subroutine-------------------------
+;Bump timer, test for abort every 1/2 sec
+;On Entry:
+;  hl = 0
+;  TIMRH = remaining timeout in 0.5 sec units
+;  RTORET = error return address
+;  top-of-stack = our return address
+;  next-on-stack = hl save value
+;  next-on-stack = RXBYTE return address
+;On Exit:
+;  hl reloaded
+;On Timeout:
+;   repair stack for call to RXBYTE
+;   jump to address in RTORET
+;Trashes psw
+;--------------------------------------------
+rxtimr:	call	cctrlc		; User abort?
+
+	ld	hl,timrh
+	dec	(hl)		; Bump timer high byte
+	ld	hl,(timrld)	; Reload timer
+	ret	nz		; Return unless timeout
+
+;Timeout: fix stack, "return" from RXBYTE to address in RTORET
+
+	pop	hl		; Chuck RXTIMR return address
+	pop	hl		; Original hl
+	ex	(sp),hl		; RXBYTE return address instead
+
+	ld	hl,(rtoret)	; Error return address
+	ex	(sp),hl		; Onto stack, restore hl
+	ret			; Go there
+
+;***Subroutine********************************
+;Send ACK
+;On Exit:
+;  a trashed
+;  All flags and all other registers preserved
+;*********************************************
+txack:	ld	a,ack
+
+;Fall into TXBYTE
+
+;***Subroutine*******************************
+;Send a to the transfer port, based on XPORT
+;and the assembly options.
+;This routine gets modified by /P option
+;On Entry:
+;  a = byte to send
+;  TXROUT has been modified by initialization
+;On Exit:
+;  All registers preserved
+;********************************************
+txbyte:	push	bc
+	ld	c,a		; Chr to c
+
+txrout:	jp	exit		; This gets modified with
+				; The routine address
+;---TX Byte Routine-------------------------
+;Custom Output Subroutine
+;(Up to 8 bytes will be written here by /I1)
+;-------------------------------------------
+txcust:
+cwdat:
+  ifdef z280rc
+	in	a,(tcs)
+	and	tcstbe
+	jr	z,txcust
+	ld	a,c
+	out	(tdr),a
+  else
+	ld	de,upmsg	; Default causes error
+	jp	abort
+	nop
+	nop
+	ld	a,c		; Restore registers
+  endif
+	pop	bc
+	ret
+
+;---TX Byte Routine----------------------
+;Transmit via direct I/O, with timeout
+;the timeout value doesn't really matter:
+;we just shouldn't hang forever here
+;----------------------------------------
+txdrct:	push	hl
+	ld	hl,0		; About 1.7 second timeout
+				; ..at 2 MHz
+
+txwait:	dec	hl		; (5)timeout?
+	ld	a,h		; (5)
+	or	l		; (4)
+	jp	z,txbto		; (10)y: abort
+
+;The relative position of the following instructions must not
+;change because MODIO assumes the positions of the bytes it
+;modifies.
+
+omodfy:	in	a,(siosta)	; (10+1)status port (modified)
+	and	siotde		; (7)mask (modified)
+	jp	nz,txwait	; (10)may become jnz (modified)
+
+;52 cycles = 26 uS per pass at 2 MHz
+
+	ld	a,c		; Recover chr
+	out	(siodat),a	; Data port (modified)
+
+	pop	hl
+	pop	bc
+	ret
+
+;Transmitter timeout: the UART CTS signal is probably not true.
+;Rudely abort program.
+
+txbto:	ld	de,utomsg	; Exit message
+	jp	abort
+
+;---TX Byte Routine-------
+;Transmit via CP/M CON
+;-------------------------
+txcon:	ld	a,conout	; BIOS send c to console
+	jp	txcp
+
+;---TX Byte Routine-------
+;Transmit via CP/M PUN
+;-------------------------
+txpun:	ld	a,punch		; 1:BIOS send c to punch
+
+;Fall into TXCP
+
+;----------------------------
+;Transmit via CP/M CON or PUN
+;----------------------------
+txcp:	call	gobios		; Chr in c, routine in a
+
+	ld	a,c		; Restore character
+	pop	bc
+	ret
+
+;***Subroutine*********************
+;Print hl in decimal on the console
+;with leading zeros suppressed
+;Trashes all registers
+;**********************************
+pdec16:	ld	d,0		; Suppress leading 0's
+
+	ld	bc,-10000
+	call	decdig
+	ld	bc,-1000
+	call	decdig
+	ld	bc,-100
+	call	decdig
+	ld	bc,-10
+	call	decdig
+
+	ld	a,l		; Last digit is simple
+	jp	decdg0		; With leading 0's
+
+;---Local Subroutine--------------------------
+;Divide hl by power of 10 in bc and print
+;result, unless it's a leading 0.
+;On Entry:
+;  hl=Dividend
+;  bc=divisor (a negative power of 10)
+;  d=0 if all prior digits were 0
+;On Exit:
+;  Quotent is printed, unless it's a leading 0
+;  hl=remainder
+;  d=0 iff this and all prior digits are 0
+;---------------------------------------------
+decdig:	ld	a,0ffh		; Will go 1 too many times
+	push	de		; Leading zero state
+
+diglp:	ld	d,h		; De gets prev value
+	ld	e,l
+	inc	a
+	add	hl,bc		; Subtract power of 10
+	jp	c,diglp
+
+	ex	de,hl		; Hl has remainder
+	pop	de		; Leading 0 state
+
+	ld	e,a		; E has digit to print
+	or	d		; Leading 0 to suppress?
+	ret	z		; Yes: digit is done
+
+	ld	d,a		; Don't suppress next digit
+	
+	ld	a,e
+
+decdg0:	add	a,'0'		; Make digit ASCII
+
+;Fall into PRINTA
+
+;***Subroutine******************
+;Print character in a on console
+;Trashes psw,c
+;*******************************
+printa:	ld	c,a		; Value to c for PRINTC
+
+;Fall into PRINTC
+
+;***Subroutine******************
+;Print character in c on console
+;Trashes psw
+;*******************************
+printc:	ld	a,conout
+	jp	gobios
+
+;***Subroutine********************************
+;Print error pacifier on the console unless
+;disabled, giving the user a chance to abort
+;On Entry:
+;  PACCNT =FFh to disable pacifier printing
+;  otherwise, PACCNT = column position
+;On Exit:
+;  PACCNT incremented mod 64, unless it is FFh
+;Trashes psw,c,hl
+;*********************************************
+pacerr:	call	cctrlc		; User abort?
+
+	ld	a,(paccnt)	; Pacifiers enabled?
+	inc	a
+	ret	z		; N: no pacifier printed
+
+	ld	c,pacnak
+	defb	21h		; 'LXI H' opcode skips 2 bytes
+
+;Hop into PACIFY
+
+;***Subroutine*************************************
+;Print good pacifier on the console unless disabled
+;On Entry:
+;  a = PACCNT = column position
+;On Exit:
+;  PACCNT incremented mod PACLIN, unless it is FFh
+;Trashes psw,c
+;**************************************************
+pacok:	ld	c,pacack
+
+;Fall into PACIFY
+
+;***Subroutine************************************
+;Print pacifier on the console unless disabled.
+;Print a CR/LF at the end of every PACLIN columns.
+;On Entry:
+;  c=pacify character
+;  a = PACCNT+1 = next column position
+;On Exit:
+;  PACCNT incremented mod PACLIN
+;Trashes psw,c
+;*************************************************
+pacify:	ld	(paccnt),a
+	sub	paclin+1	; Line full?
+	jp	nz,printc
+
+	ld	(paccnt),a	; Zero
+	push	bc		; Save pacifier chr in c
+	call	pcrlf		; Need a CR?
+	pop	bc
+	jp	printc		; Last one on the line
+
+;***Subroutine*****
+;Delete file at FCB
+;On Exit:
+;  de=FCB
+;Trashes psw,c,hl
+;******************
+fdelet:	ld	c,bdelet	; Delete existing file
+	ld	de,fcb
+	defb	21h		; LXI H opcode skips 2 bytes
+
+;Hop into GOBDOS
+
+;***Subroutine******************
+;Print $-terminated string at de
+;Trashes psw,c
+;*******************************
+printf:	ld	c,bprint
+
+;Fall into GOBDOS
+
+;***Subroutine*********************************
+;Call BDOS while preserving all regs except psw
+;**********************************************
+gobdos:	push	hl
+	push	de
+	push	bc
+	call	bdos
+	pop	bc
+	pop	de
+	pop	hl
+	ret
+
+;***Subroutine***
+;Print CR, LF
+;Trashes psw,c
+;****************
+pcrlf:	call	ilprnt
+	defb	cr,lf+80h
+	ret
+
+;***Subroutine**************************************
+;Print CR, LF, then In-line Message
+;The call to ILPRNT is followed by a message string.
+;The last message chr has its msb set.
+;Trashes psw,c
+;***************************************************
+cilprt:	call	pcrlf
+
+;Fall into ILPRNT
+
+;***Subroutine**************************************
+;Print In-line Message
+;The call to ILPRNT is followed by a message string.
+;The last message chr has its msb set.
+;On Exit:
+;  Z cleared
+;Trashes psw,c
+;***************************************************
+ilprnt:	ex	(sp),hl		; Save hl, get msg addr
+
+iploop:	ld	a,(hl)
+	and	7fh		; Strip end marker
+	call	printa		; Print byte
+	ld	a,(hl)		; End?
+	inc	hl		; Next byte
+	or	a		; Msb set?
+	jp	p,iploop	; Do all bytes of msg
+
+	ex	(sp),hl		; Restore hl,
+				; ..get return address
+	ret
+
+;***Subroutine*************************************
+;Check for Control-C on the console, and quit if so
+;On Exit:
+;  Z set if no chr was waiting
+;  Z clear if anything but ^C was waiting
+;Trashes a
+;**************************************************	
+cctrlc:	ld	a,const		; Anything on console?
+	call	gobios		; (about 200 cycles)
+	or	a		; Z means no chr waiting
+	ret	z
+
+;Chr waiting: fall into GETCON to take a look
+
+;***Subroutine*********************************
+;Get console character, abort if it's control-C
+;On Exit:
+;  chr in a
+;  Z cleared
+;Trashes a
+;**********************************************	
+getcon:	ld	a,conin		; Read the typed chr
+	call	gobios
+	cp	ctrlc
+	ret	nz		; Ignore everything else
+
+	ld	de,ccmsg	; Control C
+
+;Fall into ABORT to close file and report
+
+;***Exit***********************************
+;Abort - close file if writing, delete it
+;if no blocks received
+;On Entry:
+;  de = abort message to print
+;  XMODE = 0 for receiving, <>0 for sending
+;******************************************
+abort:	call	cilprt
+	defb	'ABORT:',' '+80h
+
+	call	printf		; Print string at de
+
+	ld	a,(xmode)	; Need to close the file?
+	or	a		; 0 means receiving
+	jp	nz,exit
+
+	jp	rxend
+
+;***Exit*****************************************************
+;Received EOT during file reception. Flush buffer, Send happy
+;termination message, report block count, and return to CP/M.
+;On Entry:
+;  EOF received, but not yet ACKed
+;  XBLOCK = block count 
+;************************************************************
+rxeot:	call	wflush		; Write all blocks in BUFFER
+	call	txack		; ACK EOF
+
+	call	cilprt
+	defb	'O','K'+80h
+
+;Fall into RXEND
+
+;***Exit*****************************************
+;Close the file. If no blocks were received, then
+;delete the empty file; otherwise, print the
+;number of blocks received. Then return to CP/M.
+;On Entry:
+;  XBLOCK = block count 
+;************************************************
+rxend:	call	fclose		; Close CP/M file
+
+	ld	hl,(xblock)	; Any disk blks written?
+	ld	a,h
+	or	l		; Check 16-bit blk count
+	jp	nz,rrxcnt	; Y: report blks written
+
+	call	fdelet		; N: delete empty file
+
+	inc	a		; Successful delete?
+	jp	z,rrxcnt	; N: print 0 byte file
+
+	call	msgxit		; Succesful deletion
+	defb	cr,lf,'Empty file deleted$'
+
+rrxcnt:	call	cilprt
+	defb	'Received',' '+80h
+
+;Fall into REPCNT
+
+;***Exit*******************************************
+;Report 16-bit block count, and then return to CP/M
+;On Entry:
+;  XBLOCK = block count 
+;  either 'sent' or 'received' already printed
+;**************************************************
+repcnt:	ld	hl,(xblock)
+	call	pdec16		; Print block count in decimal
+
+	call	msgxit		; Print & return to CP/M
+	defb	' blocks$'
+
+;***************************
+;$-terminated abort messages
+;***************************
+elemsg:	defb	(errlim/10)+'0'	; Too many block retries
+	defb	(errlim-((errlim/10)*10))+'0'
+	defb	' block errors$'
+taemsg:	defb	(errlim/10)+'0'	; Too many bad ACKs
+	defb	(errlim-((errlim/10)*10))+'0'
+	defb	' ACK errors$'
+
+;***Table*******************************
+;CRC Calculation Table
+;strategically placed on a page boundary
+;***************************************
+;Force the CRTTAB table to be page-aligned
+
+tpager	equ	$
+	org	(tpager+255) and 0ff00h
+
+crctab:
+
+;high bytes
+
+	defb	000h,010h,020h,030h,040h,050h,060h,070h
+	defb	081h,091h,0a1h,0b1h,0c1h,0d1h,0e1h,0f1h
+	defb	012h,002h,032h,022h,052h,042h,072h,062h
+	defb	093h,083h,0b3h,0a3h,0d3h,0c3h,0f3h,0e3h
+	defb	024h,034h,004h,014h,064h,074h,044h,054h
+	defb	0a5h,0b5h,085h,095h,0e5h,0f5h,0c5h,0d5h
+	defb	036h,026h,016h,006h,076h,066h,056h,046h
+	defb	0b7h,0a7h,097h,087h,0f7h,0e7h,0d7h,0c7h
+	defb	048h,058h,068h,078h,008h,018h,028h,038h
+	defb	0c9h,0d9h,0e9h,0f9h,089h,099h,0a9h,0b9h
+	defb	05ah,04ah,07ah,06ah,01ah,00ah,03ah,02ah
+	defb	0dbh,0cbh,0fbh,0ebh,09bh,08bh,0bbh,0abh
+	defb	06ch,07ch,04ch,05ch,02ch,03ch,00ch,01ch
+	defb	0edh,0fdh,0cdh,0ddh,0adh,0bdh,08dh,09dh
+	defb	07eh,06eh,05eh,04eh,03eh,02eh,01eh,00eh
+	defb	0ffh,0efh,0dfh,0cfh,0bfh,0afh,09fh,08fh
+	defb	091h,081h,0b1h,0a1h,0d1h,0c1h,0f1h,0e1h
+	defb	010h,000h,030h,020h,050h,040h,070h,060h
+	defb	083h,093h,0a3h,0b3h,0c3h,0d3h,0e3h,0f3h
+	defb	002h,012h,022h,032h,042h,052h,062h,072h
+	defb	0b5h,0a5h,095h,085h,0f5h,0e5h,0d5h,0c5h
+	defb	034h,024h,014h,004h,074h,064h,054h,044h
+	defb	0a7h,0b7h,087h,097h,0e7h,0f7h,0c7h,0d7h
+	defb	026h,036h,006h,016h,066h,076h,046h,056h
+	defb	0d9h,0c9h,0f9h,0e9h,099h,089h,0b9h,0a9h
+	defb	058h,048h,078h,068h,018h,008h,038h,028h
+	defb	0cbh,0dbh,0ebh,0fbh,08bh,09bh,0abh,0bbh
+	defb	04ah,05ah,06ah,07ah,00ah,01ah,02ah,03ah
+	defb	0fdh,0edh,0ddh,0cdh,0bdh,0adh,09dh,08dh
+	defb	07ch,06ch,05ch,04ch,03ch,02ch,01ch,00ch
+	defb	0efh,0ffh,0cfh,0dfh,0afh,0bfh,08fh,09fh
+	defb	06eh,07eh,04eh,05eh,02eh,03eh,00eh,01eh
+
+;Low Bytes
+
+	defb	000h,021h,042h,063h,084h,0a5h,0c6h,0e7h
+	defb	008h,029h,04ah,06bh,08ch,0adh,0ceh,0efh
+	defb	031h,010h,073h,052h,0b5h,094h,0f7h,0d6h
+	defb	039h,018h,07bh,05ah,0bdh,09ch,0ffh,0deh
+	defb	062h,043h,020h,001h,0e6h,0c7h,0a4h,085h
+	defb	06ah,04bh,028h,009h,0eeh,0cfh,0ach,08dh
+	defb	053h,072h,011h,030h,0d7h,0f6h,095h,0b4h
+	defb	05bh,07ah,019h,038h,0dfh,0feh,09dh,0bch
+	defb	0c4h,0e5h,086h,0a7h,040h,061h,002h,023h
+	defb	0cch,0edh,08eh,0afh,048h,069h,00ah,02bh
+	defb	0f5h,0d4h,0b7h,096h,071h,050h,033h,012h
+	defb	0fdh,0dch,0bfh,09eh,079h,058h,03bh,01ah
+	defb	0a6h,087h,0e4h,0c5h,022h,003h,060h,041h
+	defb	0aeh,08fh,0ech,0cdh,02ah,00bh,068h,049h
+	defb	097h,0b6h,0d5h,0f4h,013h,032h,051h,070h
+	defb	09fh,0beh,0ddh,0fch,01bh,03ah,059h,078h
+	defb	088h,0a9h,0cah,0ebh,00ch,02dh,04eh,06fh
+	defb	080h,0a1h,0c2h,0e3h,004h,025h,046h,067h
+	defb	0b9h,098h,0fbh,0dah,03dh,01ch,07fh,05eh
+	defb	0b1h,090h,0f3h,0d2h,035h,014h,077h,056h
+	defb	0eah,0cbh,0a8h,089h,06eh,04fh,02ch,00dh
+	defb	0e2h,0c3h,0a0h,081h,066h,047h,024h,005h
+	defb	0dbh,0fah,099h,0b8h,05fh,07eh,01dh,03ch
+	defb	0d3h,0f2h,091h,0b0h,057h,076h,015h,034h
+	defb	04ch,06dh,00eh,02fh,0c8h,0e9h,08ah,0abh
+	defb	044h,065h,006h,027h,0c0h,0e1h,082h,0a3h
+	defb	07dh,05ch,03fh,01eh,0f9h,0d8h,0bbh,09ah
+	defb	075h,054h,037h,016h,0f1h,0d0h,0b3h,092h
+	defb	02eh,00fh,06ch,04dh,0aah,08bh,0e8h,0c9h
+	defb	026h,007h,064h,045h,0a2h,083h,0e0h,0c1h
+	defb	01fh,03eh,05dh,07ch,09bh,0bah,0d9h,0f8h
+	defb	017h,036h,055h,074h,093h,0b2h,0d1h,0f0h
+
+;********************************
+;More $-terminated abort messages
+;********************************
+ccmsg:	defb	'^C$'		; User typed ^C
+synmsg:	defb	'Sync fail$'	; Can't find SOH
+lbmsg:	defb	'Lost blocks$'	; Out of sequence
+ewfmsg:	defb	'Disk write fail$' ; CP/M error
+utomsg:	defb	'UART '		; Fall into TTOMSG
+ttomsg:	defb	'Tx fail$'	; Tx not ready
+upmsg:	defb	'Undefined Port$' ; Custom IO port fail
+namsg:	defb	'No init from receiver$' ; Timeout
+
+;***Subroutine*********************************************
+;Get the error-checking mode: Wait for the initial NAK or
+;SELCRC from the receiver. (NAK means we use checksums, and
+;SELCRC means we use CRC-16.) Ignore all other characters,
+;with a long timeout. Abort if user types Control-C.
+;On Entry:
+;  XPORT=0 if using console for transfers
+;   (so don't print messages on console)
+;On Succesful Exit:
+;  CRCFLG = 0 if NAK received
+;  CRCFLG <> 0 if SELCRC received
+;  Message printed if CRC mode
+;  RTORET set to WAITNK
+;Trashes all registers
+;**********************************************************
+gtmode:	ld	b,nakto		; Long timeout
+
+	ld	hl,waitnk	; Timeout return address
+	ld	(rtoret),hl	; ..for RXBYT1
+
+	ld	a,(paccnt)	; For quiet mode test
+	ld	c,a
+
+waitnk:	ld	de,namsg
+	dec	b		; Timeout?
+	jp	z,abort		; Yes: abort
+
+	call	rxbyt1
+	xor	nak		; NAK for checksum?
+
+	ld	(crcflg),a	; 0 for cksum, NZ otherwise
+
+	jp	z,pcsnt		; Yes:message, done
+
+	cp	selcrc xor nak	; 'C' for CRC?
+	jp	nz,waitnk	; No: Keep looking
+
+	inc	c		; Quiet mode?
+	ret	z		; Y: no message
+
+;Fall into PCRC
+
+;***Subroutine****
+;Print 'with CRCs'
+;On Exit:
+;  Z flag cleared
+;Trashes a,c
+;*****************
+pcrc:	call	ilprnt
+	defb	' with CRC','s'+80h
+	ret
+
+;***Subroutine**********************
+;Print 'with checksums' unless quiet
+;On Entry:
+;  c= FFh if quiet mode
+;On Exit:
+;  Z flag cleared
+;Trashes a,c
+;***********************************
+pcsnt:	inc	c		; Quiet mode?
+	ret	z		; Y: no message
+
+;Fall into PCKSUM
+
+;***Subroutine*********
+;Print 'with checksums'
+;On Exit:
+;  Z flag cleared
+;Trashes a,c
+;**********************
+pcksum:	call	ilprnt
+	defb	' with checksum','s'+80h
+	ret
+
+;***Exit*******************************************
+;Print CRLF, then $-terminated string following the
+;call. Fix everything for CP/M, and return to CP/M
+;**************************************************
+cmsgxt:	call	pcrlf
+
+;Fall into MSGXIT
+
+;***Exit******************************************
+;Print $-terminated string following the call, fix
+;everything for CP/M, and return to CP/M
+;*************************************************
+msgxit:	pop	de		; Get message address
+	call	printf
+
+;Fall into EXIT
+
+;***Exit***********************************
+;Return to CP/M. All exits go through here.
+;******************************************
+exit:	jp	wboot		; Go to CP/M
+
+;******************************************************
+;RAM Variables and Storage, all initialized during load
+;******************************************************
+;------------------------------
+;XMODEM file transfer variables
+;------------------------------
+rxbdif:	defb	0		; Received block number minus
+				; ..previous block's block number
+xblock:	defw	0		; 16-bit Current block number 
+errcnt:	defb	0		; Error count
+nakchr:	defb	nak		; Current NAK chr
+timrld:	defw	0001h		; Receive timeout value
+				; Initialized for receiver flush in INIT
+timrh:	defb	0		; High byte of timer
+rtoret:	defw	pptimo		; Receive timeout error return address
+				; Initialized for receiver flush in INIT
+
+;------------------------
+;Disk buffering variables
+;------------------------
+blkptr:	defw	buffer		; Points to next block in BUFFER
+bufcnt:	defw	0		; Count of 128-byte blocks in BUFFER
+clflag:				; 1 means reading .CFG,
+				; ..0 means command line
+eoflag:	defb	1		; EOF flag (<>0 means true)
+
+;---------------------------
+;Other initialized variables
+;---------------------------
+xmode:	defb	0ffh		; 1 for send, 0 for receive
+				; FFh for uninitialized
+crcflg:	defb	selcrc		; 0 for checksum, NZ for CRC
+				; Init to SELCRC for receiving
+
+paccnt:	defb	paclin		; Current column position for
+				; Pacifiers. Init to start new line
+				; FF disables pacifiers.
+
+;************************************************
+;Buffer for XMODEM blocks. This buffer overwrites
+;the following initialization code, as well as
+;CP/M's CCP. The buffer is forced to an even
+;block boundary for faster compares.
+;************************************************
+bpager	equ	$
+buffer	equ	(bpager+blksiz-1) and (0-blksiz)
+
+;===========================================================
+;= The following subroutines and variables are used only   =
+;= during the initial command line processing, and get     =
+;= wiped out by the BUFFER, once we start transfering data.=
+;===========================================================
+;-----------------------------------------------------
+;Defaulted variables needed only during initialization
+;-----------------------------------------------------
+bytcnt:	defb	0		; Command buffer bytes
+cpumhz:	defb	2		; CPU speed in MHz (for timeouts)
+xport:	defb	1		; Transfer port defaults to RDR/PUN
+enhrdr:	defb	0		; 01 for RDR that returns with
+				; ..Z set if chr not ready
+
+;***INIT-Only Subroutine*******************************
+;Open CP/M disk file (for reading), and reports success
+;or failure to console.
+;On Entry:
+;  FCB has file name
+;On successful Exit:
+;  de = FCB
+;  File is open
+;  File-open message has been printed on the console
+;On failure:
+;  Relevent error msg has been printed on the console
+;  jump to CP/M
+;Trashes psw,bc
+;******************************************************
+fopen:	ld	de,fcb		; FCB describes file to open
+	ld	c,bopen		; CP/M FILE OPEN function
+	call	gobdos
+	inc	a		; -1 means open failure
+	jp	z,fofail
+
+;Start announcing
+
+	call	cilprt
+	defb	'File open',cr,lf
+	defb	'Sen','d'+80h
+
+;Fall into ANNCTP
+
+;***INIT-Only Subroutine**********
+;Announce transfer port. Disable
+;pacifiers if transfer port is CON
+;Trashes psw,c
+;*********************************
+annctp:	call	ilprnt
+	defb	'ing via',' '+80h
+
+	ld	a,(xport)
+	dec	a
+	jp	m,tvc
+
+	dec	a
+	jp	m,tvr
+	jp	z,tvd
+
+  ifdef z280rc
+	or	0FFh		; stop console status messages
+	ld	(paccnt),a
+	call	ilprnt
+	defb	'Z280UAR','T'+80h
+  else
+	call	ilprnt
+	defb	'external cod','e'+80h
+  endif
+	ret
+
+tvd:	call	ilprnt
+	defb	'direct I/','O'+80h
+	ret
+
+tvr:	call	ilprnt
+	defb	'RDR/PU','N'+80h
+	ret
+
+tvc:	ld	(paccnt),a	; CON: turn off pacifiers
+	call	ilprnt
+	defb	'CO','N'+80h
+	ret
+
+;--------------------------------------
+;Error opening file: Abort with message
+;--------------------------------------
+fofail:	call	cmsgxt		; Exit w/ this message
+	defb	'File not found$'
+
+;***INIT-Only Subroutine******************************
+;Create file on disk (for writing) and report. If the
+;file already exists, ask if it should be overwritten.
+;On Entry:
+;  FCB has file name
+;On successful Exit:
+;  File is created and open
+;  File-created message has been printed on console
+;  Initial NAK or C (cksum or CRC mode) has been sent
+;On failure:
+;  Relevent error msg has been printed on the console
+;  jump to CP/M
+;Trashes all registers
+;*****************************************************
+create:
+;------------------------------------------------------
+;See if file already exists, and ask to overwrite if so
+;------------------------------------------------------
+	ld	de,fcb
+
+	ld	c,bserch	; Search directory for file
+	call	gobdos
+
+	inc	a		; -1 means not there
+	jp	z,filnex	; No file: ok
+
+	call	cilprt
+	defb	'File exists. Overwrite (Y/N)','?'+80h
+
+	call	getans		; Get 1-chr response
+	cp	'Y'
+	jp	nz,exit
+
+	call	fdelet		; Delete existing file
+				; Returns de=FCB
+
+;------------------------
+;Create file on CP/M disk
+; de still points to FCB
+;------------------------
+filnex:	call	cilprt		; Either 'File created'
+				; Or 'File create error'
+	defb	'File creat','e'+80h
+
+	ld	c,bmake		; CP/M CREATE FILE func
+	call	gobdos
+	inc	a		; -1 means create error
+
+	jp	z,fcerr
+
+;---------------------------
+;Tell user that we are ready
+;---------------------------
+	call	ilprnt		; Finish message
+
+	defb	'd'		; End of 'File created'
+	defb	cr,lf,'Recei','v'+80h
+
+	call	annctp		; Announce port
+
+;-----------------------------------------------
+;Delay for a few seconds if receiving via the
+;console, to give the user time to start sending
+;-----------------------------------------------
+	ld	a,(xport)	; Console?
+  ifdef z280rc
+zdly0:	djnz	zdly0		; Z280 UART - delay a bit
+zdly1:	djnz	zdly1
+  else	
+	or	a
+	jp	nz,rxind
+  endif
+
+	ld	bc,26786	; Delay loop time
+	call	tsetup		; Adjust for CPU speed
+
+ridel:	call	cctrlc		; (about 200 cycles)
+	dec	hl		; (5)timeout timer?
+	ld	a,l		; (5)Test for 16-bit 0
+	or	h		; (4)
+	jp	nz,ridel	; (10)
+
+;224 cycles/pass
+;3 seconds = 3,000,000 uS = 6,000,000 cycles
+;6,000,000/224 = 26786
+
+rxind:
+
+;--------------------------------------------
+;Set initial character to NAK or SELCRC, and
+;report error checking mode (checksum or CRC)
+;--------------------------------------------
+	ld	a,(crcflg)	; CRC or checksum?
+	or	a		; 0 means checksum
+				; NZ means CRC
+
+	jp	z,rxcsm
+	ld	(nakchr),a	; Set CRC initial ACK
+
+	call	pcrc		; Print ' with CRCs'
+				; ..returns with Z cleared
+rxcsm:	call	z,pcksum	; Print ' with checksums'
+
+;-----------------------------------------------
+;Send initial NAK or SELCRC to initiate transfer
+;-----------------------------------------------
+	ld	a,(nakchr)	; Send the initial ACK
+	jp	txbyte		; Return via TXBYTE
+
+;---------------------------------------
+;Error: File create failed
+; 'File create' has already been printed
+;---------------------------------------
+fcerr:	call	msgxit
+	defb	' fail. Write protect? Directory full?$'
+
+;***INIT-Only Subroutine***********************
+;Initialization: parse command line, set up FCB
+; return with a=XMODE=0 for receive, 1 for send 
+;**********************************************
+
+;---------------------------------------------------
+;Set default CPU speed to 4MHZ if a Z80 is detected.
+;(The user can later change this with /Z option)
+;---------------------------------------------------
+init:	sub	a		; Test for 8080 or Z80
+	jp	pe,is8080
+	ld	a,4		; Assume Z80s run 4 MHz
+	ld	(cpumhz),a
+is8080:
+
+;----------------------------------------
+;Copy the command buffer so that CP/M 1.4
+;won't destroy it during the BDOS call
+;----------------------------------------
+	ld	hl,combuf
+	ld	de,icombf
+	ld	b,80
+
+ldir:	ld	a,(hl)
+	ld	(de),a
+	inc	hl
+	inc	de
+	dec	b
+	jp	nz,ldir
+
+;-----------------------------
+;look for a configuration file
+;and parse it, if it exists
+;-----------------------------
+
+	ld	de,cfgfcb	; FCB describes file to open
+	ld	c,bopen		; CP/M FILE OPEN function
+	call	gobdos
+	inc	a		; -1 means open failure
+	call	nz,parse
+
+;----------------------------------
+;Parse commands on the command line
+;----------------------------------
+	xor	a		; Command line next
+	ld	(clflag),a	; Also clears EOFLAG
+
+	ld	de,icombf	; Copy of CP/M cmd line
+	ld	a,(de)		; 1st byte is the byte count
+	ld	(bytcnt),a
+	inc	de
+
+	call	wskip		; Skip initial whitespace
+	jp	c,hlpext	; No parameters: help
+
+;Skip past the file name, which CP/M
+;already put in the FCB for us
+
+skpfil:	call	cmdchr
+	jp	c,cmdone	; End of command line?
+
+	cp	'/'		; Option crammed
+	jp	nz,sf1		; ..against file name?	
+
+	dec	de		; Y: back up
+	inc	(hl)		; Hl=BYTCNT from CMDCHR
+	ld	a,' '		; ..and pass the next test	
+
+sf1:	cp	' '		; Hunt for a space
+	jp	nz,skpfil
+
+	call	parse
+cmdone:
+
+;-------------------------------------------------
+;Initialize File Control Block for disk transfers:
+;Check for an option crammed against the file name
+;in the FCB, and clean it up (by padding with
+;spaces) if necessary. Fill the FCB Extent bytes
+;with zeros, as required.
+;-------------------------------------------------
+	ld	bc,fcbclr+(fcbnl+1)*256 ; 2 counters
+
+	ld	hl,fcbfn-1	; File name in FCB
+	ld	a,'/'		; Option marker
+
+fc1:	inc	hl
+	dec	b
+	jp	z,fc3		; All bytes checked?
+
+	cp	(hl)		; Crammed option?
+	jp	nz,fc1
+
+;Clear the rest of the name
+
+fc2:	ld	(hl),' '	; Cleanup file name
+	inc	hl
+	dec	b
+	jp	nz,fc2
+fc3:
+
+;b=0
+;c=FCBCLR
+;hl=FCBEXT
+;Clear the FCB Extent bytes
+
+fc4:	ld	(hl),b
+	inc	hl
+	dec	c
+	jp	nz,fc4
+
+;--------------------------------------------------------
+;Patch RXBYTE and TXBYTE for the specified transfer port.
+;Also set TIMRLD to the correct value for 1/2 second
+;receive timouts, based on XPORT and CPU speed. Flush the
+;receiver unless it's RDR that's not modified to return
+;with Z set when no chr is waiting.
+;On Entry
+;  XPORT    ENHRDR     Port
+;   0         x      Console
+;   1         0      PUN/Standard RDR
+;   1         1      PUN/Enhanced RDR
+;   2         x      Direct I/O
+;   3         x      Custom I/O
+;-------------------------------------------------------
+patchp:	ld	hl,portab
+	ld	a,(xport)
+	add	a,a		; *2
+	ld	e,a
+	add	a,a		; *4
+	add	a,e		; *6
+	ld	e,a
+	ld	d,0
+	add	hl,de
+
+	ld	c,(hl)
+	inc	hl
+	ld	b,(hl)		; Bc=timeout value
+
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)		; DE=RX byte routine addr
+	ex	de,hl
+
+;Check for enhanced RDR if RDR is selected, and
+;flush the reader unless it's the unmodified RDR port
+;(which would hang forever waiting for input)
+
+	cp	1*6		; RDR port?
+	jp	nz,pp1		; N: hl has correct address
+
+	ld	a,(enhrdr)	; Enhanced RDR?
+	or	a
+	jp	z,pp1		; N: hl has correct adress
+
+	ld	hl,rxerdr	; Y: update patch
+
+pp1:	ld	(rxrout+1),hl
+	call	nz,rxbyt1	; Flush receiver unless it's
+				; ..unmodified RDR
+pptimo:				; (timeout goes to PPTIMO)
+
+	ex	de,hl
+	inc	hl
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)		; De=TX byte routine addr
+	ex	de,hl
+	ld	(txrout+1),hl
+
+	call	tsetup		; Set up the Rx timer
+				; Bc is set for selected port
+
+;----------------------------------------
+;Run any user-defined initialization code
+;(This gets filled in by /I0 option)
+;----------------------------------------
+cinit:	nop			; 8 bytes space
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+	nop
+;----------------------------------------
+;Did we get a direction? Return from Init
+;with a=XMODE if so
+;----------------------------------------
+	ld	a,(xmode)	; Did /R or /S get set?
+	or	a		; -1 meant uninitialized
+	ret	p		; With result in a
+
+;-------------------------------------
+;No direction specified (by /R or /S),
+;so ask the user which way
+;-------------------------------------
+askrs:	call	cilprt
+	defb	'Send or receive (S/R)?',' '+80h
+
+	call	getans
+
+	sub	'R'		; 'R' and 'S' are adjacent
+	cp	2		; 'R' or 'S'?
+	jp	nc,askrs	; N: try again
+
+	ld	(xmode),a	; 1 for send, 0 for receive
+	ret			; With result in a
+
+;***INIT-Only Subroutine**************************
+;Get a 1-character response (with editing, CR, and
+;potential control-C) from the user
+;On Exit:
+;  a=uppercase response, if 1 chr typed
+;  a=ff for no characters typed
+;  a=1-7 for 2-8 characters typed (definitely not
+;   'Y','N','R', or 'S')
+;Trashes c,de
+;*************************************************
+getans:	ld	de,combuf
+	ld	a,8		; Max chrs
+	ld	(de),a
+	ld	c,brdcon
+	call	gobdos		; Returns chr count
+	ld	a,(combuf+1)
+	dec	a		; Just 1 chr?
+	ret	nz		; N: error exit
+
+	ld	a,(combuf+2)	; 1st chr in the buffer
+	and	0ffh xor ('a'-'A') ; Uppercase
+	ret
+
+;***INIT-Only Subroutine***************************
+;Parse command line or CFG file options
+;On Entry:
+;  CLFLAG = 1 for config file
+;           0 for command line
+;  de = address of command string terminated by EOF
+;**************************************************
+parse:
+;-----------------------------------------------------------
+;Parse all command line options & set variables accordingly. 
+;Each option must be preceeded by a '/' Options may be
+;preceeded by any reasonable number of spaces, tabs,
+;carriage returns and/or line feeds.
+;-----------------------------------------------------------
+optlup:	call	wskip		; Skip whitespace
+	ret	c		; End of input input?
+
+	ld	bc,optlup	; Create return address
+	push	bc
+
+	cp	';'		; Comment?
+	jp	z,commnt	; Y: ignore until CR or LF
+
+	cp	'/'		; All start with /
+	jp	nz,badinp	; Error:no slash
+
+	call	cmdchr		; Get an option chr
+	jp	c,badinp	; Error: nothing after /
+
+;-----------------------------------------------------------
+;Got a command line option in a. Loop through table of
+;options, looking for a match. Update the appropriate option
+;variable with the table value. Error exit if not in table.
+;  a = option character
+;Trashes c,hl
+;-----------------------------------------------------------
+	ld	hl,opttab
+
+chklup:	cp	(hl)		; Match? (alpha order)
+	inc	hl
+	ld	c,(hl)		; Get routine address offset
+	inc	hl
+
+	jp	c,opterr	; Illegal option
+	jp	nz,chklup	; No match: keep looking
+
+;-----------------------------------------
+;Option match. Go execute option routine
+;On Entry:
+;  c = option routine adress offset
+;  de  points to next cmd byte
+;  top-of-stack = return address to OPTLUP
+;Command routines preserve/advance de
+;-----------------------------------------
+	xor	a
+	ld	b,a		; High byte
+	ld	hl,cmdbas
+	add	hl,bc		; Hl=address of routine
+
+	jp	(hl)		; Go to routine
+
+;*****************
+; Option Commands
+;*****************
+cmdbas:
+
+;******----------------------
+;* /C * Set Rx Checksum Mode
+;******
+;On Entry:
+;  a=0
+;  (de)=next command line chr
+;On Exit:
+;  CRCFLG = 0
+;----------------------------
+ccksum:	ld	(crcflg),a
+	ret
+
+;******----------------------------
+;* /E * Specify Enhanced Reader
+;****** (RDR returns Z when no chr)
+;On Entry:
+;  a=0
+;  (de)=next command line chr
+;On Exit:
+;  ENHRDR = 1
+;----------------------------------
+cmodr:	inc	a
+	ld	(enhrdr),a
+	ret
+
+;*****--------------------------------------------------
+; /I * Patch Custom I/O Routine
+;*****
+; /I0 hh hh hh... defines init code
+; /I1 hh hh hh... defines transmit port routine
+; /I2 hh hh hh... defines receive status routine
+; /I3 hh hh hh... defines receive data routine
+;Max 8 hh digits. (The original intention is to use these
+;patches to call some ROM I/O routines, perhaps with a
+;couple of registers set up prior to the calls.)
+;On Entry:
+;  (de)=next command line chr
+;On Exit:
+;  A Custom Transfer port routine has been written
+;  de incremented past /I data
+;-------------------------------------------------------
+ccio:	call	cmdchr		; Get next command line chr
+
+;Get the address of the routine to define, based on a
+
+	ld	hl,cinit
+	sub	'0'		; Un-ASCII, test 0
+	jp	z,cioget	; Init code?
+
+	ld	hl,cwdat
+	dec	a		; Tx port code?
+	jp	z,cioget
+
+	ld	hl,crstat
+	dec	a		; Rx stat code?
+	jp	z,cioget
+
+	ld	hl,crdat
+	dec	a		; Rx data code?
+	jp	nz,badval	; N: bogus
+
+;Get & install all routine bytes, padding with nops at the end
+
+cioget:
+	ld	c,8		; Max bytes for a routine
+
+ciog0:	push	hl
+	call	gethex
+	pop	hl
+	jp	nc,giog1	; Any character?
+	xor	a		; N: install nop
+giog1:	ld	(hl),a
+
+	inc	hl
+	dec	c
+	jp	nz,ciog0
+
+	ret			; Note: any more hex values
+				; Will cause an error in PARSE
+
+;******-------------------------
+;* /M * print message on console
+;******
+;On Entry:
+;  (de)=next command line chr
+;-------------------------------
+cmessg:	call	pcrlf		; Initial new line
+
+cmsglp:	call	cmdchr		; Get next chr
+	ret	c		; End of file?
+	ret	z		; End of message string?
+	call	printa		; To console
+	jp	cmsglp
+
+;******-----------------------------------------
+;* /O * Output to Port
+;******
+;On Entry:
+;  (de)=next command line chr
+;      subsequent bytes are init sequence
+;On Exit:
+;  Data sequence has been sent to specified port
+;  de incremented past /O data
+;-----------------------------------------------
+coutp:	call	gthexm		; Get port number
+	ld	(iport+1),a
+
+ciloop:	call	gethex		; Get an init value
+	ret	c		; Done?
+
+iport:	out	(0),a		; Port address gets modified
+	jp	ciloop
+
+;******-------------------------------------
+;* /P * Define Transfer Port
+;******
+;On Entry:
+;  (de)=next command line chr
+;On Exit:
+;  Transfer port routines have been modified
+;  de incremented past /P data
+;-------------------------------------------
+cport:	call	gthexm		; Get status port
+	ld	l,a
+	call	gthexm		; Get data port
+	ld	h,a
+	call	gthexm		; Get jz/jnz flag
+	ld	c,a
+	call	gthexm		; Get Rx ready mask
+
+	push	af		; Save Rx ready on stack
+	call	gthexm		; Get Tx ready mask
+
+	ex	de,hl		; Ports to de,pointer to hl
+	ex	(sp),hl		; Save pointer on stack
+	push	hl		; Put Rx Ready back on stack
+
+	ld	hl,omodfy+1	; A=Tx ready mask
+	call	modio		; Modify input routine
+
+	pop	af		; A=Rx ready mask
+	ld	hl,imodfy+1
+	call	modio		; Modify input routine
+
+	pop	de		; Restore cmd pointer
+
+	ret
+
+;******----------------------
+;* /Q * Enables quiet mode
+;******
+;On Entry:
+;  a=0
+;  (de)=next command line chr
+;On Exit:
+;  PACCNT=FFh
+;----------------------------
+cquiet:	dec	a		; A=FFh
+	ld	(paccnt),a
+	ret
+
+;******----------------------
+;* /S * Select send mode
+;******
+;On Entry:
+;  a=0
+;  (de)=next command line chr
+;On Exit:
+;  XMODE = 1
+;----------------------------
+csets:	inc	a		; A=1
+
+;Fall into CSETR tpo save XMODE
+
+;******----------------------
+;* /R * Select receive mode
+;******
+;On Entry:
+;  a=0
+;  (de)=next command line chr
+;On Exit:
+;  XMODE = 0
+;----------------------------
+csetr:	ld	(xmode),a
+	ret
+
+;******----------------------
+;* /X * Select transfer port
+;******
+;On Entry:
+;  (de)=next command line chr
+;On Exit:
+;  XPORT set as specified
+;----------------------------
+csetx:	call	cmdchr
+
+	sub	'0'		; Un-ASCII
+	cp	4		; 0-3 allowed
+	jp	nc,badval
+	ld	(xport),a
+	ret
+
+;******--------------------------------
+;* /Z * Specify CPU speed, in MHz (1-9)
+;******
+;On Entry:
+;  (de)=next command line chr
+;On Exit:
+;  CPUMHZ updated
+;-------------------------------------
+cmhz:	call	cmdchr
+
+	sub	'1'		; Un-ASCII
+	cp	9+1		; 1-9 allowed
+	jp	nc,badval
+
+	inc	a		; Make it 1-9
+	ld	(cpumhz),a
+	ret
+
+;***INIT-Only Subroutine***
+;Ignore a comment
+;On Entry:
+;  de=next command line chr
+;**************************
+commnt:	call	cmdchr
+	ret	c		; End of file?
+	jp	nz,commnt	; Z means CR or LF
+	ret
+	
+;***INIT-Only Exit*********************************
+;Print help screen, and then exit. Break up the
+;help screen so that it even fits on a 16x64 screen
+;**************************************************
+hlpext:	call	cilprt		; Print this message
+
+;    123456789012345678901234567890123456789012345678901234567890123
+	defb	'=========================',cr,lf
+	defb	'XMODEM '
+	defb	((version and 0f00h)/256)+'0','.',(version and 0fh) +'0'
+	defb	' By M. Eberhard',cr,lf
+	defb	'=========================',cr,lf,lf
+	defb	'Usage: XMODEM <filename> <option list>',cr,lf
+	defb	'^C aborts',cr,lf,lf
+	defb	'Command line and XMODEM.CFG options:',cr,lf
+	defb	' /R to receive, /S to send',cr,lf
+	defb	' /C receive with checksums, otherwise CRC error checking',cr,lf
+	defb	'    (Receiver sets error checking mode when sending)',cr,lf
+	defb	' /E if CP/M RDR returns with Z set when not ready',cr,lf
+	defb	'--More-','-'+80h
+
+	call	getcon		; Wait for user input
+
+	call	cilprt
+
+	defb	' /I<n> patches I/O routines with 8080 code for /X3:',cr,lf
+	defb	'   /I0 h0 h1 ...(up to h7) = initialization',cr,lf
+	defb	'   /I1 h0 h1 ...(up to h7) = Tx data (chr is in reg c)',cr,lf
+	defb	'   /I2 h0 h1 ...(up to h7) = Rx status (Z set if no chr)',cr,lf
+	defb	'   /I3 h0 h1 ...(up to h7) = Rx data (chr in reg a)',cr,lf
+	defb	' /M console message',cr,lf
+	defb	' /O pp h0 h1 ... hn sends bytes h1-hn to port pp',cr,lf
+	defb	' /P ss dd qq rr tt defines direct I/O port:',cr,lf
+	defb	'   ss = status port',cr,lf
+	defb	'   dd = data port',cr,lf
+	defb	'   qq = 00/01 for active low/active high ready bits',cr,lf
+	defb	'   rr = Rx ready bit mask',cr,lf
+	defb	'   tt = Tx ready bit mask',cr,lf,lf
+	defb	'--More-','-'+80h
+
+	call	getcon		; Wait for user input
+
+	call	cmsgxt		; Print message and exit to CP/M
+
+	defb	' /Q for Quiet; else + means good block, - means retry',CR,LF
+	defb	' /X selects the transfer port:',cr,lf
+	defb	'   /X0 CP/M CON',cr,lf
+	defb	'   /X1 CP/M RDR/PUN (default)',cr,lf
+	defb	'   /X2 Direct I/O, defined by /P option',cr,lf
+	defb	'   /X3 8080 I/O code, patched with /I options',cr,lf
+	defb	' /Zm for m MHz CPU. 0<m<7, default m=2',cr,lf,lf
+	defb	'CP/M CON and RDR must not strip parity.',cr,lf
+	defb	'Values for /I, /O and /P are 2-digit hex.',cr,lf
+	defb	'$'
+	
+;***INIT-Only Exit*******************************
+;Illegal option. Print message and return to CP/M
+;On Entry:
+;  a=illegal option found
+;************************************************
+opterr:	ld	(par1),a	; Put it in error msg
+
+	call	cilprt		; Exit with this message
+	defb	'/'
+par1:	defb	'&'		; Parameter goes here
+	defb	' unrecognize','d'+80h
+
+	jp	errsrc		; Command line or .CFG file
+
+;***INIT-Only Exit**********************************
+;Input error exits. Print message and return to CP/M
+;***************************************************
+badinp:	call	cilprt
+	defb	'Jun','k'+80h
+
+;Fall into ERRSRC
+
+;***INIT-Only Exit****************************
+;Bad input of some sort. Print source of error
+;and quit to CP/M
+;On Entry:
+;  CLFLAG = 1 if reading .CFG file
+;           0 if command line
+;*********************************************
+errsrc:	ld	a,(clflag)	; Command line or XMODEM.CFG?
+	or	a
+	jp	z,badcln
+
+	call	msgxit
+	defb	' in XMODEM.CFG$'
+
+badcln:	call	msgxit
+	defb	' in command line$'
+
+;***INIT-Only Subroutine**************************
+;Adjust hl based on CPU speed
+;On Entry:
+;  bc = CPU cycles for 0.5 sec loop
+;     assuming 1 MHz CPU
+;  CPUMHZ = CPU speed, in MHz
+;On Exit:
+;  hl=TIMRLD=CPU cycles in loop for this CPU speed
+;Trashes psw,hl
+;*************************************************
+tsetup:	ld	a,(cpumhz)
+	ld	hl,0
+
+adjmhz:	add	hl,bc
+	dec	a
+	jp	nz,adjmhz
+
+	ld	(timrld),hl	; Timer reload value
+	ret
+
+;***INIT-Only Subroutine************************
+;Modify either the transfer input port routine
+;or output port routine. This assumes that both
+;routines look like this:
+;
+; WAIT:	...
+; IMODFY or OMODFY:
+;	in	<status port>
+;	ani	<port ready mask>
+;	jnz	WAIT	(may get converted to jz)
+;
+;	pop psw (or other 1-byte cmd)
+;	in/out	<data port>
+;	...
+;	ret
+;
+;On Entry:
+;  a = port-ready mask byte
+;  c = 0 if jnz needs to be installed
+;  d = data port address
+;  e = status port address
+;  hl = IMODFY+1 or OMODFY+1
+;On Exit:
+;  z flag unchanged
+;Trashes a,hl
+;*********************************************
+modio:	ld	(hl),e		; Install status port
+
+	inc	hl		; Point to mask location
+	inc	hl
+	ld	(hl),a		; Install mask
+
+	inc	hl		; Point to jnz location
+	ld	a,c
+	or	a
+	jp	z,modio1	; Need a jz instead?
+jz	equ	0cah		; Opcode for "JP Z,"
+	ld	(hl),jz		; Y: install jz opcode
+modio1:
+
+	inc	hl		; Point to data port loc
+	inc	hl
+	inc	hl
+	inc	hl
+	inc	hl
+	ld	(hl),d		; Install data port
+	ret
+
+;***INIT-Only Subroutine***************************
+;Get a mandatory 2-digit hex value from LINBUF
+;On Entry:
+;  de points to first hex digit
+;On Exit:
+;  a=value
+;  de advanced 2
+;  trashes b
+;  Rude jump to BADVAL if no chr or bogus hex found
+;**************************************************
+gthexm:	push	hl
+	call	gethex
+	pop	hl
+	ret	nc
+
+;Fall into BADVAL
+
+;***INIT-Only Exit**************************
+;Bad Value, bad hex character
+;Fix everything for CP/M, and return to CP/M
+;*******************************************
+badval:	call	cilprt
+	defb	'Bad valu','e'+80h
+
+	jp	errsrc		; Command line or .CFG file
+
+;***INIT-Only Subroutine***************************
+;Get an exactly 2-digit hex value from LINBUF
+;On Entry:
+;  de points to first hex digit
+;On Exit:
+;  carry set if no value found, either due to
+;    end of input or non-hex chr found on 1st digit
+;  a=value
+;  de advanced past hex if hex found
+;  de pointing to non-hex chr if found on 1st digit
+;  hl=BYTCNT
+;Trashes b
+;Rude jump to BADVAL if bogus hex found on 2nd digit
+;***************************************************
+gethex:	call	wskip		; Skip whitespace, get a chr
+				; Also sets hl=BYTCNT
+	ret	c		; Eof?
+
+	call	hex2bn		; Convert a=1st digit
+	jp	c,ghback	; Bogus?
+
+	add	a,a		; Shift into place
+	add	a,a
+	add	a,a
+	add	a,a
+	ld	b,a		; Save digit
+
+	call	ghnib
+	jp	c,badval	; No digit found or bogus?
+
+	add	a,b		; Combine w/ high digit
+	ret			; Carry is clear for ret
+
+;non-hex 1st chr found, so backup
+
+ghback:	dec	de		; Back up
+	inc	(hl)		; (does not affect carry)
+	ret			; With carry set
+	
+;---Local Subroutine-----------------
+;convert (de) to binary
+;On Exit:
+;  a=chr
+;  de advanced 1
+;  carry set if bad hex chr or no chr
+;------------------------------------
+ghnib:	call	cmdchr		; Get a character
+	ret	c		; Carry:no more chrs
+
+;Fall into HEX2BN
+
+;---Local Subroutine-------
+;convert a to binary
+;On Exit:
+;  a=chr
+;  carry set if bad hex chr
+;--------------------------
+hex2bn:	cp	'9'+1		; Below ASCII 9?
+	jp	c,hc1		; Yes: deal with digit
+
+	cp	'A'		; Between 9 & A?
+	ret	c		; Yes: bogus
+
+	sub	'A'-'9'-1	; No: subtract offset	
+
+hc1:	sub	'0'
+	cp	10h		; Above 0Fh?
+	ccf			; So carry means error
+	ret			; Carry clear means ok
+
+;***INIT-Only Subroutine*************************
+;Skip over spaces, tabs, CRs, and LFs in command
+;line buffer until any other character is found 
+;On Entry:
+;  BYTCNT has remaining byte count
+;  hl points to the next chr in buffer
+;On Exit:
+;  a = chr from buffer
+;  BYTCNT has been decremented
+;  de has been advanced
+;  Carry means end of buffer (and a is not valid)
+;************************************************
+wskip:	call	cmdchr		; Sets Z if CR or LF
+	ret	c		; Carry set if nothing left
+	jp	z,wskip		; Skip CR or LF
+	cp	' '
+	jp	z,wskip		; Skip space
+	cp	tab
+	jp	z,wskip		; Skip tab
+	ret			; Chr in a, carry clear
+
+;***INIT-Only Subroutine*****************************
+;Get more command bytes
+;If we are reading from ICOMBF then we are done
+;Otherwise, try to get another XMODEM.CFG sector
+;On Entry:
+;  CLFLAG = 1 if reading from XMODEM.CFG
+;           0 if reading from command line in ICOMBF
+;  de points to the next chr
+;  hl=BYTCNT
+;On Exit:
+;  a = chr from ICOMBF or XMODEM.CFG, parity stripped
+;  de has been reset and advanced
+;  BYTCNT has bee reset and decremented
+;    unless at end
+;  Carry means end of buffer
+;  Z means CR or LF found
+;hl trashed
+;****************************************************
+rdcmd:	ld	a,(clflag)	; Reading command buffer?
+	sub	1
+	ret	c		; Y: ret w/carry: done	
+
+	push	bc
+	ld	de,cfgbuf
+	push	de
+	ld	c,bstdma	; Set CP/M DMA address
+	call	gobdos		; Trashes no registers
+	ld	de,cfgfcb
+	ld	c,bread		; Read another sector
+	call	gobdos		; A=0 if not eof
+	pop	de		; Buffer address
+	pop	bc		; D=CFGBUF
+
+	or	a		; End of input?
+	scf			; Nz if end if file found
+	ret	nz
+
+	ld	(hl),blksiz	; Another XMODEM.CFG sector
+
+;Fall into CMDCHR
+
+;***INIT-Only Subroutine*****************************
+;Get next character from command line buffer
+;On Entry:
+;  CLFLAG = 1 if reading from XMODEM.CFG
+;           0 if reading from command line in ICOMBF
+;  BYTCNT has remaining buffer byte count
+;  de points to the next chr
+;On Exit:
+;  a = chr from ICOMBF or XMODEM.CFG, parity stripped
+;  de has been advanced and BYTCNT decremented
+;    unless at end
+;  hl =BYTCNT
+;  Carry means end of buffer
+;  Z means CR or LF found
+;****************************************************
+cmdchr:	ld	hl,bytcnt
+	ld	a,(hl)
+	or	a		; Any bytes left?
+	jp	z,rdcmd		; N:try to get more
+	
+	ld	a,(de)		; Get buffer chr
+	and	7fh		; Strip parity
+
+	cp	eof		; File end?
+	scf			; Y: ret with carry set
+	ret	z
+
+	inc	de		; Bump buffer pointer
+	dec	(hl)		; Dec BYTCNT
+
+	cp	cr
+	ret	z
+	cp	lf
+	scf
+	ccf			; Clear carry
+	ret
+	
+;***INIT-Only Table************************
+;Port configuration table
+;Three words per entry:
+; Word 0 = timer constant
+; Word 1 = address of receive byte routine
+; Word 3 = address of transmit byte routine
+;******************************************
+portab:	defw	conto,rxbcon,txcon
+	defw	rdrto,rxrdr,txpun
+	defw	dirto,rxdrct,txdrct
+	defw	custo,rxcust,txcust
+
+;***INIT-Only Table**************************
+;Command Line Options Table
+;Table entries must be in alphabetical order,
+;and terminated with 0FFh
+;
+;2 bytes per entry:
+; Byte 0 = Uppercase legal option letter
+; Byte 1 = offset to address of parse routine
+;********************************************
+opttab:	defb	'C',ccksum-cmdbas ; Select checksum mode
+	defb	'E',cmodr-cmdbas ; Enhanced RDR port
+	defb	'I',ccio-cmdbas	; Custom I/O definition	
+	defb	'M',cmessg-cmdbas ; Console message
+	defb	'O',coutp-cmdbas ; Output to port
+	defb	'P',cport-cmdbas ; Define transfer port
+	defb	'Q',cquiet-cmdbas ; Quiet mode
+	defb	'R',csetr-cmdbas ; Select receive mode
+	defb	'S',csets-cmdbas ; Select receive mode
+	defb	'X',csetx-cmdbas ; Select transfer port
+	defb	'Z',cmhz-cmdbas	; Specify CPU MHz
+	defb	0ffh		; End of table
+
+;***INIT-Only Table**************
+;Configuration File Control Block
+;********************************
+cfgfcb:	defb	0		; (dr) use default drive
+  ifdef z280rc
+	defb	'XMZ280RC'	; (f1-f8)
+  else
+	defb	'XMODEM  '	; (f1-f8)
+  endif
+	defb	'CFG'		; (t1-t3)
+	defb	0,0,0,0		; (ex,s1,s2,rc)
+	defw	0,0,0,0,0,0,0,0	; (d0-d15)
+	defb	0,0,0,0		; (cr,r0,r1,r2)
+
+;***INIT-Only Buffer******
+;Configuration file buffer
+;*************************
+cfgbuf:	defs	blksiz
+
+;***INIT-Only Stack*************************
+;Stack space used only during initialization
+;*******************************************
+	defs	64		; Plenty of room
+istack:
+;***INIT-Only Buffer*********************************
+;Command line buffer, used only during initialization
+;****************************************************
+icombf:	defs	80
+
+	end
+                                                                                                                  
