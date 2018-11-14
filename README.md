@@ -18,6 +18,17 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+15-Nov-2018
+-----------
+
+Hector Peraza's latest beta 11 of ZSM4 - a Z80/Z180/Z280 Macro-Assembler
+available at
+https://www.retrobrewcomputers.org/forum/index.php?t=msg&th=93&goto=3700&#msg_3700
+found a typo in IDEHD which I fixed.  Also went through and commented/
+removed superfluous lines from the BIOS sources.  No object code changes -
+just cosmetic!
+
+
 14-Nov-2018
 -----------
 

@@ -842,7 +842,7 @@ dtabuf:	defs	hstsiz		; Data buffer
 
 alv:	defs	(dsm/4)+2	; Allocation vector
   else
-    if not use$disk$macro
+    if not use$disk$macros
 
 	; Manually allocate space for Allocation vectors
 

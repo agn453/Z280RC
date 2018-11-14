@@ -106,7 +106,7 @@ config	macro
 	defb	'RamDisk M:'
   endif
 	defz	cr,lf
-	endm
+	endm ; config
 
   if dma$burst$mode
 dma$descriptor equ 1000000010000000b	; Burst mode for memory to memory
@@ -121,7 +121,7 @@ dma$descriptor equ 1000000010000000b	; Burst mode for memory to memory
 		; end-of-process signaled (bit 0)
   else
 dma$descriptor equ 1000000100000000b	; Continuous mode
-;dma$descriptor equ 1000000000000000b	; Singe transaction mode
+;dma$descriptor equ 1000000000000000b	; Singe transaction mode (not used)
   endif
 
 ; Commonly used CP/M entry points

@@ -78,7 +78,7 @@
 	public	?auxis, ?auxos, ?dvtbl, ?devin, ?drtbl, ?mltio
 	public	?flush, ?mov, ?tim, ?bnksl, ?stbnk, ?xmov, ?userf
 
-	; I/O Page select routines
+	; Z280 I/O Page select routines
 
 	public	iopwatch, iopcf
 	public	ioprrr, iopdma, iopmmu
@@ -259,7 +259,7 @@ boot:
 	ldctl	usp,hl
   endif
 
-  if 0 ; using pre-initialized values
+  if 0 ; Using pre-initialized values now, but leave this here
 	xor	a
 	ld	hl,bzero	; Set all *BNK variables to zero
 	ld	b,bzerol	; (@DBNK, @CBNK, @UBNK, @SUMODE
@@ -272,7 +272,7 @@ bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
     if multi$sector$io
 	ld	(@rwcnt),a
     endif
-  endif
+  endif ; 0
 
 ;
 ; Refresh Register defaults (taken from ZZMON)
@@ -308,7 +308,7 @@ bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
 ;
 ; Set-up onchip DMA controllers
 ;
-;	The I/O page for DMA is same as already set for RRR
+;	The I/O page for DMA is the same as already set for RRR
 
 	ld	hl,0000000000000000b	; DMA Transaction Description
 		; Disable channel (bit 15 OFF)
@@ -422,7 +422,7 @@ initd1:	pop	bc		; Next drive
 	ldctl	(c),hl
   endif ; banked
 
-	ld	hl,deflts	; Set default character I/O
+	ld	hl,deflts	; Copy default character I/O
 	ld	de,@civec	; device vectors to the SCB
 	ld	bc,defltl
 	ldir
@@ -438,13 +438,12 @@ initd1:	pop	bc		; Next drive
 	ld	c,itv
 	ldctl	(c),hl
 
-	im	3
-
-	ei			; Enable interrupts
+	im	3		; Enable Mode 3 interrupts
+	ei
     else
 
-	ld	hl,1400h	; Clear 000000..0013ff
-clr00:	dec	hl
+	ld	hl,1400h	; Clear base memory in Bank 0
+clr00:	dec	hl		; (addresses 000000..0013ff)
 	ld	(hl),0
 	ld	a,h
 	or	l
@@ -470,7 +469,7 @@ bootc:
   else
 
     if 0 and debug
-	enter$debug	; Temporary Breakpoint
+	enter$debug	; Temporary Breakpoint (without a message)
     endif
 
 	call	setjumps	; This also sets @CBNK to the TPA$BANK
@@ -480,17 +479,21 @@ bootc:
 	enter$debug	<'BIOSDBG active.',cr,lf,'Use (C)ontinue to enter CP/M.',cr,lf,'Typing <CTRL-P> re-enters BIOSDBG from console input.',cr,lf>
     endif ; debug
 
-	jp	tpa
+	jp	tpa		; Enter CP/M's console command processor
 
   endif ; ldrbios
 
 ;
 ; Default character I/O device vectors
 ;
-	bank0$segment
+	bank0$segment	; No need for the sign-on to be in common memory
 
 signon:	config			; macro has a DEFZ signon string and date
+				; See CONFIG.LIB
 
+;
+; Default character device assignments
+;
 deflts:	defw	def$civec	; Console input
 	defw	def$covec	; Console output
 	defw	def$aivec	; Auxiliary input
@@ -542,7 +545,7 @@ itvtl	equ	$-itvt
 
 ;
 ; Interrupt and Trap Handling routines
-
+;
 	common$segment
 ;
 ; System Call
@@ -659,11 +662,11 @@ privlp:	ldup	a,(hl)		; (fetched from User-mode address space)
 	inc	hl
 	djnz	privlp
 iabort:
-      if int$debug
+      if int$debug and debug
 	push	biosdbg		; Force entry to debugger
       else
 	push	?wboot		; Warm boot entrypoint to stack
-      endif ; int$debug
+      endif ; int$debug and debug
 	push	int$mask	;  and default Interrupt Mask
 				;  (back to System-mode)
 	retil			; Interrupt return to re-start
@@ -737,7 +740,7 @@ iret2:	retil		; Pop MSR and return
 ;
 ;	No registers are saved
 ;
-	common$segment
+	common$segment	; Must be in Common
 
 wboot:
   if banked and int$enabled
@@ -758,11 +761,11 @@ wbsys:
   endif
 
   if ldrbios
-	ret
+	ret			; All done for LDRBIOS
   else
 	call	setjumps	; Init base page of TPA
 	call	?rlccp		; Re-load CCP
-	jp	tpa
+	jp	tpa		; and start it
   endif
 
 ;
@@ -820,7 +823,7 @@ move:
 	ld	(@msbnk),a	;  to the current bank
 	ld	(@mdbnk),a
   else
-	ex	de,hl		;No, just block move in the current
+	ex	de,hl		; No, just block move in the current
 	ldir			; bank
 	ex	de,hl
 	ret
@@ -829,6 +832,7 @@ move:
 bnkdif:
 
   if krnl$debug
+	; Some verbose debugging output
 	ld	(@dstack),sp	; Save stack pointer
 	ld	sp,@dstack	; (To prevent the possibility of
 				;  stack overflow from debugging
@@ -862,6 +866,9 @@ bnkdif:
   endif
 
   if use$dma$to$copy
+
+	; Move using DMA
+
 	push	hl		; Save destination
 	push	de		; Save source address
 	ld	(mvcnt),bc	; Byte Count to parameter block
@@ -920,7 +927,6 @@ moveit:	ld	a,(de)		; Copy BC bytes from source
   endif
 	xor	a		; Clear extended move flag
 	ld	(@xmflg),a
-
 	ret
 
   if use$dma$to$copy
@@ -931,7 +937,8 @@ mvsrc:	defw	0000h		; Source (low 12 bits)
 	defw	0000h		;  (high 12 bits)
 mvcnt:	defw	0000		; Byte count
 	defw	dma$descriptor	; DMA controller descriptor
-  endif
+  endif ; use$dma$to$copy
+
 ;
 ; MULTIO
 ;
@@ -943,7 +950,7 @@ mvcnt:	defw	0000		; Byte count
 ;
 ;	All registers are saved
 ;
-	bank0$segment
+	bank0$segment	; Called by BDOS when Bank 0 is selected
 
 multio:
 	push	af
@@ -980,9 +987,10 @@ flush:
 	ld	(@ubnk),a	; Save User-mode bank
 	ld	(@sbnk),a
 ;	ld	a,updr0		; Point MMU to User-PDR page 0
-	xor	a
+	xor	a		; (this is a zero - save a byte)
 	jr	selpdr
   endif
+
 ;
 ; SELMEM
 ;
@@ -1064,7 +1072,8 @@ selpdr:
 ; For a Banked system, everything runs in System-mode for now. (Perhaps
 ; later we can add support for User-mode)
 ;
-; Inter-bank memory moves use the on-chip DMA3 controller.
+; Inter-bank memory moves use the on-chip DMA3 controller or MMU
+; depending on the USE$DMA$TO$COPY setting.
 ;
 ; Memory Map (Banked)
 ;
@@ -1076,9 +1085,10 @@ selpdr:
 ; 000100	00	0100-0d7f	Copy of CCP.COM
 ; 000d80	00	0d80-0fff	(reserved and currently not used)
 ; 001000 	00	1000-11ff	Interrupt Trap Vector Table
-; 001200	00	1200-dfff	Banked part of CP/M BDOS/BIOS and
+; 001200	00	1200-13ff	BIOS Interrupt buffers (512 bytes)
+; 001400	00	1400-dfff	Banked part of CP/M BDOS/BIOS and
 ;					and CP/M directory buffers
-; 00f000	All	e000-ffff	Common Memory (in all banks)
+; 00e000	All	e000-ffff	Common Memory (in all banks)
 ;
 ; TPA Bank
 ; 010000	01	0000-00ff	CP/M Page 0 (JP vectors, FCBs)
@@ -1096,7 +1106,7 @@ selpdr:
 ;
 ; Common memory contains only the Hardware Dependent buffer
 ; space, Resident BDOS and Resident parts of the BIOS - including
-; future planned Interrupt Handlers and buffers.
+; a disk "bounce" buffer at CMNBUF (512 bytes).
 ;
 ;
 ; Memory Management Unit PDR format
@@ -1292,7 +1302,7 @@ phyadr:
 ; For Non-Banked, Physical and Logical addresses are the same.
 ; For Banked, we take into account Common Memory, and logical
 ; banks >9 are redirected to non-existent memory at P20xxxx
-; (above the installed 2MB RAM).
+; (above the installed 2MB RAM) to protect the RAMDISK.
 ;
 ;	On exit, A= physical bank (high 8 bits of address),
 ;	HL= physical address (low 16 bits of address).
@@ -1502,7 +1512,6 @@ fcb$nr:	defb	0,0,0
 ;
 ;	Return address of character device table
 ;
-
 	common$segment
 
 devtbl:
@@ -1626,8 +1635,8 @@ cos$next:
 	or	0ffh		; all selected were ready, return true
 	ret
 
-coster:				; check for output device ready, including optional
-				; 	xon/xoff support
+coster:				; check for output device ready, including
+				;  optional xon/xoff support
 	ld	l,b
 	ld	h,0		; make device code 16 bits
 	push	hl		; save it in stack
@@ -1874,7 +1883,7 @@ dmasx:	pop	hl
 	pop	af
 	pop	ix
 	ld	sp,(@dstack)	; Restore stack
-  endif
+  endif ; krnl$debug
 
 	push	bc
 	push	hl
@@ -1917,13 +1926,13 @@ dma$in$progress:
 	bit	4,l		; Has the Terminal Count (TC) bit been set?
 	jr	z,dma$in$progress ; No, busy wait until it completes
 
+  if debug
 	dec	c		; Make sure the count register is zero
 	inw	hl,(c)
 	ld	a,h
 	or	l
 	jr	z,dma$done	; Yes
 
-  if debug
 	enter$debug	<'DMA signalled TC but count not zero'>
   endif
 
@@ -1992,7 +2001,7 @@ pshiop:
 ; Disk I/O interface routines
 ;
 
-	bank0$segment
+	bank0$segment	; BDOS calls these from Bank 0
 
 ;
 ; SELDSK
@@ -2000,10 +2009,10 @@ pshiop:
 ;	Select Disk Drive.  Drive code in <C>.
 ;	Initial select flag in <E>.
 ;
-;		Invoke login procedure for drive
-;		if this is first select.  Return
-;		address of disk parameter header
-;		in <HL> or 0 if non-existent drive.
+;	Invoke login procedure for drive
+;	if this is first select.  Return
+;	address of disk parameter header
+;	in <HL> or 0 if non-existent drive.
 ;
 seldsk:
 	ld	a,c
@@ -2051,7 +2060,7 @@ home:
 ; SETTRK
 ;
 ;	Set Track. Saves track address from <BC> 
-;		in @TRK for further operations.
+;	in @TRK for further operations.
 ;
 settrk:
 	ld	(@trk),bc
@@ -2061,7 +2070,7 @@ settrk:
 ; SETSEC
 ;
 ;	Set Sector.  Saves sector number from <BC>
-;		in @sect for further operations.
+;	in @sect for further operations.
 ;
 
 setsec:
@@ -2072,9 +2081,9 @@ setsec:
 ; SETDMA
 ;
 ;	Set Disk Memory Address.  Saves DMA address
-;		from <BC> in @DMA and sets @DBNK to @CBNK
-;		so that further disk operations take place
-;		in current bank.
+;	from <BC> in @DMA and sets @DBNK to @CBNK
+;	so that further disk operations take place
+;	in current bank.
 ;
 
 setdma:
@@ -2086,8 +2095,8 @@ setdma:
 ; SETBNK
 ;
 ;	Set Disk Memory Bank.  Saves bank number
-;		in @DBNK for future disk data
-;		transfers.
+;	in @DBNK for future disk data
+;	transfers.
 ;
 setbnk:
 	ld	(@dbnk),a
@@ -2097,11 +2106,11 @@ setbnk:
 ; SECTRN
 ;
 ;	Sector Translate.  Indexes skew table in <DE>
-;		with sector in <BC>.  Returns physical sector
-;		in <HL>.  If no skew table (<DE>=0) then
-;		returns physical=logical.
+;	with sector in <BC>.  Returns physical sector
+;	in <HL>.  If no skew table (<DE>=0) then
+;	returns physical=logical.
 ;
-	common$segment
+	common$segment	; Put this in common
 
 sectrn:
 	ld	l,c
@@ -2220,7 +2229,7 @@ diskrd	equ	read
 	ld	de,-8
 	add	hl,de		; point to read routine address
 
-  if not ldrbios	; CPMLDR doesn't need to write
+  if not ldrbios ; CPMLDR doesn't need to write
 
 	jr	rw$common		; use common code
 
@@ -2525,7 +2534,7 @@ gchr2:	call	conin
 gchr3:	jr	popbdh
 
 ;
-	bank0$segment
+	bank0$segment	; Accessed via routines in Bank 0
 
 dskmsg:	defz	cr, lf, 'Disk error on '
 	defz	': T='
@@ -2537,10 +2546,15 @@ on$msg	equ	dskmsg+12	; points to " on" above
 
 	common$segment
 
+;
+; Character device flow-control flags
+;
 xofflist:			; Device XON/XOFF flags
 	rept	16
 	defb	-1
 	endm
+;
+; BIOS Variables (all in COMMON)
 ;
 	common$segment
 
@@ -2562,17 +2576,9 @@ xofflist:			; Device XON/XOFF flags
 @dma:	defs	2		; Current disk DMA transfer address
 
   if 0
-bzero:	; BOOT routine clears these to zero
-@dbnk:	defs	1		; Current disk DMA bank
-@cbnk:	defs	1		; Current bank for CPU access
-@ubnk:	defs	1		; Current bank for User-mode access
-@sumode: defs	1		; System-Mode (zero) or User-Mode (non-zero)
-@msbnk:	defs	2		; Memory move Source Bank
-@mdbnk	equ	@msbnk+1	; Memory move Destination Bank
-@xmflg:	defs	1		; XMOVE flag (non zero for interbank move)
-bzerol	equ	$-bzero
-  else
-	; Pre-initialised to zero
+bzero:	; (disabled) BOOT routine clears these to zero
+  endif
+	; They're now pre-initialised to zero
 @dbnk:	defb	0		; Current disk DMA bank
 @cbnk:	defb	0		; Current bank for CPU access
 @ubnk:	defb	0		; Current bank for User-mode access
@@ -2580,14 +2586,17 @@ bzerol	equ	$-bzero
 @msbnk:	defw	0		; Memory move Source Bank
 @mdbnk	equ	@msbnk+1	; Memory move Destination Bank
 @xmflg:	defb	0		; XMOVE flag (non zero for interbank move)
-  endif
 
-	common$segment
+  if 0
+bzerol	equ	$-bzero
+  endif
 
   if krnl$debug
 ;
 ; Kernel debug messages and stack
 ;
+	common$segment ; all in COMMON
+
 rd$msg:	defz	cr, lf, 'READ'
 wr$msg:	defz	cr, lf, 'WRITE'
 dma$msg: defz	' DMA='
@@ -2600,13 +2609,18 @@ cnt$msg: defz	' count '
 sel$msg: defz	cr, lf, 'SELMEM Select Bank '
   endif ;
 
+;
+; Align Common memory to a Word (even address) boundary
+;
+	common$segment
+
 alignw	equ ($ - bios) and 0001h
 
   if alignw ne 0
-	defs	1	; Align to a Word (even address) boundary
+	defs	1
   endif
 
-  if idehd		; Define disk sector buffer here
+  if idehd or ramdisk	; Define disk sector buffer here
 			;  to ensure it is on an even address
     if banked
 
@@ -2620,6 +2634,8 @@ cmnbuf:	defs	512
 ;
 ; Kernel debug stack
 ;
+	common$segment
+
   if krnl$debug
 
 	public	@dstack		; Show this in LINK map

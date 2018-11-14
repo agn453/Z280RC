@@ -11,7 +11,9 @@
 ;
 ;   This is a simple debug monitor to allow examination of
 ;   Z280 registers and memory (with MMU bank selection support).
-;   It is invoked via a CALL BIOSDBG from other BIOS routines.
+;   It is invoked via a CALL BIOSDBG from other BIOS routines or
+;   by invoking an ENTER$DEBUG macro (defined in CONFIG.LIB).
+;
 ;
 ;   Author:	Tony Nicholson
 ;		10-Aug-2018
@@ -243,7 +245,7 @@ prompt:	call	crlf
 	jr	z,registers
 
     if banked
-	cp	'Z'		; (Z)ero memory
+	cp	'Z'		; (Z)ero memory/RAMDISK
 	jp	z,zero
     endif
 
@@ -709,7 +711,12 @@ regmsg:
 	common$segment		; Stack and storage is in
 				; Common Memory
 
-	defs	48*2		; System-mode stack
+	; System-mode stack (48 words)
+
+	defb	'BIOSDBG StackDDDDDDDDDDDDDDDDDDD'
+	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
+	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
+
 dbgstk:				; (this is where SP points after
 				; we've finished saving registers)
 afsave:	defs	2

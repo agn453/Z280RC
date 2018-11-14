@@ -69,11 +69,6 @@ rampg$end equ 2000h	; Page end address (high 16-bits) + 1
     endif
 
 ;
-; Utility routines in the BIOSKRNL
-;
-	extrn	iopdma, iopdef
-
-;
 ; DMA routines in BIOSKRNL
 ;
 	extrn	dmaxfr

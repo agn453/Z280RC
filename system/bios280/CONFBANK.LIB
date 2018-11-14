@@ -106,7 +106,7 @@ config	macro
 	defb	'RamDisk M:'
   endif
 	defz	cr,lf
-	endm
+	endm ; signon
 
   if dma$burst$mode
 dma$descriptor equ 1000000010000000b	; Burst mode for memory to memory
@@ -121,7 +121,7 @@ dma$descriptor equ 1000000010000000b	; Burst mode for memory to memory
 		; end-of-process signaled (bit 0)
   else
 dma$descriptor equ 1000000100000000b	; Continuous mode
-;dma$descriptor equ 1000000000000000b	; Singe transaction mode
+;dma$descriptor equ 1000000000000000b	; Single transaction mode (not used)
   endif
 
 ; Commonly used CP/M entry points
@@ -196,16 +196,6 @@ msg:	defz	cr,lf,textmsg
     endif
 dbg:	call	biosdbg		; Enter debugger
 	endm
-  endif
-
-  if	ldrbios
-;
-; Device to use for console error messages in LDRBIOS
-;
-ldr$cinit equ	true		; Set FALSE for no serial port init required
-ldr$condata equ	tdr		; Z280 UART data port
-ldr$const equ	tcs		; Z280 UART status port
-ldr$contbe equ	uarttbe		; Z280 UART transmitter buffer empty bit
   endif
 
   if	int$enabled
