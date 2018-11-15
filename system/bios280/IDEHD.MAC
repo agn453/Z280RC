@@ -101,6 +101,15 @@ al1	equ	00000000b	; (reserve 4 groups for directory)
 psh	equ	2		; Physical record shift factor
 phm	equ	00000011b	; Block mask for psh bits
 
+  if	use$big$drm and partn8
+
+	; Bigger directories on the E:..H: drive partitions
+
+bigdrm	equ	1024		; 1024 directory entries
+bigal0	equ	11111111b	; and allocation mask for more
+bigal1	equ	00000000b	; reserved directory groups
+  endif
+
 hdtype	equ	10h		; Media type for Hard Disk
 
   if	hstsiz ne 512
@@ -127,6 +136,10 @@ hdtype	equ	10h		; Media type for Hard Disk
 ;	Partition 5 64 Tracks		Track 320..383 (CP/M)
 ;	Partition 6 64 Tracks		Track 384..447 (CP/M)
 ;	Partition 7 64 Tracks		Track 448..511 (CP/M)
+;
+; and they have 512 directory entries (like A:..D:) unless
+; USE$BIG$DRM is enabled (in which case they have 1024 directory
+; entries).
 ;
 
 ;
@@ -423,14 +436,23 @@ dpb3:
     if	partn8
 dpb4:
       if use$disk$macros
+       if use$big$drm
+	dpb	512,256,319,4096,1024,256,8000h
+       else
 	dpb	512,256,319,4096,512,256,8000h
+       endif
       else
 	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
 	defb	bsh, blm		; Block shift and mask
 	defb	exm			; Extent mask
 	defw	dsm-1			; Maximum block number - 1
+       if use$big$drm
+	defw	bigdrm-1		; Number of big directory entries -1
+	defb	bigal0,bigal1
+       else
 	defw	drm-1			; Number of directory entries - 1
 	defb	al0,al1			; Allocation for directory
+       endif
 	defw	8000h			; Permanently mounted drive
 	defw	256			; 256 reserved tracks
 	defb	psh,phm			; Physical record shift factor and mask
@@ -438,14 +460,23 @@ dpb4:
 
 dpb5:
       if use$disk$macros
+       if use$big$drm
+	dpb	512,256,383,4096,1024,320,8000h
+       else
 	dpb	512,256,383,4096,512,320,8000h
+       endif
       else
 	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
 	defb	bsh, blm		; Block shift and mask
 	defb	exm			; Extent mask
 	defw	dsm-1			; Maximum block number - 1
+       if use$big$drm
+	defw	bigdrm-1		; Number of big directory entries -1
+	defb	bigal0,bigal1
+       else
 	defw	drm-1			; Number of directory entries - 1
 	defb	al0,al1			; Allocation for directory
+       endif
 	defw	8000h			; Permanently mounted drive
 	defw	320			; 320 reserved tracks
 	defb	psh,phm			; Physical record shift factor and mask
@@ -453,14 +484,23 @@ dpb5:
 
 dpb6:
       if use$disk$macros
+       if use$big$drm
+	dpb	512,256,447,4096,1024,384,8000h
+       else
 	dpb	512,256,447,4096,512,384,8000h
+       endif
       else
 	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
 	defb	bsh, blm		; Block shift and mask
 	defb	exm			; Extent mask
 	defw	dsm-1			; Maximum block number - 1
+       if use$big$drm
+	defw	bigdrm-1		; Number of big directory entries -1
+	defb	bigal0,bigal1
+       else
 	defw	drm-1			; Number of directory entries - 1
 	defb	al0,al1			; Allocation for directory
+       endif
 	defw	8000h			; Permanently mounted drive
 	defw	384			; 384 reserved tracks
 	defb	psh,phm			; Physical record shift factor and mask
@@ -468,15 +508,24 @@ dpb6:
 
 dpb7:
       if use$disk$macros
+       if use$big$drm
+	dpb	512,256,511,4096,1024,448,8000h
+       else
 	dpb	512,256,511,4096,512,448,8000h
+       endif
       else
 	; Manually construct DPB
-dpb0:	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
+	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
 	defb	bsh, blm		; Block shift and mask
 	defb	exm			; Extent mask
 	defw	dsm-1			; Maximum block number - 1
+       if use$big$drm
+	defw	bigdrm-1		; Number of big directory entries -1
+	defb	bigal0,bigal1
+       else
 	defw	drm-1			; Number of directory entries - 1
 	defb	al0,al1			; Allocation for directory
+       endif
 	defw	8000h			; Permanently mounted drive
 	defw	448			; 448 reserved tracks
 	defb	psh,phm			; Physical record shift factor and mask

@@ -21,6 +21,22 @@ Modification History (in reverse chronological order):
 15-Nov-2018
 -----------
 
+I was running out of space/directory entries so I built a version of
+Banked CP/M-Plus with eight 8MB CompactFlash drives.  See the CONFBNK8.LIB,
+BANKED8.DAT, CPM3BNK8.SYS and BNK8BIOS.SUB files in the system/bios280
+directory.
+
+Depending on the actual size of CompactFlash you have, play it safe
+and use at least a 128MB one if you use this (64MB is not the same as 64MiB).
+
+Drives E: thru H: are configured with 1024 directory entries each.  A
+new configuration option USE$BIG$DRM enables 1024 directory entries
+(512 is the default for all other drives).
+
+
+15-Nov-2018
+-----------
+
 Hector Peraza's latest beta 11 of ZSM4 - a Z80/Z180/Z280 Macro-Assembler
 available at
 https://www.retrobrewcomputers.org/forum/index.php?t=msg&th=93&goto=3700&#msg_3700
