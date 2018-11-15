@@ -18,6 +18,17 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+16-Nov-2018
+-----------
+
+USE$BIG$DRM now causes the extra drives E: thru H: to have 2048 directory
+entries (the maximum for the 4096 byte block size).  Updated IDEHD.MAC and
+the CPM3*.SYS files.  Also added a check for the maximum number of directory
+entries for a given block size in the CPM3M80.LIB macro library (a version
+of the Digital Research supplied CPM3.LIB that works with Microsoft's M80
+and Hector Peraza's ZSM4).
+
+
 15-Nov-2018
 -----------
 

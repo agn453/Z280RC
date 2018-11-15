@@ -14,6 +14,11 @@
 ;	drive assignments (use a blank parameter to skip a drive letter)
 ;						 14-Aug-2018
 ;
+;	Modified by Tony Nicholson to check number of directory entries
+;	in the dpb macro for specified block size (Too many can't be
+;	catered for by the al0 and al0 allocation vectors)
+;						16-Nov-2018
+;
 ;-------------------------------------------------------------------------
 	; dtbl	<dph0,dph1,...>		- drive table
 
@@ -49,7 +54,7 @@ dtbl	macro	?list
 	endm
 
 	ift	?n gt 16
-	  .printx 'Error: Too many drives.  Max 16 allowed'
+	  .printx 'DTBL macro error: Too many drives.  Max 16 allowed'
 	  exitm	
 	endif
 
@@ -122,7 +127,7 @@ dpb	macro	?psize,?pspt,?trks,?bls,?ndirs,?off,?ncks
 ?exm	defl	?bls/1024
 	ift	?dsm gt 255
 	  ift	  ?bls eq 1024
-	  .printx "Error: Can't have this size disk with 1k block size"
+	  .printx "DPB macro error: Can't have this size disk with 1k block size"
 	  exitm
 	  endif
 ?exm	  defl	  ?exm/2
@@ -135,6 +140,10 @@ dpb	macro	?psize,?pspt,?trks,?bls,?ndirs,?off,?ncks
 	endm
 ?al0	defl	?all shr 8
 ?al1	defl	?all and 0ffh
+	if ?ndirs gt (?bls shr 1)
+	.printx	"DPB macro error: Too many directory entries for this block size"
+	exitm
+	endif
 ?drm	defl	?ndirs-1
 	if nul ?ncks
 ?cks	  defl	  ?ndirs/4

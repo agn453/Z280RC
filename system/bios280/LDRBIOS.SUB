@@ -19,8 +19,8 @@ ERA CONFIG.LIB
 ; Build a TEST.COM that loads TEST.SYS instead of CPM3.SYS
 ZSM4 =CPMLDR3/DTEST=1
 LINK TEST[L100 NR]=CPMLDR3,BIOSKRNL,BIOSDBG,CHARIO,CLOCK,SCB,IDEHD
-; Copy it to boot drive for testing
-PIP A:TEST.COM[G0V]=TEST.COM
+; Copy it to boot drive for testing using
+;     PIP A:TEST.COM[G0V]=TEST.COM
 ;
 ; Standard version (loads from CPM3.SYS)
 ZSM4 =CPMLDR3

@@ -105,9 +105,9 @@ phm	equ	00000011b	; Block mask for psh bits
 
 	; Bigger directories on the E:..H: drive partitions
 
-bigdrm	equ	1024		; 1024 directory entries
+bigdrm	equ	2048		; 2048 directory entries
 bigal0	equ	11111111b	; and allocation mask for more
-bigal1	equ	00000000b	; reserved directory groups
+bigal1	equ	11111111b	; reserved directory groups
   endif
 
 hdtype	equ	10h		; Media type for Hard Disk
@@ -138,7 +138,7 @@ hdtype	equ	10h		; Media type for Hard Disk
 ;	Partition 7 64 Tracks		Track 448..511 (CP/M)
 ;
 ; and they have 512 directory entries (like A:..D:) unless
-; USE$BIG$DRM is enabled (in which case they have 1024 directory
+; USE$BIG$DRM is enabled (in which case they have 2048 directory
 ; entries).
 ;
 
@@ -437,7 +437,7 @@ dpb3:
 dpb4:
       if use$disk$macros
        if use$big$drm
-	dpb	512,256,319,4096,1024,256,8000h
+	dpb	512,256,319,4096,2048,256,8000h
        else
 	dpb	512,256,319,4096,512,256,8000h
        endif
@@ -461,7 +461,7 @@ dpb4:
 dpb5:
       if use$disk$macros
        if use$big$drm
-	dpb	512,256,383,4096,1024,320,8000h
+	dpb	512,256,383,4096,2048,320,8000h
        else
 	dpb	512,256,383,4096,512,320,8000h
        endif
@@ -485,7 +485,7 @@ dpb5:
 dpb6:
       if use$disk$macros
        if use$big$drm
-	dpb	512,256,447,4096,1024,384,8000h
+	dpb	512,256,447,4096,2048,384,8000h
        else
 	dpb	512,256,447,4096,512,384,8000h
        endif
@@ -509,7 +509,7 @@ dpb6:
 dpb7:
       if use$disk$macros
        if use$big$drm
-	dpb	512,256,511,4096,1024,448,8000h
+	dpb	512,256,511,4096,2048,448,8000h
        else
 	dpb	512,256,511,4096,512,448,8000h
        endif

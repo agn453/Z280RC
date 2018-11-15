@@ -1,3 +1,6 @@
+; Build all versions of CP/M-Plus *.SYS files
 LDRBIOS.SUB
 NBNKBIOS.SUB
 BANKBIOS.SUB
+BNK1BIOS.SUB
+BNK8BIOS.SUB
