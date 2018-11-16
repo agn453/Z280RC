@@ -203,4 +203,27 @@ outjmp	macro
 	nop
 	endm
 
+;---------------------------------
+;
+; Calculate the Date in CP/M-3-Format
+; (used for initialising RAM Drive)
+;
+; Before invoking the macro, ASET the
+; variables $YEAR, $MONTH and $DAY.
+; Returns the result in $DATE.
+
+cpmdate	macro
+$date	aset	($year-78)*365 + ($year-77) shr 2 + $day - 1
+  if	(($year and 3) eq 0) and ($month gt 2)
+$date	aset	$date+1
+  endif
+X$month	aset	$month
+  irp	Md,<31,28,31,30,31,30,31,31,30,31,30,31>
+    if	X$month gt 1
+$date	aset	$date+Md
+X$month	aset	X$month-1
+    endif
+  endm ; irp
+	endm ; cpmdate
+
 	.list

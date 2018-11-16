@@ -28,6 +28,9 @@ entries for a given block size in the CPM3M80.LIB macro library (a version
 of the Digital Research supplied CPM3.LIB that works with Microsoft's M80
 and Hector Peraza's ZSM4).
 
+Also added an initialisation routine to the RAMDISK module to prompt for
+and format drive M: if it doesn't have a valid CP/M directory label.
+
 
 15-Nov-2018
 -----------

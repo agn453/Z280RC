@@ -190,7 +190,7 @@ ide00:
 	defw	alv0		; Pointer to allocation vector
 	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
 	defw	0FFFEh		; Pointer to data buffers (GENCPM)
-	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defw	0ffffh		; Hash table disabled
 	defb	0		; Hash table bank (GENCPM)
     endif
   endif
@@ -214,7 +214,7 @@ ide01:
 	defw	alv1		; Pointer to allocation vector
 	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
 	defw	0FFFEh		; Pointer to data buffers (GENCPM)
-	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defw	0ffffh		; Hash table disabled
 	defb	0		; Hash table bank (GENCPM)
   endif
 
@@ -236,7 +236,7 @@ ide02:
 	defw	alv2		; Pointer to allocation vector
 	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
 	defw	0FFFEh		; Pointer to data buffers (GENCPM)
-	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defw	0ffffh		; Hash table disabled
 	defb	0		; Hash table bank (GENCPM)
   endif
 
@@ -258,7 +258,7 @@ ide03:
 	defw	alv3		; Pointer to allocation vector
 	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
 	defw	0FFFEh		; Pointer to data buffers (GENCPM)
-	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defw	0ffffh		; Hash table disabled
 	defb	0		; Hash table bank (GENCPM)
   endif
 
@@ -281,7 +281,7 @@ ide04:
 	defw	alv4		; Pointer to allocation vector
 	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
 	defw	0FFFEh		; Pointer to data buffers (GENCPM)
-	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defw	0ffffh		; Hash table disabled
 	defb	0		; Hash table bank (GENCPM)
       endif
 
@@ -303,7 +303,7 @@ ide05:
 	defw	alv5		; Pointer to allocation vector
 	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
 	defw	0FFFEh		; Pointer to data buffers (GENCPM)
-	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defw	0ffffh		; Hash table disabled
 	defb	0		; Hash table bank (GENCPM)
       endif
 
@@ -325,7 +325,7 @@ ide06:
 	defw	alv6		; Pointer to allocation vector
 	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
 	defw	0FFFEh		; Pointer to data buffers (GENCPM)
-	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defw	0ffffh		; Hash table disabled
 	defb	0		; Hash table bank (GENCPM)
       endif
 
@@ -347,7 +347,7 @@ ide07:
 	defw	alv7		; Pointer to allocation vector
 	defw	0FFFEh		; Pointer to directory buffers (GENCPM)
 	defw	0FFFEh		; Pointer to data buffers (GENCPM)
-	defw	0FFFEh		; Pointer to directory hash table (GENCPM)
+	defw	0ffffh		; Hash table disabled
 	defb	0		; Hash table bank (GENCPM)
       endif
     endif ; partn8

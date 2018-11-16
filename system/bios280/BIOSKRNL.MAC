@@ -373,12 +373,15 @@ initc0:	push	bc
 	dec	c
 	jp	p,initc0
 
+	ld	hl,deflts	; Copy default character I/O
+	ld	de,@civec	; device vectors to the SCB
+	ld	bc,defltl
+	ldir
+
 	; ?CINIT has set the I/O page to UARTP
 ;
 ; Initialize Disk Drive controllers
 ;
-  if 0	; IDEHD and RAMDISK need no initialization - so skip this
-
 	ld	bc,16*256+0	; count 16 in B, drive 0 in C
 	ld	hl,@dtbl	; Do all 16 logical disk drives
 initd0:	push	bc
@@ -407,7 +410,6 @@ initd0:	push	bc
 initd1:	pop	bc		; Next drive
 	inc	c
 	djnz	initd0
-  endif ; 0
 
   if banked
 	ld	hl,0000h	; Clear all Interrupt vector enable bits
@@ -421,11 +423,6 @@ initd1:	pop	bc		; Next drive
 	ld	c,tcr
 	ldctl	(c),hl
   endif ; banked
-
-	ld	hl,deflts	; Copy default character I/O
-	ld	de,@civec	; device vectors to the SCB
-	ld	bc,defltl
-	ldir
 
   if banked
     if int$enabled
