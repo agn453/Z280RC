@@ -384,7 +384,7 @@ dpb0:
   if	not ldrbios
 
 	; Partitions 1..3 have no reserved track, but instead their
-	; size accounts for the previous partition (64 sectors) with
+	; size accounts for the previous partition (64 tracks) with
 	; reserved tracks to make it easy to address each sector in
 	; the READ and WRITE routines.
 
@@ -889,7 +889,7 @@ dirbuf:	defs	hstsiz		; Directory buffer
 
 dtabuf:	defs	hstsiz		; Data buffer
 
-alv:	defs	(dsm/4)+2	; Allocation vector
+alv:	defs	(dsm0/4)+2	; Allocation vector
   else
     if not use$disk$macros
 

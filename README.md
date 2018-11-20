@@ -10,13 +10,29 @@ wiki at
 
 The original software is located in zip files in the "original" subdirectory.
 
-My own modifications to Bill Shen's original CBIOS3 for CP/M 3 are in the
-"system" subdirectory and below.
+My modifications to Bill Shen's original CBIOS3 for CP/M 3 are in the
+"system" subdirectory and below.  I also developed a CP/M 3 BIOS to add
+support for a Banked memory configuration.  It's in the system/bios280
+subdirectory.
 
 New Utilities are in the "utilities" subdirectory.
 
 Modification History (in reverse chronological order):
 ======================================================
+
+20-Nov-2018
+-----------
+
+I examined the DMAXFR code with a view to fixing the defect regarding
+transfers crossing the common memory address boundary.  The modifications
+increase the size of the MOVE routine considerably (if I stick to the
+current physical-logical memory addressing configuration).  I've therefore
+decided to not release updated DMA routines and instead will keep the
+memory management work-around in place for now.  I may revise the memory
+allocation in future though (and make the transient program area and
+common memory contiguous).  Do not set the USE$DMA$TO$COPY configuration
+item to TRUE in any of the configuration CONF*.LIB files for now.
+
 
 16-Nov-2018
 -----------
