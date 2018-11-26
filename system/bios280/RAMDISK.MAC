@@ -33,6 +33,9 @@
 ;					a banked system.
 ;	16-Nov-2018	Tony Nicholson	Initialise RAMDISK if it doesn't
 ;					have a valid label.
+;	26-Nov-2018	Tony Nicholson	Common memory is contiguous in
+;					the TPA bank so use this for the
+;					DMA transfer.
 ;
 
 	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
@@ -201,7 +204,7 @@ rd$init:
 
 	xor	a		; Set-up DMA parameter
 	ld	hl,label	;  to fetch the RamDisk label
-	push	hl
+	push	hl		;  (into bank 0 - so no need to PHYAHL)
 	call	cnv12
 	ld	(destl),hl
 	ld	(desth),de
@@ -243,7 +246,7 @@ nomatch:
 	push	hl		; Save for later
 	push	hl		;  and put into IX
 	pop	ix
-	call	cnv12
+	call	cnv12		; We're in bank 0 so no PHYAHL needed
 	ld	(srcl),hl
 	ld	(srch),de
 
@@ -389,7 +392,9 @@ rd$read:
     if banked
 	xor	a
 	ld	(rwflag),a	; Flag cleared (for READ)
+	inc	a		; Common is TPA bank
 	ld	hl,cmnbuf	; Read into common buffer
+	call	phyahl
     else
 	ld	a,(@dbnk)	; Read directly into bank 0
 	ld	hl,(@dma)	;  user buffer
@@ -423,8 +428,9 @@ copywr:	ldup	a,(hl)		; Copy data to cmnbuf
 
 	pop	af		; Restore User-mode PDRs
 	call	?usrsl
-	xor	a
+	ld	a,tpa$bank	; Common is in TPA bank
 	ld	hl,cmnbuf	; Write from cmnbuf
+	call	phyahl
     else
 	ld	a,(@dbnk)
 	ld	hl,(@dma)
@@ -462,7 +468,7 @@ rw$common:
 
 	ld	(count),hl
 
-	ld	c,dal2		; Use DMA2 to transfer sector(s)
+	ld	c,dal3		; Use DMA3 to transfer sector(s)
 	ld	hl,xfer
 	call	dmaxfr
 

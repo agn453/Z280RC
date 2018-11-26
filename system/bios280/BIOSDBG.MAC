@@ -713,9 +713,9 @@ regmsg:
 
 	; System-mode stack (48 words)
 
-	defb	'BIOSDBG StackDDDDDDDDDDDDDDDDDDD'
-	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
-	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
+	defb	'BIOSDBG StackBBBBBBBBBBBBBBBBBBB'
+	defb	'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
+	defb	'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
 
 dbgstk:				; (this is where SP points after
 				; we've finished saving registers)

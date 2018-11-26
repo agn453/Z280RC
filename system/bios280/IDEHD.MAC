@@ -30,6 +30,9 @@
 ;					use the User-mode MMU to copy
 ;					the user disk buffer to/from
 ;					CMNBUF.
+;	26-Nov-2018	Tony Nicholson	Common is now physically
+;					contiguous with the TPA bank
+;					so USE$DMA$TO$COPY TRUE now works
 ;
 
 	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
@@ -629,7 +632,8 @@ hd$write:
 	ld	(srch),de
 
 	xor	a		; Destination bank is Common
-	ld	hl,cmnbuf	; (logical = physical address)
+	ld	hl,cmnbuf
+	call	phyahl
 	call	cnv12
 	ld	(dstl),hl
 	ld	(dsth),de
@@ -746,6 +750,7 @@ readdrq:
 	; Copy the sector just read to the destination address using DMA
 	xor	a		; Source bank is common
 	ld	hl,cmnbuf
+	call	phyahl
 	call	cnv12
 	ld	(srcl),hl
 	ld	(srch),de

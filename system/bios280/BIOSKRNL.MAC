@@ -63,6 +63,13 @@
 ;					Also make sure it is disabled
 ;					before loading DMA address
 ;					and transfer count registers.
+;	26-Nov-2018	Tony Nicholson	Re-organise banked memory
+;					address assignment to make the
+;					TPA memory contiguous.  This
+;					allows the original DMAXFR
+;					routine to correctly transfer
+;					data between the TPA bank and
+;					other banks.
 ;
 	page
 	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
@@ -335,19 +342,29 @@ bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
 ;
 ;	The I/O page for MMU is the same as already set for DMA
 
-	ld	hl,mmtab0	; Point System-mode PDRs to Bank 0
-	ld	a,spdr0
-	out	(pdr),a
-	ld	bc,16*256+bmp	; 16 words to MMU block move port
-	otirw
-
-	ld	hl,mmtab1	; Also point User-mode PDRs to TPA bank
+	ld	hl,mmtab1	; Point User-mode PDRs to TPA bank
 	ld	a,updr0
 	out	(pdr),a
 	ld	bc,16*256+bmp	; 16 words to MMU block move port
 	otirw
 	ld	a,tpa$bank	; Initialise User-mode Bank
 	ld	(@ubnk),a
+
+	ld	hl,common$base	; Copy common into contiguous
+	ld	bc,common$size	;  memory in the TPA bank
+cpycmn:	ld	a,(hl)
+	ldup	(hl),a
+	inc	hl
+	dec	bc
+	ld	a,b
+	or	c
+	jr	nz,cpycmn
+
+	ld	hl,mmtab0	; Point System-mode PDRs to Bank 0
+	ld	a,spdr0
+	out	(pdr),a
+	ld	bc,16*256+bmp	; 16 words to MMU block move port
+	otirw
 
 	ld	hl,1011101111100000b
 		; User-mode translate enable (bit 15 ON)
@@ -1085,18 +1102,26 @@ selpdr:
 ; 001200	00	1200-13ff	BIOS Interrupt buffers (512 bytes)
 ; 001400	00	1400-dfff	Banked part of CP/M BDOS/BIOS and
 ;					and CP/M directory buffers
-; 00e000	All	e000-ffff	Common Memory (in all banks)
+; 00e000	00	e000-ffff	CPMLDR loads Common Memory here.
+;					This is copied to 01e000 by the
+;					?BOOT: routine where it becomes
+;					the CP/M Common Area.
 ;
 ; TPA Bank
-; 010000	01	0000-00ff	CP/M Page 0 (JP vectors, FCBs)
-; 010100	01	0100-dfff	TPA (user programs) - extends into
+; 00e000	01	0000-00ff	CP/M Page 0 (JP vectors, FCBs)
+; 00e100	01	0100-dfff	TPA (user programs) - extends into
 ;					common memory up to BDOS entry
+; 01c000	All	e000-ffff	Common Memory (in all banks) and
+;					contiguous with the TPA so that
+;					DMA transfers from the TPA map
+;					to contiguous physical addresses
 ;
 ; CP/M-Plus Data Buffers
 ; 01e000	02..03	0000-dfff	CP/M Buffers
 ;
 ; Not-used
-; 03a000	04..08	0000-dfff
+; 03a000..	04..08	0000-dfff
+;   07ffff
 ;
 ; RAM Drive
 ; 080000	09..1F	0000-ffff	RAMdisk (accessed via DMA3)
@@ -1151,26 +1176,12 @@ spdre	equ	1eh	; Page 14 (E000..EFFF)
 spdrf	equ	1fh	; Page 15 (F000..FFFF)
 
 ;
-; Memory Bank 0 Page Descriptors (used only by SLPDR macro)
+; Common Memory Page Descriptors (used only by SLPDR macro)
 ;
-pdr0	equ	000h*16+pdr$mode$bits
-pdr1	equ	001h*16+pdr$mode$bits
-pdr2	equ	002h*16+pdr$mode$bits
-pdr3	equ	003h*16+pdr$mode$bits
-pdr4	equ	004h*16+pdr$mode$bits
-pdr5	equ	005h*16+pdr$mode$bits
-pdr6	equ	006h*16+pdr$mode$bits
-pdr7	equ	007h*16+pdr$mode$bits
-pdr8	equ	008h*16+pdr$mode$bits
-pdr9	equ	009h*16+pdr$mode$bits
-pdr10	equ	00ah*16+pdr$mode$bits
-pdr11	equ	00bh*16+pdr$mode$bits
-pdr12	equ	00ch*16+pdr$mode$bits
-pdr13	equ	00dh*16+pdr$mode$bits
-pdr14	equ	00eh*16+pdr$mode$bits
-pdr15	equ	00fh*16+pdr$mode$bits
+pdr14	equ	01ch*16+pdr$mode$bits	; 01c000..01cfff
+pdr15	equ	01dh*16+pdr$mode$bits	; 01d000..01dfff
 
-; Macro to Select one of the above PDRs (for N = 0..15)
+; Macro to Select one of the above PDRs (for N = 14 or 15)
 ; and define a word containing the PDR
 
 slpdr	macro	n
@@ -1179,19 +1190,19 @@ slpdr	macro	n
 
 ; Macro to generate 16 PDR entries with the specified attribute
 ; (Adjacent 4K pages starting at the Page Frame Address
-; plus the Common Memory PDRs)
+; plus the Common Memory PDRs).
 
 defpdr	macro	bank,attr
 	local	pf,pg,pn
 pf	aset	bank
-    if (pf lt 0) or (pf gt 17)
-	.printx	'Bank number out of range 0..17'
+    if (pf lt 0) or (pf gt 16)
+	.printx	'Bank number out of range 0..16'
 	exitm
     endif
-    if (pf gt 1)
+    if (pf gt 1)	; Adjust for common
 pf	aset	bank*16-(common$size shr 12)*(bank-1)
     else
-pf	aset	bank*16
+pf	aset	bank*16-(common$size shr 12)*bank
     endif
 pn	aset	0
   rept	16
@@ -1248,14 +1259,6 @@ ptablst:
 	defw	mmtab9		; In RAMDISK memory
     endif
 
-  endif ; banked
-
-  if 0	; Old routine replaced by PHYAHL
-	; but keep it here to show how to
-	; look this up.  The result can
-	; be used to program DMA transfer
-	; high 12-bit physical, low 12-bit
-	; is just low 12 bits of logical.
 ;
 ; PHYADR
 ;
@@ -1287,7 +1290,7 @@ phyadr:
 	add	hl,de		; Point to PDR entry in the mmtabn
 	ldw	hl,(hl)		;  and load it into HL (high 12-bit physical)
 	ret
-  endif ; 0
+  endif ; banked
 
 ;
 ; PHYAHL - Calculate Physical Address from Logical Address
@@ -1305,36 +1308,32 @@ phyadr:
 ;	HL= physical address (low 16 bits of address).
 ;	Registers BC and DE are unchanged.
 ;
+  if banked
 	common$segment
 
 phyahl:
-  if banked
-	cp	00h+1		;Bank 0 has logical address
-	ret	c		; equal to physical address
-	cpw	hl,common$base	;Address below common ?
-	jr	c,bnc1		;Yes
-	xor	a		;No, Common is always Bank 0
-	ret
-bnc1:	cp	01h+1		;Bank 1?
-	ret	c		;Yes, logical = physical
-	cp	9+1
-	jr	nc,badbank
-	dec	a		;Bank-1 to A
-	push	bc		;The following will work only
-	ld	b,a		; for banks up to bank 17
-				; so we are safe while we use 0..9
-				; for the CP/M Plus system. (Bank 9
-				; is the first 56KB of RAMDISK).
-adjust:	subw	hl,common$size	;Take off common memory size
-	djnz	adjust		; for each bank > 1
+	push	bc		; Save registers
+	push	de
+	push	hl		; Save logical address
+	call	phyadr		; Look-up the high 12 bits in MMU
+				; Physical bank in H and
+				;  high 4-bits of page in L
+	pop	de		; Logical address to DE
+	ld	a,d
+	and	0Fh		; Keep low 12 bits (4K page address)
+	ld	d,a
+	ld	a,l		; Merge with bits 15..12 of page
+	and	0F0h
+	or	d
+	ld	d,a		; Low 16 bit physical is in DE
+	ld	a,h		; High 8-bit physical to A
+	ex	de,hl		; Low 16-bit physical to HL
+	pop	de		; Restore registers
 	pop	bc
-  endif ; banked
-
 	ret
-
-badbank:
-	ld	a,20h		;Force non-existent bank
-	ret			; (AHL is above 2Mb RAM = P20xxxx)
+  else
+phyahl	equ	dummy
+  endif ; banked
 
 ;
 ; CNV12 - Convert address in AHL to two words in "DMA address format"
@@ -1353,8 +1352,6 @@ cnv12:	ld	d,a		; Bank address to D
 	ld	h,a		; HL now has low 12 bits
 	ret
 
-jmp	equ	0c3h
-
   if	not ldrbios
 ;
 ; SETJUMPS
@@ -1362,6 +1359,8 @@ jmp	equ	0c3h
 ;	Write CP/M entry vectors (and selects the TPA bank)
 ;
 	common$segment
+
+jmp	equ	0c3h
 
 setjumps:
   if banked
@@ -1388,7 +1387,7 @@ setjumps:
 
 ?rlccp:
     if banked and ccp$in$mem
-	ld	c,dal2		; Use DMA2
+	ld	c,dal3		; Use DMA3
 	ld	hl,rstccp	; Copy CCP from bank 0 to bank 1
 	jp	dmaxfr		;  using DMA and return
     else
@@ -1435,9 +1434,9 @@ setjumps:
 	; CCP.COM was just read into 010100..010D7Fh
 	; Save a copy to the CCP$COPY$BANK using DMA
 
-	ld	c,dal2
+	ld	c,dal3
 	ld	hl,savccp	; Point to DMA parameter block
-	call	dmaxfr		; Copy using DMA2
+	call	dmaxfr		; Copy using DMA3
       endif
     endif
 	ret
@@ -1457,13 +1456,13 @@ no$ccp:
 	; DMA Parameter block to restore CCP from bank 0 to bank 1
 	; (The ?LDCCP routine loads the CCP into Bank 0)
 
-rstccp:	dmapbw	tpa$bank,tpa	;  destination
-	dmapbw	ccp$copy$bank,tpa ;source
+rstccp:	dmapbw	00h,0E100h	;  destination (L010100h = P00E100h)
+	dmapbw	00h,00100h	;  source (L000100h = P000100h)
 	defw	ccp$len		;  length (bytes)
 	defw	dma$descriptor
 
-savccp:	dmapbw	ccp$copy$bank,tpa ;  destination
-	dmapbw	tpa$bank,tpa	;  source
+savccp:	dmapbw	00h,00100h	;  destination
+	dmapbw	00h,0E100h	;  source
 	defw	ccp$len		;  length (bytes)
 	defw	dma$descriptor
     endif
@@ -2343,7 +2342,7 @@ diskwr	equ	dummy
 ;
 ; ?PHEXHL
 ;
-;	Print the value in HL in dexadecimal to console
+;	Print the value in HL in hexadecimal to console
 ;
 	common$segment
 

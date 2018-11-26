@@ -20,6 +20,16 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+26-Nov-2018
+-----------
+
+Revised the banked memory layout to make the TPA and common memory
+contiguous.  The DMAXFR routine now works properly (so you may choose
+to set USE$DMA$TO$COPY to TRUE to perform memory-to-memory transfers
+using the Z280's on-chip DMA controller instead of the Memory Management
+Unit).  Coming up next... Interrupts and System/User mode operation.
+
+
 20-Nov-2018
 -----------
 

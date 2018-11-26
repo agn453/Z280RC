@@ -11,7 +11,7 @@
 ; This date is included in the sign-on message
 
 build$date macro
-	defb	'15-Nov-2018'
+	defb	'26-Nov-2018'
 	endm
 
 true	equ	-1
@@ -159,10 +159,6 @@ ccp$in$mem equ	false		; FALSE for CCP loaded from disk each time
   endif
 
 common$size equ	0-common$base	; Size of common memory
-
-  if	ccp$in$mem
-ccp$copy$bank equ	0	; CCP is copied into this Bank from 0100h to 0D80h
-  endif
 
 common$segment	macro
 	cseg
