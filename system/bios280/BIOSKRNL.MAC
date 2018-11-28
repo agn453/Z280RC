@@ -776,16 +776,16 @@ wboot:
 wbsys:
   endif
 
-	ld	sp,@stack
-
-  if banked and int$enabled
-	ld	hl,@ustack	; Load a User-mode stack pointer
-	ldctl	usp,hl
-  endif
-
   if ldrbios
 	ret			; All done for LDRBIOS
   else
+	ld	sp,@stack
+
+    if banked and int$enabled
+	ld	hl,@ustack	; Load a User-mode stack pointer
+	ldctl	usp,hl
+    endif
+
 	call	setjumps	; Init base page of TPA
 	call	?rlccp		; Re-load CCP
 	jp	tpa		; and start it
@@ -804,9 +804,8 @@ drvtbl:
 	ld	hl,@dtbl
 dummy:	ret
 
-  if ldrbios
+  if not banked
 xmove	equ	dummy		; No need for XMOVE
-move	equ	dummy		;  or MOVE in LDRBIOS
   else
 ;
 ; XMOVE
@@ -826,6 +825,7 @@ xmove:
 	ld	a,1		; Set extended move flag
 	ld	(@xmflg),a
 	ret
+  endif
 
 ;
 ; MOVE
@@ -841,21 +841,18 @@ xmove:
 	common$segment
 
 move:
+  if banked
 	ld	a,(@xmflg)	; Is it an extended move?
 	or	a
 	jp	nz,bnkdif	; Yes
+  endif
 
-    if 0 ; disable this and just use ldir for same bank
-	ld	a,(@cbnk)	; No, set source and destination banks
-	ld	(@msbnk),a	;  to the current bank
-	ld	(@mdbnk),a
-    else
 	ex	de,hl		; No, just block move in the current
 	ldir			; bank
 	ex	de,hl
 	ret
-    endif
 
+  if banked
 bnkdif:
 
     if krnl$debug
@@ -965,11 +962,8 @@ mvsrc:	defw	0000h		; Source (low 12 bits)
 mvcnt:	defw	0000		; Byte count
 	defw	dma$descriptor	; DMA controller descriptor
     endif ; use$dma$to$copy
-  endif ; not ldrbios
+  endif ; banked
 
-  if ldrbios
-multio	equ	dummy
-  else
 ;
 ; MULTIO
 ;
@@ -981,6 +975,9 @@ multio	equ	dummy
 ;
 ;	All registers are saved
 ;
+  if ldrbios
+multio	equ	dummy
+  else
 	bank0$segment	; Called by BDOS when Bank 0 is selected
 
 multio:

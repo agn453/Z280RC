@@ -20,14 +20,15 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
-28-Nov-2018
+29-Nov-2018
 -----------
 
-Clean-up the LDRBIOS code included to build a CPMLDR3.HEX loader.  The aim
-is to replace the original loader on the CompactFlash boot sectors.  I'm
-still using Bill Shen's original boot routines though.  There are still
-a few outstanding defects with the replacement loader though - so don't
-use it yet.
+Clean-up the conditional code to build a CPMLDR3.HEX loader. Now the
+settings in the CONFLDR.LIB configuration correctly build the aforementioned
+loader that you can write to the CompactFlash boot tracks using the inbuilt
+ZZMON monitor.  Just upload the Intel Hex format file directly (e.g. using
+the File menu Send file... option of Tera Term VT) and do a "C3" command
+to write it to the CP/M-Plus boot loader (sectors 1..15 of track 0).
 
 
 26-Nov-2018

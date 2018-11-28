@@ -242,10 +242,11 @@ SIGNON::
 
 	DEFB	'021182',0,0,0,0
 
-			;AGN - needs more stack-space
+  if 0			;AGN - needs more stack-space
 	rept	24
 	defb	'%%%%'
 	endm
+  endif
 
 STACKBOT::
 

@@ -624,8 +624,8 @@ hd$login:
 hd$read:
   if not ldrbios
 	xor	a
-  endif
 	ld	hl,rd$msg
+  endif
 
   if ldrbios
 	; Include write routines if not LDRBIOS
@@ -689,9 +689,8 @@ copywr:	ldup	a,(hl)
 
 rw$common:
 	ld	(rwflag),a	; Save operation code
-  endif ; not ldrbios
-
 	ld	(op$name),hl	;  and message pointer
+  endif ; not ldrbios
 
   if multi$sector$io
 	ld	a,1		; Force multi-sector OFF

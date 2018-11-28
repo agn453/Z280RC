@@ -11,7 +11,7 @@
 ; This date is included in the sign-on message
 
 build$date macro
-	defb	'28-Nov-2018'
+	defb	'29-Nov-2018'
 	endm
 
 true	equ	-1
@@ -51,7 +51,7 @@ dma$burst$mode equ false	; TRUE burst mode/FALSE continuous mode DMA
 config	macro	
 	defb	cr,lf,'Z280RC '
   if ldrbios
-	defb	'Loader '
+	defb	'CP/M 3 Loader '
   else
     if banked
 	defb	'Banked '
