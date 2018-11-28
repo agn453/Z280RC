@@ -70,6 +70,9 @@
 ;					routine to correctly transfer
 ;					data between the TPA bank and
 ;					other banks.
+;	28-Nov-2018	Tony Nicholson	Prune out unnecessary code
+;					for the LDRBIOS (only need
+;					disk read and console output)
 ;
 	page
 	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
@@ -94,8 +97,13 @@
 
 	; Utility routines used by other modules
 
-	public	dummy, ?pmsg, ?pderr, ?geco, ?getch
+	public	dummy, ?pmsg, ?pderr
 	public	?phexm, ?phex, ?phexhl, ?putc
+
+  if (not ldrbios) or debug
+	public	?geco, ?getch
+  endif
+
   if banked
 	public	?usrsl
   endif
@@ -126,8 +134,11 @@
 
 	; Routines in other modules
 
+	extrn	?cinit		; in CHARIO module
+
+  if not ldrbios
 	extrn	time		; in CLOCK module
-	extrn	?cinit, @ctbl	; in CHARIO module
+	extrn	@ctbl		; in CHARIO module
 	extrn	?ci, ?cist, ?co, ?cost
 
 	; External data items in the SCB module
@@ -135,6 +146,7 @@
 	extrn	scb$base	; System Control Block
 	extrn	@civec, @covec, @aivec, @aovec, @lovec
 	extrn	@mxtpa		; Top of TPA
+  endif
 
 	; External DTBL entries
 	;
@@ -266,21 +278,6 @@ boot:
 	ldctl	usp,hl
   endif
 
-  if 0 ; Using pre-initialized values now, but leave this here
-	xor	a
-	ld	hl,bzero	; Set all *BNK variables to zero
-	ld	b,bzerol	; (@DBNK, @CBNK, @UBNK, @SUMODE
-bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
-	inc	hl
-	djnz	bz0
-
-	inc	a		; Set MULTIO variables to 1 sector
-	ld	(@cnt),a
-    if multi$sector$io
-	ld	(@rwcnt),a
-    endif
-  endif ; 0
-
 ;
 ; Refresh Register defaults (taken from ZZMON)
 ;
@@ -337,28 +334,27 @@ bz0:	ld	(hl),a		;  @MSBNK, @MDBNK, @XMFLG)
 	outw	(c),hl
 
   if banked
+	ld	c,dal3		; Copy loaded common memory into
+	ld	hl,movcmn	;  memory adjacent (and physically
+	call	dmaxfr		;  contiguous to the TPA bank)
+
+;	The I/O page is changed to the default by DMAXFR
+
 ;
 ; Load the MMU page description registers
 ;
-;	The I/O page for MMU is the same as already set for DMA
+	ld	l,mmup		; Select the MMU I/O page
+	ld	c,iop
+	ldctl	(c),hl
 
 	ld	hl,mmtab1	; Point User-mode PDRs to TPA bank
-	ld	a,updr0
+;	ld	a,updr0
+	xor	a		; (this is a zero - save a byte)
 	out	(pdr),a
 	ld	bc,16*256+bmp	; 16 words to MMU block move port
 	otirw
 	ld	a,tpa$bank	; Initialise User-mode Bank
 	ld	(@ubnk),a
-
-	ld	hl,common$base	; Copy common into contiguous
-	ld	bc,common$size	;  memory in the TPA bank
-cpycmn:	ld	a,(hl)
-	ldup	(hl),a
-	inc	hl
-	dec	bc
-	ld	a,b
-	or	c
-	jr	nz,cpycmn
 
 	ld	hl,mmtab0	; Point System-mode PDRs to Bank 0
 	ld	a,spdr0
@@ -380,6 +376,13 @@ cpycmn:	ld	a,(hl)
 	; MMU is now ON
   endif
 
+  if ldrbios
+	ld	hl,0011001111100000b	; Explicit disable of MMU
+	ld	c,mmcr
+	outw	(c),hl
+
+	call	?cinit		; Initialise console only
+  else
 ;
 ; Initialize Character devices
 ;
@@ -394,8 +397,11 @@ initc0:	push	bc
 	ld	de,@civec	; device vectors to the SCB
 	ld	bc,defltl
 	ldir
+  endif
 
 	; ?CINIT has set the I/O page to UARTP
+
+  if not ldrbios
 ;
 ; Initialize Disk Drive controllers
 ;
@@ -427,6 +433,7 @@ initd0:	push	bc
 initd1:	pop	bc		; Next drive
 	inc	c
 	djnz	initd0
+  endif
 
   if banked
 	ld	hl,0000h	; Clear all Interrupt vector enable bits
@@ -478,13 +485,14 @@ bootc:
   endif ; banked
 
   if ldrbios			; All done for CPMLDR
+
+    if debug
+	enter$debug		; LDRBIOS Breakpoint (without a message)
+    endif
+
 	ld	sp,(@stack)	;  so restore stack and return
 	ret
   else
-
-    if 0 and debug
-	enter$debug	; Temporary Breakpoint (without a message)
-    endif
 
 	call	setjumps	; This also sets @CBNK to the TPA$BANK
 	call	?ldccp
@@ -504,7 +512,7 @@ bootc:
 
 signon:	config			; macro has a DEFZ signon string and date
 				; See CONFIG.LIB
-
+  if not ldrbios
 ;
 ; Default character device assignments
 ;
@@ -514,6 +522,7 @@ deflts:	defw	def$civec	; Console input
 	defw	def$aovec	; Auxiliary output
 	defw	def$lovec	; List output
 defltl	equ	$-deflts
+  endif
 
   if banked
     if int$enabled
@@ -795,6 +804,10 @@ drvtbl:
 	ld	hl,@dtbl
 dummy:	ret
 
+  if ldrbios
+xmove	equ	dummy		; No need for XMOVE
+move	equ	dummy		;  or MOVE in LDRBIOS
+  else
 ;
 ; XMOVE
 ;
@@ -832,20 +845,20 @@ move:
 	or	a
 	jp	nz,bnkdif	; Yes
 
-  if 0 ; disable this and just use ldir for same bank
+    if 0 ; disable this and just use ldir for same bank
 	ld	a,(@cbnk)	; No, set source and destination banks
 	ld	(@msbnk),a	;  to the current bank
 	ld	(@mdbnk),a
-  else
+    else
 	ex	de,hl		; No, just block move in the current
 	ldir			; bank
 	ex	de,hl
 	ret
-  endif
+    endif
 
 bnkdif:
 
-  if krnl$debug
+    if krnl$debug
 	; Some verbose debugging output
 	ld	(@dstack),sp	; Save stack pointer
 	ld	sp,@dstack	; (To prevent the possibility of
@@ -877,9 +890,9 @@ bnkdif:
 	pop	de
 	pop	hl
 	ld	sp,(@dstack)	; Restore stack
-  endif
+    endif
 
-  if use$dma$to$copy
+    if use$dma$to$copy
 
 	; Move using DMA
 
@@ -912,7 +925,7 @@ bnkdif:
 	ex	de,hl		;  and put it back in DE
 	pop	hl		; Restore destination
 	add	hl,bc		;  and advance it too
-  else
+    else
 
 	; Move via User-mode MMU PDRs
 
@@ -938,12 +951,12 @@ moveit:	ld	a,(de)		; Copy BC bytes from source
 	call	?usrsl
 	pop	af		; Restore current bank
 	call	?bnksl
-  endif
+    endif
 	xor	a		; Clear extended move flag
 	ld	(@xmflg),a
 	ret
 
-  if use$dma$to$copy
+    if use$dma$to$copy
 mvprog:	; DMA controller parameters
 mvdst:	defw	0000h		; Destination (low 12 bits)
 	defw	0000h		;  (high 12 bits)
@@ -951,8 +964,12 @@ mvsrc:	defw	0000h		; Source (low 12 bits)
 	defw	0000h		;  (high 12 bits)
 mvcnt:	defw	0000		; Byte count
 	defw	dma$descriptor	; DMA controller descriptor
-  endif ; use$dma$to$copy
+    endif ; use$dma$to$copy
+  endif ; not ldrbios
 
+  if ldrbios
+multio	equ	dummy
+  else
 ;
 ; MULTIO
 ;
@@ -970,11 +987,12 @@ multio:
 	push	af
 	ld	a,c
 	ld	(@cnt),a
-  if multi$sector$io
+    if multi$sector$io
 	ld	(@rwcnt),a
-  endif
+    endif
 	pop	af
 	ret
+  endif
 
 ;
 ; FLUSH
@@ -996,8 +1014,8 @@ flush:
 ;
 	common$segment
 
-?usrsl:
   if banked
+?usrsl:
 	ld	(@ubnk),a	; Save User-mode bank
 	ld	(@sbnk),a
 ;	ld	a,updr0		; Point MMU to User-PDR page 0
@@ -1005,6 +1023,7 @@ flush:
 	jr	selpdr
   endif
 
+  if banked
 ;
 ; SELMEM
 ;
@@ -1013,7 +1032,6 @@ flush:
 ;	All registers saved.
 ;
 selmem:
-  if banked
 	ld	(@cbnk),a	; Save new bank to current bank
 	ld	(@sbnk),a
 	ld	a,spdr0		; Point MMU to System-PDR page 0
@@ -1055,8 +1073,10 @@ selpdr:
 	pop	bc		;  and all registers
 	pop	de
 	pop	hl
-  endif
 	ret
+  else
+selmem	equ	dummy
+  endif
 
   if banked
 ;
@@ -1363,10 +1383,10 @@ cnv12:	ld	d,a		; Bank address to D
 jmp	equ	0c3h
 
 setjumps:
-  if banked
+    if banked
 	ld	a,tpa$bank
 	call	?bnksl
-  endif
+    endif
 	ld	a,jmp
 	ld	(warmboot),a
 	ld	(bdos),a
@@ -1465,6 +1485,12 @@ savccp:	dmapbw	00h,00100h	;  destination
 	dmapbw	00h,0E100h	;  source
 	defw	ccp$len		;  length (bytes)
 	defw	dma$descriptor
+
+movcmn:	dmapbw	01h,0C000h	;  destination (LxxE000h = P01C000h)
+	dmapbw	00h,common$base	;  source (loaded common P00E000h)
+	defw	common$size	;  length (bytes)
+	defw	dma$descriptor
+
     endif
 
 ;
@@ -1501,8 +1527,6 @@ ccp$fcb:
 	defs	16
 fcb$nr:	defb	0,0,0
 
-  endif	; not ldrbios
-
 ;
 ; DEVTBL
 ;
@@ -1514,6 +1538,32 @@ devtbl:
 	ld	hl,@ctbl
 	ret
 
+  else
+
+	; LDRBIOS doesn't need these
+
+devtbl	equ	dummy
+
+	extrn	conout		; LDRBIOS console output in CHARIO
+    if debug
+	extrn	const, conin	; LDRBIOS DEBUG needs these too
+    else
+const	equ	dummy
+conin	equ	dummy
+    endif
+
+list	equ	dummy
+auxout	equ	dummy
+auxin	equ	dummy
+listst	equ	dummy
+conost	equ	dummy
+auxist	equ	dummy
+auxost	equ	dummy
+time	equ	dummy
+
+  endif	; not ldrbios
+
+  if not ldrbios
 ;
 ; CONOUT
 ;
@@ -1767,6 +1817,7 @@ ci$next:
 ci$rdy:
 	pop	hl		; discard extra stack
 	jp	?ci
+  endif ; not ldrbios
 
 ;
 ; Utility Subroutines
@@ -2491,6 +2542,7 @@ popbdh:	pop	bc
 ?space:	ld	a,' '
 	jr	?putc
 
+  if (not ldrbios) or debug
 ;
 ; ?GECO
 ;
@@ -2528,6 +2580,7 @@ gchr2:	call	conin
 	jr	c,gchr3
 	sub	'a'-'A'
 gchr3:	jr	popbdh
+  endif
 
 ;
 	bank0$segment	; Accessed via routines in Bank 0
@@ -2540,15 +2593,18 @@ dskmsg:	defz	cr, lf, 'Disk error on '
 on$msg	equ	dskmsg+12	; points to " on" above
   endif
 
-	common$segment
-
+  if not ldrbios
 ;
 ; Character device flow-control flags
 ;
+	common$segment
+
 xofflist:			; Device XON/XOFF flags
 	rept	16
 	defb	-1
 	endm
+  endif
+
 ;
 ; BIOS Variables (all in COMMON)
 ;
@@ -2570,11 +2626,6 @@ xofflist:			; Device XON/XOFF flags
 
 ; ** Do not change the order of @DMA and @DBNK - used for KRNL$DEBUG
 @dma:	defs	2		; Current disk DMA transfer address
-
-  if 0
-bzero:	; (disabled) BOOT routine clears these to zero
-  endif
-	; They're now pre-initialised to zero
 @dbnk:	defb	0		; Current disk DMA bank
 @cbnk:	defb	0		; Current bank for CPU access
 @ubnk:	defb	0		; Current bank for User-mode access
@@ -2582,10 +2633,6 @@ bzero:	; (disabled) BOOT routine clears these to zero
 @msbnk:	defw	0		; Memory move Source Bank
 @mdbnk	equ	@msbnk+1	; Memory move Destination Bank
 @xmflg:	defb	0		; XMOVE flag (non zero for interbank move)
-
-  if 0
-bzerol	equ	$-bzero
-  endif
 
   if krnl$debug
 ;

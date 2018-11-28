@@ -20,6 +20,16 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+28-Nov-2018
+-----------
+
+Clean-up the LDRBIOS code included to build a CPMLDR3.HEX loader.  The aim
+is to replace the original loader on the CompactFlash boot sectors.  I'm
+still using Bill Shen's original boot routines though.  There are still
+a few outstanding defects with the replacement loader though - so don't
+use it yet.
+
+
 26-Nov-2018
 -----------
 

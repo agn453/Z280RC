@@ -42,7 +42,10 @@
 	public	biosdbg		; Entrypoint to debugger
 	public	@indbg		; Flag indicating debugger active
 
-	extrn	?bnksl,?usrsl	; Bank select
+	extrn	?bnksl		; Bank select
+    if banked
+	extrn	?usrsl		; User-mode bank select
+    endif
 	extrn	?phex,?phexhl	; Hexadecimal output
 	extrn	?phexm
 	extrn	?pmsg		; ASCII string output (NUL terminated)

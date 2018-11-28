@@ -26,8 +26,7 @@
 ;
 ;	13-Aug-2018	Tony Nicholson	Included an assembly-time definition
 ;					to alter the name of the system
-;					image.  TEST -> A:TEST.SYS or
-;					MINB -> A:MINB.SYS
+;					image.  TEST -> A:TEST.SYS
 ;					Also increased the stack space.
 ;
 
@@ -206,11 +205,7 @@ CPMFCB::
   ifdef	test
 	DEFB	0,'TEST    SYS',0,0,0,0,0,0
   else
-    ifdef minb
-	DEFB	0,'MINB    SYS',0,0,0,0,0,0
-    else
 	DEFB	0,'CPM3    SYS',0,0,0,0,0,0
-    endif
   endif
 	DEFW	0,0,0,0,0,0,0,0,0
 
@@ -220,11 +215,7 @@ OPENERR::
   ifdef test
 	DEFB	'TEST'
   else
-    ifdef minb
-	DEFB	'MINB'
-    else
 	DEFB	'CPM3'
-    endif
   endif
 	DEFB	'.SYS'
 	DEFB	CR,LF,'$'
@@ -235,11 +226,7 @@ READERR::
   ifdef test
 	DEFB	'TEST'
   else
-    ifdef minb
-	DEFB	'MINB'
-    else
 	DEFB	'CPM3'
-    endif
   endif
 	DEFB	'.SYS'
 	DEFB	CR,LF,'$'
@@ -256,7 +243,7 @@ SIGNON::
 	DEFB	'021182',0,0,0,0
 
 			;AGN - needs more stack-space
-	rept	32
+	rept	24
 	defb	'%%%%'
 	endm
 

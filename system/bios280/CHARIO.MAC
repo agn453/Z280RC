@@ -20,15 +20,26 @@
 ;					(This has a side-effect for
 ;					CP/M enabling/disabling printer
 ;					echo).
+;	28-Nov-2018	Tony Nicholson	Only use Z280 UART routines
+;					for LDRBIOS use (no device support)
 ;
 
 	maclib	CONFIG.LIB
 	maclib	Z280RCIO.LIB	; Define port addresses
 	maclib	MODEBAUD.LIB	; Define serial mode bits and baud rates
 
-	public	?cinit,?co,?cost
-	public	?ci,?cist
+	public	?cinit
+
+  if ldrbios
+	public	conout		; LDRBIOS uses only console output
+    if debug
+	public	const,conin	;  (unless DEBUG is also defined)
+    endif
+  else
+	public	?co,?cost	; Otherwise include multiple
+	public	?ci,?cist	;  device support
 	public	@ctbl
+  endif
 
 max$devices equ 1	; Only Z280 UART for now
 
@@ -75,9 +86,11 @@ ctrlz	equ	01ah		; CTRL-Z end-of-file character
 	common$segment	; All character I/O is in common memory
 
 ?cinit:
+  if not ldrbios
 	ld	a,c
 	cp	max$devices	; Valid device code? (only 1)
 	ret	nc		; No, return
+  endif
 
 	; Configure and Enable Console UART
 
@@ -91,16 +104,27 @@ ctrlz	equ	01ah		; CTRL-Z end-of-file character
 
 	ld	a,uart$en	; Enable Transmitter
 	out	(tcs),a
+
+  if ldrbios and (not debug)
+	xor	uart$en		; toggle to disable
+  endif
+
 	out	(rcs),a		; and Receiver
+
 	outjmp
 
 	ret
+
+  if not ldrbios
 
 ?ci:				; character input
 
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$input
+  else
+conin:
+  endif
 ci1:
 	call	?cist
 	jr	z,ci1		; wait for character ready
@@ -109,7 +133,7 @@ ci1:
 	ld	c,rdr
 ci2:	in	a,(c)		; get data
 
-  if debug
+    if debug
 	push	af
 	ld	a,(@indbg)	; If inside debugger, ignore <CTRL-P>
 	or	a
@@ -119,18 +143,24 @@ ci2:	in	a,(c)		; get data
 brktst:	pop	af
 	cp	ctrlp		; CTRL-P breaks to debugger
 	call	z,biosdbg
-  endif
+    endif
 	ret
 
+  if not ldrbios
 null$input:
 	ld	a,ctrlz		; return EOF (ctrl-Z) for NULL device
 	ret
+  endif
 
 ?cist:				; character input status
 
+  if not ldrbios
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$status
+  else
+const:
+  endif
 
 	call	iopuart
 	ld	c,rcs
@@ -143,10 +173,15 @@ null$status:
 	or	0ffh		; return indicating character available
 	ret
 
+  if ldrbios
+conout:
+  else
 ?co:				; character output
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$output
+  endif
+
 	ld	a,c
 	push	af		; save character from <C>
 co$spin:
@@ -165,9 +200,11 @@ null$output:
 	ret
 
 ?cost:				; character output status
+  if not ldrbios
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$status
+  endif
 
 	call	iopuart
 	push	bc
@@ -179,10 +216,12 @@ null$output:
 	or	0ffh
 	ret			; return true if ready
 
+  if not ldrbios
 @ctbl:	defb	'UART  '	; device 0, On-chip UART
 	defb	mb$in$out+mb$serial
 	defb	baud$none	; Fixed-speed 115200 bps 8O1
 
 	defb	0		; table terminator
+  endif
 
 	end

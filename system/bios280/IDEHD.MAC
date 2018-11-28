@@ -33,6 +33,7 @@
 ;	26-Nov-2018	Tony Nicholson	Common is now physically
 ;					contiguous with the TPA bank
 ;					so USE$DMA$TO$COPY TRUE now works
+;	28-Nov-2018	Tony Nicholson	Prune LDRBIOS to just HD$READ
 ;
 
 	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
@@ -76,7 +77,9 @@
 ;
 ; System Control Block variables
 ;
+  if not ldrbios
 	extrn	@ermde		; BDOS error mode
+  endif
 
 ;
 ; Utility routines in standard BIOS
@@ -84,7 +87,10 @@
 	extrn	?wboot		; warm boot vector
 	extrn	?pmsg		; print message @<HL> up to 00, saves <BC> & <DE>
 	extrn	?pderr		; print BIOS disk error header
+
+  if not ldrbios
 	extrn	?geco		; console input with echo
+  endif
 
 ;
 ;	Maximum disk sector size
@@ -616,13 +622,21 @@ hd$login:
 ;
 
 hd$read:
+  if not ldrbios
 	xor	a
+  endif
 	ld	hl,rd$msg
+
+  if ldrbios
+	; Include write routines if not LDRBIOS
+hd$write equ	hd$nop
+  else
+
 	jr	rw$common
 
 hd$write:
-  if	banked
-    if use$dma$to$copy
+    if	banked
+      if use$dma$to$copy
 	; Copy the sector to be written to common buffer using DMA
 	ld	a,(@dbnk)	; Source bank
 	ld	hl,(@dma)
@@ -641,7 +655,7 @@ hd$write:
 	ld	c,dal3		; Transfer using DMA3
 	ld	hl,dmapb
 	call	dmaxfr
-    else
+      else
 	ld	a,(@ubnk)	; Save old User-mode bank on stack
 	push	af
 	ld	a,(@dbnk)	; Copy buffer via User-mode PDRs
@@ -661,8 +675,8 @@ copywr:	ldup	a,(hl)
 
 	pop	af		; Restore User-mode PDRs
 	call	?usrsl
+      endif
     endif
-  endif
 	or	0ffh
 	ld	hl,wr$msg
 
@@ -675,6 +689,8 @@ copywr:	ldup	a,(hl)
 
 rw$common:
 	ld	(rwflag),a	; Save operation code
+  endif ; not ldrbios
+
 	ld	(op$name),hl	;  and message pointer
 
   if multi$sector$io
@@ -723,9 +739,11 @@ loopcmdrdy2:
 	xor	01000000b
 	jr	nz,loopcmdrdy2
 
+  if not ldrbios
 	ld	a,(rwflag)	; Read or Write?
 	or	a
 	jr	nz,ide$write	; Write
+  endif
 
 ide$read:
 	ld	a,020h		; Read command
@@ -788,8 +806,10 @@ copyrd:	ld	a,(de)
 	call	?usrsl
     endif
   endif
+
+  if not ldrbios
 	jr	ide$done	; Return Success
-;
+
 ide$write:
 	ld	a,030h		; CF Write command
 	out	(cfcmd),a
@@ -814,7 +834,8 @@ loopnotbusy:
 	in	a,(cfstat)	; Error? (bit 0 set)
 	and	00000001b
 	jr	nz,tryagain
-;
+  endif ; not ldrbios
+
 ide$done:
 	call	iopdef		; Point back to default I/O Page
 	xor	a		; Return goodstatus
@@ -824,13 +845,20 @@ ide$done:
 	ret
 ;
 tryagain:
+  if not ldrbios
 	ld	a,(@ermde)	; Suppress error messages?
 	cp	0ffh
 	jr	z,ide$error	; Return error to application
+  endif
 
 	call	?pderr
 	ld	hl,(op$name)
 	call	?pmsg
+  if ldrbios
+	ld	hl,halt$msg	; Halt with a message for LDRBIOS
+	call	?pmsg		;  read error
+stop:	jr	stop
+  else
 	ld	hl,er$msg	; Print "Retry (Y/N)?"
 	call	?geco
 	cp	'Y'
@@ -840,20 +868,28 @@ ide$error:
 	call	iopdef		; Back to default I/O page
 	xor	a		; Return a "Non recoverable media error"
 	or	1
-  if multi$sector$io
+    if multi$sector$io
 	ld	(@derflg),a
-  endif
+    endif
 	ret	
-
+  endif
 ;
+  if not ldrbios
 rwflag:
 	defs	1		; Read/write flag
+  endif
+
 op$name:
 	defw	rd$msg
 
 rd$msg:	defz	cr,lf,'Read'
+  if ldrbios
+halt$msg:
+	defz	' error on IDE/CF device. System Halted.'
+  else
 wr$msg:	defz	cr,lf,'Write'
 er$msg:	defz	' error on IDE/CF device. Retry (Y/N) ?'
+  endif
 
 ;
   if banked and use$dma$to$copy
