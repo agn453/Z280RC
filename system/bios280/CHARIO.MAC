@@ -29,19 +29,18 @@
 	maclib	MODEBAUD.LIB	; Define serial mode bits and baud rates
 
 	public	?cinit
-
-  if ldrbios
-	public	conout		; LDRBIOS uses only console output
-    if debug
-	public	const,conin	;  (unless DEBUG is also defined)
-    endif
-  else
-	public	?co,?cost	; Otherwise include multiple
-	public	?ci,?cist	;  device support
 	public	@ctbl
-  endif
+
+  if use$device$io
+	public	?co,?cost	; Use multiple
+	public	?ci,?cist	;  device support
 
 max$devices equ 1	; Only Z280 UART for now
+
+  else
+	public	conost,conout	; Only console I/O via Z280 UART
+	public	const,conin
+  endif
 
 	extrn	iopuart		; I/O Page select
 
@@ -86,7 +85,7 @@ ctrlz	equ	01ah		; CTRL-Z end-of-file character
 	common$segment	; All character I/O is in common memory
 
 ?cinit:
-  if not ldrbios
+  if use$device$io
 	ld	a,c
 	cp	max$devices	; Valid device code? (only 1)
 	ret	nc		; No, return
@@ -115,7 +114,7 @@ ctrlz	equ	01ah		; CTRL-Z end-of-file character
 
 	ret
 
-  if not ldrbios
+  if use$device$io
 
 ?ci:				; character input
 
@@ -133,7 +132,7 @@ ci1:
 	ld	c,rdr
 ci2:	in	a,(c)		; get data
 
-    if debug
+  if debug
 	push	af
 	ld	a,(@indbg)	; If inside debugger, ignore <CTRL-P>
 	or	a
@@ -143,10 +142,10 @@ ci2:	in	a,(c)		; get data
 brktst:	pop	af
 	cp	ctrlp		; CTRL-P breaks to debugger
 	call	z,biosdbg
-    endif
+  endif
 	ret
 
-  if not ldrbios
+  if use$device$io
 null$input:
 	ld	a,ctrlz		; return EOF (ctrl-Z) for NULL device
 	ret
@@ -154,7 +153,7 @@ null$input:
 
 ?cist:				; character input status
 
-  if not ldrbios
+  if use$device$io
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$status
@@ -173,13 +172,13 @@ null$status:
 	or	0ffh		; return indicating character available
 	ret
 
-  if ldrbios
-conout:
-  else
+  if use$device$io
 ?co:				; character output
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$output
+  else
+conout:
   endif
 
 	ld	a,c
@@ -200,10 +199,12 @@ null$output:
 	ret
 
 ?cost:				; character output status
-  if not ldrbios
+  if use$device$io
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$status
+  else
+conost:
   endif
 
 	call	iopuart
@@ -216,12 +217,11 @@ null$output:
 	or	0ffh
 	ret			; return true if ready
 
-  if not ldrbios
-@ctbl:	defb	'UART  '	; device 0, On-chip UART
+@ctbl:
+	defb	'UART  '	; device 0, On-chip UART
 	defb	mb$in$out+mb$serial
 	defb	baud$none	; Fixed-speed 115200 bps 8O1
 
 	defb	0		; table terminator
-  endif
 
 	end

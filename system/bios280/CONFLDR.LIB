@@ -42,6 +42,14 @@ use$dma$to$copy equ true	; TRUE to copy disk buffer to user buffer
 use$big$drm equ	true		; TRUE to allocate 1024 directory entries
 				; (only on the PARTN8 partitions E:..H:)
 
+  if ldrbios
+use$device$io equ false		; FALSE omits Character device support
+				; (MUST be FALSE for LDRBIOS - doesn't use SCB)
+  else
+use$device$io equ false		; FALSE maximises TPA space
+				; TRUE include character devices support
+  endif
+
 clock$set$support equ false	; TRUE to include time set support in CLOCK
 
 dma$burst$mode equ false	; TRUE burst mode/FALSE continuous mode DMA

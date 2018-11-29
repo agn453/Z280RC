@@ -135,17 +135,26 @@
 	; Routines in other modules
 
 	extrn	?cinit		; in CHARIO module
+	extrn	@ctbl		; in CHARIO module
 
   if not ldrbios
 	extrn	time		; in CLOCK module
-	extrn	@ctbl		; in CHARIO module
-	extrn	?ci, ?cist, ?co, ?cost
+	extrn	scb$base	; System Control Block in SCB module
+	extrn	@mxtpa		; Top of TPA in SCB module
 
 	; External data items in the SCB module
 
-	extrn	scb$base	; System Control Block
 	extrn	@civec, @covec, @aivec, @aovec, @lovec
-	extrn	@mxtpa		; Top of TPA
+  else
+time	equ	dummy		; No TIME in LDRBIOS
+  endif
+
+  if use$device$io
+
+	; Character device support in CHARIO module
+
+	extrn	?ci, ?cist, ?co, ?cost
+
   endif
 
 	; External DTBL entries
@@ -380,9 +389,9 @@ boot:
 	ld	hl,0011001111100000b	; Explicit disable of MMU
 	ld	c,mmcr
 	outw	(c),hl
+  endif
 
-	call	?cinit		; Initialise console only
-  else
+  if use$device$io
 ;
 ; Initialize Character devices
 ;
@@ -392,7 +401,12 @@ initc0:	push	bc
 	pop	bc
 	dec	c
 	jp	p,initc0
+  else
+	outjmp			; (there was an OUTW before this)
+	call	?cinit		; Initialise console only
+  endif
 
+  if not ldrbios
 	ld	hl,deflts	; Copy default character I/O
 	ld	de,@civec	; device vectors to the SCB
 	ld	bc,defltl
@@ -1144,8 +1158,7 @@ selmem	equ	dummy
 ; 080000	09..1F	0000-ffff	RAMdisk (accessed via DMA3)
 ;
 ; Common memory contains only the Hardware Dependent buffer
-; space, Resident BDOS and Resident parts of the BIOS - including
-; a disk "bounce" buffer at CMNBUF (512 bytes).
+; space, Resident BDOS and Resident parts of the BIOS.
 ;
 ;
 ; Memory Management Unit PDR format
@@ -1524,6 +1537,8 @@ ccp$fcb:
 	defs	16
 fcb$nr:	defb	0,0,0
 
+  endif
+
 ;
 ; DEVTBL
 ;
@@ -1535,32 +1550,34 @@ devtbl:
 	ld	hl,@ctbl
 	ret
 
-  else
+  if not use$device$io
 
-	; LDRBIOS doesn't need these
+	; No character device I/O support uses only
+	; the console I/O routines in CHARIO module.
+	; Other device support discards output and
+	; returns end-of-file (CTRL-Z) for input.
 
-devtbl	equ	dummy
-
-	extrn	conout		; LDRBIOS console output in CHARIO
-    if debug
-	extrn	const, conin	; LDRBIOS DEBUG needs these too
-    else
-const	equ	dummy
-conin	equ	dummy
-    endif
+	extrn	conost,conout
+	extrn	const, conin
 
 list	equ	dummy
 auxout	equ	dummy
-auxin	equ	dummy
-listst	equ	dummy
-conost	equ	dummy
-auxist	equ	dummy
-auxost	equ	dummy
-time	equ	dummy
 
-  endif	; not ldrbios
+	common$segment
 
-  if not ldrbios
+ctrlz	equ	01ah		; CTRL-Z end-of-file character
+
+auxin:	ld	a,ctrlz
+	ret
+
+listst:
+auxist:
+auxost:
+	or	0FFh		; Return TRUE to indicate
+	ret			;  device ready
+
+  else
+
 ;
 ; CONOUT
 ;
@@ -1814,7 +1831,8 @@ ci$next:
 ci$rdy:
 	pop	hl		; discard extra stack
 	jp	?ci
-  endif ; not ldrbios
+
+  endif ; use$device$io
 
 ;
 ; Utility Subroutines
@@ -1965,7 +1983,9 @@ dmasx:	pop	hl
 	; The DMA controller is doing its thing now
 
 dma$in$progress:
-	outjmp			; Do nothing for about a microsecond
+	nop			; Do nothing for about a microsecond
+	nop
+	nop
 	inw	hl,(c)		; Read DMA Transaction Description register
 	bit	4,l		; Has the Terminal Count (TC) bit been set?
 	jr	z,dma$in$progress ; No, busy wait until it completes
@@ -2044,7 +2064,6 @@ pshiop:
 ;
 ; Disk I/O interface routines
 ;
-
 	bank0$segment	; BDOS calls these from Bank 0
 
 ;
@@ -2154,7 +2173,6 @@ setbnk:
 ;	in <HL>.  If no skew table (<DE>=0) then
 ;	returns physical=logical.
 ;
-	common$segment	; Put this in common
 
 sectrn:
 	ld	l,c
@@ -2590,7 +2608,7 @@ dskmsg:	defz	cr, lf, 'Disk error on '
 on$msg	equ	dskmsg+12	; points to " on" above
   endif
 
-  if not ldrbios
+  if use$device$io
 ;
 ; Character device flow-control flags
 ;
@@ -2647,26 +2665,21 @@ xfr$msg: defz	cr, lf, 'DMAXFR using DMA'
 bad$dma$port: defz ' BAD PORT='
 cnt$msg: defz	' count '
 sel$msg: defz	cr, lf, 'SELMEM Select Bank '
-  endif ;
+
+  endif ; krnl$debug
 
 ;
-; Align Common memory to a Word (even address) boundary
+;	Disk I/O sector buffer
 ;
-	common$segment
-
-alignw	equ ($ - bios) and 0001h
-
-  if alignw ne 0
-	defs	1
-  endif
-
   if idehd or ramdisk	; Define disk sector buffer here
-			;  to ensure it is on an even address
+
     if banked
 
-	public	cmnbuf
+	bank0$segment	; This can be in Bank 0 with Disk I/O routines
 
-cmnbuf:	defs	512
+	public	bk0buf
+
+bk0buf:	defs	512
 
     endif
   endif
@@ -2680,14 +2693,11 @@ cmnbuf:	defs	512
 
 	public	@dstack		; Show this in LINK map
 
-    if debug
 	; Marked with D to see how much is used'
 	defb	'Debug StackDDDDDDDDDDDDDDDDDDDDD'
 	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
 	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
-    else
-	defs	48*2
-    endif
+
 @dstack: defs	2
   endif
 
@@ -2698,12 +2708,9 @@ cmnbuf:	defs	512
 
 	public	@tstack		; Show this in LINK map
 
-    if debug
 	defb	'Temporary BIOS StackTTTTTTTTTTTT'
 	defb	'TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT'
-    else
-	defs	32*2		; 32-level stack
-    endif
+
 @tstack:
 	defs	2
   endif
@@ -2714,12 +2721,10 @@ cmnbuf:	defs	512
 
 	public	@stack		; Show this in LINK map
 
-  if debug
 	defb	'System-mode StackSSSSSSSSSSSSSSS'
 	defb	'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS'
+  if 0 ; reduce stack to 32 words
 	defb	'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS'
-  else
-	defs	48*2
   endif
 
 @stack:
@@ -2734,13 +2739,9 @@ cmnbuf:	defs	512
 
 	public	@ustack		; Show this in LINK map
 
-    if debug
 	defb	'User-mode StackUUUUUUUUUUUUUUUUU'
 	defb	'UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU'
 	defb	'UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU'
-    else
-	defs	48*2
-    endif
 
 @ustack:
   endif

@@ -23,7 +23,14 @@ Modification History (in reverse chronological order):
 29-Nov-2018
 -----------
 
-Clean-up the conditional code to build a CPMLDR3.HEX loader. Now the
+Squeeze as much as possible out of the Banked system common memory
+to maximise the size of the CP/M transient program area - resulting in
+61KB free for user programs.  There's a new configuration setting to
+remove the Character I/O device support in BIOSKRNL and CHARIO modules.
+I've defaulted USE$DEVICE$IO to FALSE to only use the Z280 UART console
+(and free up common memory).
+
+Also clean-up the conditional code to build a CPMLDR3.HEX loader. Now the
 settings in the CONFLDR.LIB configuration correctly build the aforementioned
 loader that you can write to the CompactFlash boot tracks using the inbuilt
 ZZMON monitor.  Just upload the Intel Hex format file directly (e.g. using

@@ -11,7 +11,7 @@
 ; This date is included in the sign-on message
 
 build$date macro
-	defb	'26-Nov-2018'
+	defb	'29-Nov-2018'
 	endm
 
 true	equ	-1
@@ -41,6 +41,14 @@ use$dma$to$copy equ true	; TRUE to copy disk buffer to user buffer
 				; (only applies when BANKED is TRUE)
 use$big$drm equ	true		; TRUE to allocate 1024 directory entries
 				; (only on the PARTN8 partitions E:..H:)
+
+  if ldrbios
+use$device$io equ false		; FALSE omits Character device support
+				; (MUST be FALSE for LDRBIOS - doesn't use SCB)
+  else
+use$device$io equ false		; FALSE maximises TPA space
+				; TRUE include character devices support
+  endif
 
 clock$set$support equ true	; TRUE to include time set support in CLOCK
 

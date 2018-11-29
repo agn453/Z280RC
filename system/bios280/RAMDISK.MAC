@@ -81,7 +81,7 @@ rampg$end equ 2000h	; Page end address (high 16-bits) + 1
 
     if banked
 	extrn	?usrsl, @ubnk
-	extrn	cmnbuf		; Common memory buffer
+	extrn	bk0buf		; Sector buffer in bank 0
     endif
 
 	extrn	?pmsg, ?getch
@@ -392,8 +392,7 @@ rd$read:
     if banked
 	xor	a
 	ld	(rwflag),a	; Flag cleared (for READ)
-	inc	a		; Common is TPA bank
-	ld	hl,cmnbuf	; Read into common buffer
+	ld	hl,bk0buf	; Read into bank 0 sector buffer
 	call	phyahl
     else
 	ld	a,(@dbnk)	; Read directly into bank 0
@@ -414,10 +413,10 @@ rd$write:
 	call	?usrsl		;  from the user buffer to common
 
 	ld	bc,hstsiz	; byte count
-	ld	de,cmnbuf	; dest
+	ld	de,bk0buf	; dest
 	ld	hl,(@dma)	; source
 
-copywr:	ldup	a,(hl)		; Copy data to cmnbuf
+copywr:	ldup	a,(hl)		; Copy data to bk0buf
 	ld	(de),a
 	inc	de
 	inc	hl
@@ -428,8 +427,8 @@ copywr:	ldup	a,(hl)		; Copy data to cmnbuf
 
 	pop	af		; Restore User-mode PDRs
 	call	?usrsl
-	ld	a,tpa$bank	; Common is in TPA bank
-	ld	hl,cmnbuf	; Write from cmnbuf
+	xor	a
+	ld	hl,bk0buf	; Write from bank 0 sector buffer
 	call	phyahl
     else
 	ld	a,(@dbnk)
@@ -483,7 +482,7 @@ rw$common:
 	call	?usrsl
 
 	ld	bc,hstsiz	; byte count
-	ld	de,cmnbuf	; source
+	ld	de,bk0buf	; source
 	ld	hl,(@dma)	; dest
 
 copyrd:	ld	a,(de)
