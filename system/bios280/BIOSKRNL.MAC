@@ -858,7 +858,7 @@ move:
   if banked
 	ld	a,(@xmflg)	; Is it an extended move?
 	or	a
-	jp	nz,bnkdif	; Yes
+	jr	nz,bnkdif	; Yes
   endif
 
 	ex	de,hl		; No, just block move in the current
@@ -1134,7 +1134,7 @@ selmem	equ	dummy
 ; 001400	00	1400-dfff	Banked part of CP/M BDOS/BIOS and
 ;					and CP/M directory buffers
 ; 00e000	00	e000-ffff	CPMLDR loads Common Memory here.
-;					This is copied to 01e000 by the
+;					This is copied to 01c000 by the
 ;					?BOOT: routine where it becomes
 ;					the CP/M Common Area.
 ;
@@ -1462,7 +1462,7 @@ setjumps:
       if ccp$in$mem
 
 	; CCP.COM was just read into 010100..010D7Fh
-	; Save a copy to the CCP$COPY$BANK using DMA
+	; Save a copy to 000100..000D7Fh using DMA
 
 	ld	c,dal3
 	ld	hl,savccp	; Point to DMA parameter block
@@ -1479,12 +1479,12 @@ no$ccp:
 	ex	de,hl
 	call	?pmsg
 	call	?getch		; get a character
-	jp	?ldagain	; and try again
+	jr	?ldagain	; and try again
 
     if	banked
 
 	; DMA Parameter block to restore CCP from bank 0 to bank 1
-	; (The ?LDCCP routine loads the CCP into Bank 0)
+	; (The ?LDCCP routine loads the CCP into Bank 1)
 
 rstccp:	dmapbw	00h,0E100h	;  destination (L010100h = P00E100h)
 	dmapbw	00h,00100h	;  source (L000100h = P000100h)
@@ -1998,10 +1998,10 @@ dma$in$progress:
 	jr	z,dma$done	; Yes
 
 	enter$debug	<'DMA signalled TC but count not zero'>
-  endif
 
 dma$done:
 	inc	c		; Point back to DMA TDR
+  endif
 	ld	hl,0000000000000000b
 	outw	(c),hl		; Write zero to it (disables the channel)
 

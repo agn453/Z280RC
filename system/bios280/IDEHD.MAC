@@ -183,7 +183,7 @@ ide00:
 	defw	0ffffh		; hashing table disabled
 	defb	0
   else
-	; IDE0 partition 0 (sectors 0..63 - first track reserved for boot)
+	; IDE0 partition 0 (tracks 0..63 - first track reserved for boot)
     if use$disk$macros
 	dph	0,dpb0,0	; No translation table, permanently mounted
     else
@@ -643,7 +643,7 @@ hd$write:
 
 	xor	a		; Destination bank is sector
 	ld	hl,bk0buf	;  buffer in bank 0
-	call	phyahl
+;	call	phyahl		; (physical address same as logical)
 	call	cnv12
 	ld	(dstl),hl
 	ld	(dsth),de
@@ -691,7 +691,7 @@ rw$common:
   if multi$sector$io
 	ld	a,1		; Force multi-sector OFF
 	ld	(@cnt),a	; (IDEHD doesn't support it due to
-	ld	(@rwcnt),a	;  common memory transfer buffer)
+	ld	(@rwcnt),a	;  bank 0 disk transfer buffer)
   endif
 	
 more$retries:
@@ -763,7 +763,7 @@ readdrq:
 	; Copy the sector just read to the destination address using DMA
 	xor	a		; Source bank is sector
 	ld	hl,bk0buf	;  buffer in bank 0
-	call	phyahl
+;	call	phyahl		;  (physical address same as logical address)
 	call	cnv12
 	ld	(srcl),hl
 	ld	(srch),de

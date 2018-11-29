@@ -1,4 +1,4 @@
-; Make .COM file boot loaders from .SYS files
+; Make .COM boot loaders from .SYS files
 pip CPM3BNK1.COM=BOOTSYS.BIN,CPM3BNK1.SYS
 pip CPM3BANK.COM=BOOTSYS.BIN,CPM3BANK.SYS
 pip CPM3NBNK.COM=BOOTSYS.BIN,CPM3NBNK.SYS
