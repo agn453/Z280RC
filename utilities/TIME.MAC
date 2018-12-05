@@ -20,10 +20,7 @@
 ;  Z280RC
 ;
 ;  Accesses the DS1302 Trickle Charge Timekeeping chip at
-;  IO Port Address 00xxA2.  There is currently a Non-banked
-;  only restriction until the banked BIOS is completed due
-;  to User mode privileged requirements for changing the
-;  I/O bank via the LDCTL instruction.  Assemble with ZSM4.
+;  IO Port Address 00xxA2.  Assemble with ZSM4.
 ;
 ;  Author:	Tony Nicholson
 ;  Date:	15-May-1988
@@ -51,6 +48,7 @@
 ;		As well as alphabetic month names,
 ;		accept numeric month digit too.
 ;  12-Jul-2018	Add Z280RC support for DS1302 timekeeper.
+;  05-Dec-2018	Remove Non-banked restriction on Z280RC.
 ;
 ;
 FALSE	EQU	0
@@ -80,17 +78,6 @@ WATCH	equ	0A800h		; DS1216 SmartWatch address
 WATCHP	equ	0		; I/O Page 00xx
 WATCH	equ	0a2h		; DS1302 Timekeeper address
 
-BANK$SUPPORT equ false		; TRUE to enable User mode support
-
-; Banked memory runs in User mode, so need to do a system call
-; to select the IO Page for the DS1302 timekeeper chip.
-
-    if BANK$SUPPORT	;***Not yet implemented***
-
-sc$IOPage equ	0	; System Call to select IOPage
-
-    endif
-
 ;
 ; Z280 MPU work-around for OUTJMP defect which may be
 ; triggered by a cache pipe-line fault for an I/O write
@@ -98,6 +85,7 @@ sc$IOPage equ	0	; System Call to select IOPage
 ; external write with wait states).
 ;
 outjmp	macro
+	nop
 	nop
 	nop
 	nop
@@ -156,12 +144,7 @@ az280:
 	jr	nz,versok	;Only Banked CP/M-Plus
   endif
   if	Z280RC
-	ld	(sysmod),a	;Non-banked is in System mode
-    if	not BANK$SUPPORT	; and Banked is in User mode
-	jr	z,versok	;Only allow Non-banked
-    else
 	jr	versok		;It's all ok to proceed
-    endif
   endif
 
 wrongv:	ld	de,badver
@@ -1023,16 +1006,6 @@ selRTCiopage::
 	push	bc
 	push	af
 
-	ld	a,(sysmod)	;System mode?
-	or	a
-	jr	z,sel1		;Yes, can execute privileged instructions
-
-    if BANK$SUPPORT
-	ld	hl,watchp	;Watch IOpage
-	sc	sc$IOPage	;No, User mode must do a system call
-	ld	(savctl),hl	;Save previous I/O Page
-	jr	sel2
-    endif
 sel1:
 	ld	c,08h		;Select the I/O page register
 	ldctl	hl,(c)		;Fetch and save the current page
@@ -1051,16 +1024,6 @@ restoreIOpage::
 	push	bc
 	push	af
 	ld	hl,(savctl)	;Restore the I/O page register
-	ld	a,(sysmod)
-	or	a
-	jr	z,rest1		;Non-Banked is in System mode
-
-    if BANK$SUPPORT
-	sc	sc$IOPage	;Banked means we are in User mode
-	jr	rest2
-    endif
-
-rest1:
 	ld	c,08h
 	ldctl	(c),hl
 
@@ -1382,8 +1345,6 @@ year::	defs	1		;Year
   if	Z280RC
 z280msg:
 	db	'Requires a Z280 MPU',13,10,'$'
-sysmod::
-	defs	1		;System (0) or User Mode (1) flag
 savctl::
 	defs	2		;Saved IOPage register
   endif	; Z280RC
