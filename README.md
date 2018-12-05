@@ -20,6 +20,21 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+05-Dec-2018
+-----------
+
+Updated the DS1302 timekeeper chip TIME program (in the utilities directory)
+to support a Banked system (this makes adjusting the time-of-day easier
+that using the CP/M-Plus DATE command).
+
+Interrupt and Trap handling using Interrupt Mode 3 has been tested for
+System Calls and error traps (divison by zero, divide quotient exceptions,
+and memory access violations).  Device interrupts are not yet implemented.
+Set the INT$ENABLED equate to TRUE to enable this in the configuration
+file (CONFINT8.LIB is supplied with DEBUG still enabled). CPM3INT8.SYS is
+a bootable system image with this feature active.
+
+
 29-Nov-2018
 -----------
 

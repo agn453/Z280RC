@@ -17,23 +17,23 @@ build$date macro
 true	equ	-1
 false	equ	not true
 
-debug	equ	false		; TRUE to include BIOSDBG module
+debug	equ	true		; TRUE to include BIOSDBG module
 ldrbios equ	false		; TRUE to generate Loader BIOS 
-banked	equ	false		; TRUE for Banked memory
+banked	equ	true		; TRUE for Banked memory
 cache$on equ	true		; TRUE to enable on-chip cache for Instr/Data
 multi$sector$io equ false	; TRUE to support MULTIO (not tested)
 
-; Interrupt mode and System/User mode not yet implemented
-int$enabled equ	false		; TRUE to enable interrupts (mode 3)
+int$enabled equ	true		; TRUE to enable interrupts (mode 3)
+				; and traps
 
 krnl$debug equ	false		; TRUE to enable BIOSKRNL debug output
 				; for disk I/O and memory moves.
 
 idehd	equ	true		; Built-in IDE CompactFlash disk
-partn8	equ	false		; TRUE for extra drives E:..H:
+partn8	equ	true		; TRUE for extra drives E:..H:
 ramdisk equ	true		; and RAMDISK drive M: (uses top 1.5Mb of RAM)
 
-use$disk$macros equ true	; TRUE use DPH and DPB macros in CPM3M80.LIB
+use$disk$macros equ false	; TRUE use DPH and DPB macros in CPM3M80.LIB
 				; FALSE DPH and DPB are manually specified
 				; in the disk modules.
 use$dma$to$copy equ true	; TRUE to copy disk buffer to user buffer
@@ -50,7 +50,7 @@ use$device$io equ false		; FALSE maximises TPA space
 				; TRUE include character devices support
   endif
 
-clock$set$support equ false	; TRUE to include time set support in CLOCK
+clock$set$support equ true	; TRUE to include time set support in CLOCK
 
 dma$burst$mode equ false	; TRUE burst mode/FALSE continuous mode DMA
 
@@ -71,6 +71,9 @@ config	macro
 	build$date
 	defb	cr,lf
   	defb	'Built with '
+  if int$enabled
+	defb	'Interrupts '
+  endif
   if debug
 	defb	'Debug '
   endif
@@ -89,6 +92,9 @@ config	macro
 	defb	'MOVE-w/MMU '
     endif
   endif
+  if partn8 and use$big$drm
+	defb	'BigDirE-H '
+  endif
   if dma$burst$mode
 	defb	'Burst-DMA '
   else
@@ -100,7 +106,9 @@ config	macro
     endif
   endif
 	defb	cr,lf
+  if not ldrbios
 	defb	'Drives '
+  endif
   if idehd
     if ldrbios
 	defb	'CompactFlash A: '
@@ -116,7 +124,7 @@ config	macro
 	defb	'RamDisk M:'
   endif
 	defz	cr,lf
-	endm ; config
+	endm ; signon
 
   if dma$burst$mode
 dma$descriptor equ 1000000010000000b	; Burst mode for memory to memory
@@ -131,7 +139,7 @@ dma$descriptor equ 1000000010000000b	; Burst mode for memory to memory
 		; end-of-process signaled (bit 0)
   else
 dma$descriptor equ 1000000100000000b	; Continuous mode
-;dma$descriptor equ 1000000000000000b	; Singe transaction mode (not used)
+;dma$descriptor equ 1000000000000000b	; Single transaction mode (not used)
   endif
 
 ; Commonly used CP/M entry points

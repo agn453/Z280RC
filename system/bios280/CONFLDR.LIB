@@ -11,7 +11,7 @@
 ; This date is included in the sign-on message
 
 build$date macro
-	defb	'29-Nov-2018'
+	defb	'05-Dec-2018'
 	endm
 
 true	equ	-1

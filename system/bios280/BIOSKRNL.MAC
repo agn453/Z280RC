@@ -73,6 +73,8 @@
 ;	28-Nov-2018	Tony Nicholson	Prune out unnecessary code
 ;					for the LDRBIOS (only need
 ;					disk read and console output)
+;	05-Dec-2018	Tony Nicholson	Interrupts with System/User
+;					mode
 ;
 	page
 	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
@@ -460,9 +462,14 @@ initd1:	pop	bc		; Next drive
 		; Stack Overflow Warning disabled (bit 0 OFF)
 	ld	c,tcr
 	ldctl	(c),hl
-  endif ; banked
 
-  if banked
+	ld	hl,1400h	; Clear base memory in Bank 0
+clr00:	dec	hl		; (addresses 000000..0013ff)
+	ld	(hl),0
+	ld	a,h
+	or	l
+	jr	nz,clr00
+	
     if int$enabled
 	ld	hl,itvt		; Copy the Interrupt and Trap
 	ld	de,1000h	;  Vector table to 001000h
@@ -475,16 +482,8 @@ initd1:	pop	bc		; Next drive
 
 	im	3		; Enable Mode 3 interrupts
 	ei
-    else
-
-	ld	hl,1400h	; Clear base memory in Bank 0
-clr00:	dec	hl		; (addresses 000000..0013ff)
-	ld	(hl),0
-	ld	a,h
-	or	l
-	jr	nz,clr00
-	
     endif ; int$enabled
+
   endif ; banked
 
 	ld	hl,signon
@@ -583,24 +582,77 @@ itvtl	equ	$-itvt
 ;
 ; Interrupt and Trap Handling routines
 ;
-	common$segment
+	common$segment	; Only common memory is guaranteed resident
+
 ;
 ; System Call
 ;
 ;	Process SC instruction
 ;
-; Enter with Function number (16 bit) on top of stack
-;	followed by the MSR register contents (16 bit)
-;	and return address.
+;	Enter with Function number (16 bit) on top of stack
+;	followed by the MSR register contents (16 bit) and
+;	return address.  System-Mode is in effect (so memory
+;	references are using SYS-MMU mappings and the system
+;	stack is active).
 ;
 syscall:
-	pop	(@sysfn)	; Pop function number
-;
-; NOT YET IMPLEMENTED
-;
-	retil
+	ld	(hlsav),hl	; Save HL
+	ld	(asav),a	; Save A
+	pop	hl		; Get Function number
+	ld	a,l		; Check function code (low byte)
+	cp	max$sc		; Is it less than the maximum?
+	jr	nc,sctrap	; No, error trap
+	add	a,h		; High byte should be 256-function
+	jr	nz,sctrap	; Invalid system call function
+	ld	h,a		; Zero to high byte
+	add	hl,hl		; Index into SCTAB
+	ldw	hl,(hl+sctab)	; Fetch SC handler routine address
+	push	sysret		; Simulate a call by pushing "return address"
+	push	hl		; and the routine address
+	ld	a,(asav)	; Restore A
+	ld	hl,(hlsav)	; and HL
+xret:	ret			; Call SC handling routine
+sysret:
+	retil			; Return after processing SC
 
-@sysfn:	defs	2
+sctrap:	push	hl		; Save SC function
+	ld	hl,scmsg	; Output "Illegal System Call" to console
+	call	?pmsg
+	pop	hl
+	call	?phexhl		; Output bad function code
+	ld	hl,atmsg	; " at "
+	call	?pmsg
+	pop	hl		; Discard saved MSR
+	pop	hl		; Where we were called from (User-mode)
+	lda	hl,(hl-4)	; Backtrack 4 bytes (length of SC instruction)
+	call	?phexahl	; Output it as 24-bit address in current bank
+
+warm:	ld	hl,warmmsg	; Announce "Warm boot"
+	call	?pmsg
+	call	?getch		; Pause until character entered
+	jp	?wboot		; Warm boot
+
+;
+; System Call vector table
+;
+sctab:	defw	xret		; SC 0000 reserved
+	defw	sumode		; SC FF01 enter system-mode if A=0
+
+max$sc	equ	($-sctab)/2	; Number of entries in SCTAB
+
+sumode:
+	; HL is already saved by the SYSCALL routine
+
+	pop	hl		; Discard SYSRET address from stack
+	pop	hl		; Get Master Status Register from stack
+	res	6,h		; Select system-mode (bit 14 of HL OFF)
+	or	a		; If A=0 then System-mode
+	jr	z,modret
+	set	6,h		; Set user-mode (bit 14 of HL ON)
+modret:	ld	(@sumode),a	; Save current-mode
+	push	hl		; Push (modified) MSR back to stack
+	ld	hl,(hlsav)	; Restore HL
+	retil			; Return from SC SC$SUMODE
 
 ;
 ; Access Violation Trap
@@ -609,13 +661,14 @@ acctrp:	pop	hl		; Discard MSR from stack
 	ld	hl,accmsg	; Output "Access Violation"
 	call	?pmsg		; (also selects the UARTP I/O page)
 	pop	hl
-	call	?phexhl		; Followed by the address in hex
+	call	?phexahl	; Followed by the 24-bit address in hex
 	ld	hl,pdrmsg	; then the MMU PDR in hex
 	call	?pmsg
 	ld	l,mmup		; Select the MMU I/O page
 	ld	c,iop
 	ldctl	(c),hl
-	inw	hl,(mmcr)	; Get the MMU Master Control Register
+	ld	c,mmcr
+	inw	hl,(c)		; Get the MMU Master Control Register
 	ld	a,l
 	and	00011111b	; Lower 5 bits is PFI
 	call	?phex
@@ -686,11 +739,8 @@ priabo:	pop	af		; Restore AF
 	ld	hl,atmsg
 	call	?pmsg
 
-	ld	a,(@cbnk)	; Output last bank selected in User-mode
-	call	?phex
-
 	pop	hl		; Get trap address
-	call	?phexhl		; Output Address
+	call	?phexahl	; Output 24-bit address in current bank
 	ld	a,':'		; Output a colon
 	call	?putc
 	ld	b,3		; Output 3 bytes of Op-Code in hex
@@ -734,7 +784,7 @@ divtrp:	pop	hl		; Discard MSR from stack
 divtrp1:
 	call	?pmsg		; Output message
 	pop	hl
-	call	?phexhl		; Followed by the address in hex
+	call	?phexahl	; Followed by the 24-bit address in hex
 	jr	iabort		; Abort via Warm-Boot
 
 ;
@@ -744,15 +794,19 @@ stotrp:	pop	hl		; Discard MSR from stack
 	ld	hl,stomsg	; Message for "Stack Overflow"
 	jr	divtrp1
 
+warmmsg:
+	defz	cr,lf,'Press a key to warm boot'
+scmsg:	defz	cr,lf,'%SYSCALL-E Bad System Call fn='
 nmimsg:	defz	cr,lf,'*NMI'
 primsg:	defz	cr,lf,'Privileged instruction MSR='
-atmsg:	defz	' at '
 dv0msg: defz	cr,lf,'Divide by 0 at '
+atmsg	equ	$-5	; points to ' at '
 ovfmsg:	defz	cr,lf,'Divide Overflow at '
 stomsg:	defz	cr,lf,'System Stack Overflow at '
 accmsg:	defz	cr,lf,'Access Violation'
 pdrmsg:	defz	' using PDR '
 
+asav:	defs	1
 hlsav:	defs	2
 msrsav:	defs	2
 
@@ -2412,6 +2466,12 @@ diskwr	equ	dummy
 ;
 	common$segment
 
+  if banked and int$enabled
+?phexahl:
+	ld	a,(@cbnk)	; Print current bank too
+	call	?phex		;  for interrupt/trap errors
+  endif
+
 ?phexhl:
 	push	af
 	ld	a,h
@@ -2723,7 +2783,8 @@ bk0buf:	defs	512
 
 	defb	'System-mode StackSSSSSSSSSSSSSSS'
 	defb	'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS'
-  if 0 ; reduce stack to 32 words
+
+  if int$enabled ; extra stack to 48 words
 	defb	'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS'
   endif
 

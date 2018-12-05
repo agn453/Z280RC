@@ -103,7 +103,7 @@ biosdbg:
 	or	a		; Are we in System-mode (=0)?
 	jr	z,bd00		; Yes
 
-      if 0 ; Only System-mode for now
+      if int$enabled
 	xor	a		; No, then enter System-mode
 	sc	sc$sumode
 
@@ -113,7 +113,7 @@ biosdbg:
 	ld	(spsave),sp	; We just switched into System-mode
 				; so we now can save the System-SP
 	jr	bd01
-      endif ; 0
+      endif ; int$enabled
 
 bd00:	ldctl	hl,usp		; We entered in System-mode, save User-SP
 	ld	(uspsav),hl
@@ -147,9 +147,9 @@ ge01:	ld	a,(susave)	; and System/User-mode state
 	or	a		; Do we need to change it?
 	jr	z,ge02		; No
 
-      if 0	; Only System-mode for now
+      if int$enabled
 	sc	sc$sumode
-      endif ;0
+      endif ; int$enabled
 
 ge02:
 	ld	a,(usrsav)	; Restore User-mode bank

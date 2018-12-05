@@ -2,7 +2,7 @@
 ;
 ; Z280RCIO.LIB  -  Z280RC Hardware I/O Port equates
 ;
-; Last edited: 18-Jul-2018
+; Last edited: 05-Dec-2018
 
 ;---------------------------------
 ;
@@ -225,5 +225,13 @@ X$month	aset	X$month-1
     endif
   endm ; irp
 	endm ; cpmdate
+
+  if int$enabled
+;
+; System call function codes
+;
+sc$dummy equ	00000h
+sc$sumode equ	0FF01h	; A=0 enter System-mode else User-mode
+  endif
 
 	.list

@@ -4,6 +4,7 @@ NBNKBIOS.SUB
 BANKBIOS.SUB
 BNK1BIOS.SUB
 BNK8BIOS.SUB
+INT8BIOS.SUB
 ; Make *.SYS files loaders
 SYSCOM.SUB
 ; Create new CRC checksum file

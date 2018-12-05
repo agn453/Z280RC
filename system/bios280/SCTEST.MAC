@@ -1,0 +1,49 @@
+	.z280
+	cseg
+
+;
+; Test the Interrupts and Traps are working
+;
+
+int$enabled equ -1
+
+	maclib	Z280RCIO.LIB
+
+bdos	equ	0005h
+
+$print	equ	9
+$conin	equ	1
+
+start:	ld	de,msg
+	ld	c,$print
+	call	bdos
+
+	ld	c,$conin
+	call	bdos
+
+	cp	'0'
+	jr	nz,test1
+
+test0:	ld	hl,1234h
+	div	hl,0		; divide by 0
+	jp	0
+
+test1:	cp	'1'
+	jr	nz,test2
+
+	ld	hl,5678h
+	div	hl,130		; quotient outside range -128 to 127
+				; should give division exception
+	jp	0
+
+test2:
+	sc	1234h
+	jp	0
+
+msg:	defb	13,10,'Testing interrupt traps'
+	defb	13,10,'Select 0=Divide by 0'
+	defb	13,10,'       1=Divide exception'
+	defb	13,10,'    or 2=Bad System Call function'
+	defb	13,10,10,'Choice ? $'
+
+	end	start
