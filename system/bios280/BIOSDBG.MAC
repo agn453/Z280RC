@@ -292,13 +292,13 @@ setbnk:	push	af		; Save bank (clobbered by ?usrsl)
 
 bankerr:
 	ld	hl,bankerrmsg
-	call	?pmsg
-	jr	prompt
     else
 nobank:	ld	hl,nonbankedmsg
+    endif
+
+pmsg$prompt:
 	call	?pmsg
 	jr	prompt
-    endif
 
 registers:
 	ld	hl,regmsg	; Display all register values
@@ -327,8 +327,7 @@ showlp:	inc	hl
 	ex	de,hl
 	djnz	showlp
 	ex	de,hl
-	call	?pmsg
-	jp	prompt
+	jr	pmsg$prompt
 
     if banked
 showphys:
@@ -641,8 +640,7 @@ popper:
 	pop	hl		; Clean up stack
 parmerr:
 	ld	hl,parmerrmsg	; Output "Invalid parameter"
-	call	?pmsg
-	jp	prompt
+	jp	pmsg$prompt
 
     if banked
 bankerrmsg:

@@ -11,7 +11,7 @@
 ; This date is included in the sign-on message
 
 build$date macro
-	defb	'05-Dec-2018'
+	defb	'07-Dec-2018'
 	endm
 
 true	equ	-1
@@ -39,8 +39,9 @@ use$disk$macros equ false	; TRUE use DPH and DPB macros in CPM3M80.LIB
 use$dma$to$copy equ false	; TRUE to copy disk buffer to user buffer
 				; using DMA, FALSE to copy using MMU
 				; (only applies when BANKED is TRUE)
-use$big$drm equ	true		; TRUE to allocate 1024 directory entries
+use$big$drm equ	true		; TRUE to allocate 2048 directory entries
 				; (only on the PARTN8 partitions E:..H:)
+use$timer$interrupt equ false	; TRUE to enable Heart-Beat interrupt
 
   if ldrbios
 use$device$io equ false		; FALSE omits Character device support
@@ -205,7 +206,11 @@ dbg:	call	biosdbg		; Enter debugger
   endif
 
   if	int$enabled
-int$mask equ	0		; No interrupts enabled
+    if use$timer$interrupt
+int$mask equ	i$ct1		; Allow Counter/Timer 1 interrupts
+    else
+int$mask equ	i$none		; No maskable interrupts
+    endif
 int$debug equ	false		; Set TRUE to enable interrupt debug code
   endif
 

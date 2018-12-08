@@ -20,6 +20,18 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+08-Dec-2018
+-----------
+
+Implement and test Z280 on-chip device interrupts with a 20ms heart-beat
+counter (a single word counter at BIOS+063h) using cascaded Counter/Timer
+0 and 1.  These operate in timer mode and an interrupt is generated at
+50Hz.  Enable this by setting both INT$ENABLED and USE$TIMER$INTERRUPT
+in the configuration file (CONFINT8.LIB has this enabled).  Also removed
+the dual banked testing version (CPM3BNK1.SYS) - but you may still
+generate it if required using the BNK1BIOS.SUB submit command file.
+
+
 05-Dec-2018
 -----------
 

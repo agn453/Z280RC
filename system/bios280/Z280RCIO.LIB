@@ -2,14 +2,30 @@
 ;
 ; Z280RCIO.LIB  -  Z280RC Hardware I/O Port equates
 ;
-; Last edited: 05-Dec-2018
+; This file contains Z280 definitions taken from the July 1987
+; "Zilog Z280(TM) MPU Microprocessing Unit Preliminary Technical Manual"
+; for internal control registers and on-chip peripherals.
+;
+; It also contains Z280RC device specific I/O port definitions
+; for the IDE CompactFlash interface and DS1203 timekeeper chip.
+;
+;
+; Modification History
+;
+; 27-Jul-2018	Tony Nicholson	Initial version from CPU280 BIOS sources
+;				file Z280EQU.MAC by Daniel A. Jacobs
+;				dated 13-Mar-1988.
+; 05-Dec-2018	Tony Nicholson	Added Interrupt and Trap Vector
+;				Table related equates and System-Call
+;				function definitions.
+;
 
 ;---------------------------------
 ;
 ; Z280 MPU internal devices
 ;
 
-; Master Control Register (MCR) equals:	 Z280 manual	Page 5-77
+; Master Control Register (MCR) equates:	 Z280 manual	Page 5-77
 
 msr	equ	0	; Master Status Register	Page 3-4
 isr	equ	16h	; Interrupt Status Reg.		Page 3-4 & 3-5
@@ -28,7 +44,7 @@ lar	equ	14h	; Local (global)
 
 ;---------------------------------
 
-; Memory Management Unit (MMU) equals:	 Z280 manual	Page 7-6
+; Memory Management Unit (MMU) equates:	 Z280 manual	Page 7-6
 
 mmup	equ	0ffh	; MMU Page I/O
 mmcr	equ	0f0h	; MMU Master Control Reg.	Page 7-5
@@ -39,36 +55,36 @@ ip	equ	0f2h	; Invalidation Port		Page 7-6
 
 ;---------------------------------
 
-; Refresh Rate Register (RRR) equals:	Z280 manual	Page 9-1
+; Refresh Rate Register (RRR) equates:	Z280 manual	Page 9-1
 
 rrrp	equ	0ffh	; RRR Page I/O
 rrr	equ	0e8h	; Refresh Rate Register		Page 9-1
 
 ;---------------------------------
 
-; Counter Timers (CT) equals:		Z280 manual	Page 9-7
+; Counter Timers (C/T) equates:		Z280 manual	Page 9-7
 
-ctp	equ	0feh	; CT Page I/O
+ctp	equ	0feh	; Counter/Timer Page I/O
 
-cr0	equ	0e0h	; Configuration reg. for CT/0	Page 9-5
-cr1	equ	0e8h	; Configuration reg. for CT/1	Page 9-5
-cr2	equ	0f8h	; Configuration reg. for CT/2	Page 9-5
+cr0	equ	0e0h	; Configuration reg. for Counter/Timer 0	Page 9-5
+cr1	equ	0e8h	; Configuration reg. for Counter/Timer 1	Page 9-5
+cr2	equ	0f8h	; Configuration reg. for Counter/Timer 2	Page 9-5
 
-cs0	equ	0e1h	; Command Status reg for CT/0	Page 9-6
-cs1	equ	0e9h	; Command Status reg for CT/1	Page 9-6
-cs2	equ	0f9h	; Command Status reg for CT/2	Page 9-6
+cs0	equ	0e1h	; Command Status reg for Counter/Timer 0	Page 9-6
+cs1	equ	0e9h	; Command Status reg for Counter/Timer 1	Page 9-6
+cs2	equ	0f9h	; Command Status reg for Counter/Timer 2	Page 9-6
 
-tc0	equ	0e2h	; Time Constant reg. for CT/0	Page 9-6
-tc1	equ	0eah	; Time Constant reg. for CT/1	Page 9-6
-tc2	equ	0fah	; Time Constant reg. for CT/2	Page 9-6
+tc0	equ	0e2h	; Time Constant reg. for Counter/Timer 0	Page 9-6
+tc1	equ	0eah	; Time Constant reg. for Counter/Timer 1	Page 9-6
+tc2	equ	0fah	; Time Constant reg. for Counter/Timer 2	Page 9-6
 
-ct0	equ	0e3h	; Count Time reg.    for CT/0	Page 9-6
-ct1	equ	0ebh	; Count Time reg.    for CT/1	Page 9-6
-ct2	equ	0fbh	; Count Time reg.    for CT/2	Page 9-6
+ct0	equ	0e3h	; Count Time reg.    for Counter/Timer 0	Page 9-6
+ct1	equ	0ebh	; Count Time reg.    for Counter/Timer 1	Page 9-6
+ct2	equ	0fbh	; Count Time reg.    for Counter/Timer 2	Page 9-6
 
 ;---------------------------------
 
-; Direct Memory Access (DMA) equals:	Z280 manual	Page 9-15
+; Direct Memory Access (DMA) equates:	Z280 manual	Page 9-15
 
 dmap	equ	0ffh	; DMA Page I/O
 dmcr	equ	1fh	; DMA Master Control Register	Page 9-13 & 9-14
@@ -105,7 +121,7 @@ tdr3	equ	1dh	; Transaction Descriptor DMA3	Page 9-13 & 9-14
 
 ;---------------------------------
 
-; Universal Asynchronous Receiver/Transmitter (UART) equals:   Page 9-20
+; Universal Asynchronous Receiver/Transmitter (UART) equates:   Page 9-20
 
 uartp	equ	0feh	; UART Page I/O
 ucr	equ	10h	; UART Configuration Reg.	Page 9-18
@@ -131,8 +147,8 @@ ucr$eom	equ	00010000b ; E/O - parity even / odd
 ucr$ev	equ	00010000b	; Even Parity
 ucr$ov	equ	00000000b	; Odd Parity
 ucr$csm	equ	00001000b ; CS - Clock select
-ucr$ct1v equ	00001000b	; Use CT1 output for clock
-ucr$cexv equ	00000000b	; External clock input from CT1 input
+ucr$ct1v equ	00001000b	; Use Counter/Timer 1 output for clock
+ucr$cexv equ	00000000b	; External clock input from Counter/Timer 1 input
 ucr$crm	equ	00000110b ; CR - Clock Rate multiplier
 ucr$x1v	equ	00000000b	; x1
 ucr$x16v equ	00000010b	; x16
@@ -147,16 +163,21 @@ ucr$lbv	equ	00000001b	; Local Loop back mode
 
 i$none	equ	00000000b ; No Interrupts
 i$a	equ	00000001b ; Bit Value INTA Interrupt
-i$ct0	equ	00000010b ; Bit Value CT0 and DMA0 Interrupt
+i$ct0	equ	00000010b ; Bit Value Counter/Timer 0 & DMA0 Interrupt
+i$dma0	equ	i$ct0
 i$b	equ	00000100b ; Bit Value INTB Interrupt
-i$rx	equ	00001000b ; Bit Value CT1, UART Rx and DMA1 Interrupt
+i$ct1	equ	00001000b ; Bit Value Counter/Timer 1, UART Rx & DMA1 Interrupt
+i$rx	equ	i$ct1
+i$dma1	equ	i$ct1
 i$c	equ	00010000b ; Bit Value INTC Interrupt
-i$tx	equ	00100000b ; Bit Value UART Tx and DMA2 Interrupt
-i$dma3	equ	01000000b ; Bit Value CT2 and DMA3 Interrupt
+i$tx	equ	00100000b ; Bit Value UART Tx & DMA2 Interrupt
+i$dma2	equ	i$tx
+i$ct2	equ	01000000b ; Bit Value Counter/Timer 2 & DMA3 Interrupt
+i$dma3	equ	i$ct2
 
 ;---------------------------------
 
-; Card Flash Interface
+; IDE CompactFlash Interface in 16-bit mode
 
 cfp	equ	00h	; CF I/O page
 cfdata	equ	0c0h	; CF data register (R/W)
@@ -172,7 +193,7 @@ cfcmd	equ	0cfh	; CF command register (W)
 
 ;---------------------------------
 
-; DS1302 clock chip
+; DS1302 timekeeper clock chip
 
 watchp	equ	00h	; DS1302 I/O page
 watch	equ	0a2h	; DS1302 3-wire interface
@@ -226,12 +247,41 @@ X$month	aset	X$month-1
   endm ; irp
 	endm ; cpmdate
 
-  if int$enabled
+;
+; Interrupt and Trap Vector Table offsets (Page 6-11)
+;
+itvtoff$nmi	equ	04h	; NMI vector
+itvtoff$inta	equ	08h	; Interrupt line A vector
+itvtoff$intb	equ	0ch	; Interrupt line B vector
+itvtoff$intc	equ	10h	; Interrupt line C vector
+itvtoff$tc0	equ	14h	; Counter/Timer 0 vector
+itvtoff$tc1	equ	18h	; Counter/Timer 1 vector
+itvtoff$tc2	equ	20h	; Counter/Timer 2 vector
+itvtoff$dma0	equ	24h	; DMA channel 0 vector
+itvtoff$dma1	equ	28h	; DMA channel 1 vector
+itvtoff$dma2	equ	2ch	; DMA channel 2 vector
+itvtoff$dma3	equ	30h	; DMA channel 3 vector
+itvtoff$uar	equ	34h	; UART receiver vector
+itvtoff$uat	equ	38h	; UART transmitter vector
+itvtoff$ss	equ	3ch	; Single-Step trap vector
+itvtoff$boh	equ	40h	; Breakpoint-on-Halt trap vector
+itvtoff$dive	equ	44h	; Division Exception trap vector
+itvtoff$stkovf equ	48h	; Stack Overflow Warning trap vector
+itvtoff$accv	equ	4ch	; Access Violation trap vector
+itvtoff$sc	equ	50h	; System Call trap vector
+itvtoff$priv	equ	54h	; Privileged Instruction trap vector
+itvtoff$mem2epu equ	58h	; EPU <- Memory Extended Instruction trap vector
+itvtoff$epu2mem equ	5ch	; Memory <- EPU Extended Instruction trap vector
+itvtoff$epu2a	equ	60h	; A <- EPU Extended Instruction trap vector
+itvtoff$epuintop equ	64h	; EPU Internal Operation Extended Instr. trap vector
+itvtoff$nmiav	equ	70h	; NMI Int A vectors (128 PC values)
+itvtoff$ibv	equ	170h	; Int B vectors (128 PC values)
+itvtoff$icv	equ	270h	; Int C vectors (128 PC values)
+
 ;
 ; System call function codes
 ;
 sc$dummy equ	00000h
 sc$sumode equ	0FF01h	; A=0 enter System-mode else User-mode
-  endif
 
 	.list
