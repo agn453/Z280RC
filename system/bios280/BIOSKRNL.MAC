@@ -233,7 +233,7 @@ bios:
 
   if banked and int$enabled and use$timer$interrupt
 ;
-; 16-bit counter incremented by a timer interrupt every 10ms
+; 16-bit counter incremented by a timer interrupt every 20ms
 ;
 heart$beat:
 	defw	0FFFFh	; Initial value is -1

@@ -37,7 +37,7 @@ generate it if required using the BNK1BIOS.SUB submit command file.
 
 Updated the DS1302 timekeeper chip TIME program (in the utilities directory)
 to support a Banked system (this makes adjusting the time-of-day easier
-that using the CP/M-Plus DATE command).
+than using the CP/M-Plus DATE command).
 
 Interrupt and Trap handling using Interrupt Mode 3 has been tested for
 System Calls and error traps (divison by zero, divide quotient exceptions,
