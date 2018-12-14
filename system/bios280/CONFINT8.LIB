@@ -43,6 +43,9 @@ use$big$drm equ	true		; TRUE to allocate 2048 directory entries
 				; (only on the PARTN8 partitions E:..H:)
 use$timer$interrupt equ true	; TRUE to enable Heart-Beat interrupt
 
+clock$50hz equ false		; TRUE for 50Hz (using cascaded C/T 0 & C/T 1)
+				; FALSE for 128Hz (using only C/T 0)
+
   if ldrbios
 use$device$io equ false		; FALSE omits Character device support
 				; (MUST be FALSE for LDRBIOS - doesn't use SCB)
@@ -215,7 +218,11 @@ dbg:	call	biosdbg		; Enter debugger
 
   if	int$enabled
     if use$timer$interrupt
+      if clock$50hz
 int$mask equ	i$ct1		; Allow Counter/Timer 1 interrupts
+      else
+int$mask equ	i$ct0		; Allow Counter/Timer 0 interrupts
+      endif
     else
 int$mask equ	i$none		; No maskable interrupts
     endif

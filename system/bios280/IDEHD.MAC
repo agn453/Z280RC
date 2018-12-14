@@ -39,7 +39,7 @@
   if	banked
 	extrn	bk0buf		; Disk sector buffer in Bank 0
     if use$dma$to$copy
-	extrn	dmaxfr, phyahl, cnv12
+	extrn	dma3xfr, phyahl, phydma, cnv12
     else
 	extrn	?usrsl, @ubnk	; Use MMU PDRs
     endif
@@ -636,8 +636,7 @@ hd$write:
 	; Copy the sector to be written to common buffer using DMA
 	ld	a,(@dbnk)	; Source bank
 	ld	hl,(@dma)
-	call	phyahl
-	call	cnv12
+	call	phydma
 	ld	(srcl),hl
 	ld	(srch),de
 
@@ -648,9 +647,8 @@ hd$write:
 	ld	(dstl),hl
 	ld	(dsth),de
 
-	ld	c,dal3		; Transfer using DMA3
-	ld	hl,dmapb
-	call	dmaxfr
+	ld	hl,dmapb	; Transfer using DMA3
+	call	dma3xfr
       else
 	ld	a,(@ubnk)	; Save old User-mode bank on stack
 	push	af
@@ -770,14 +768,12 @@ readdrq:
 
 	ld	a,(@dbnk)	; Destination bank
 	ld	hl,(@dma)
-	call	phyahl
-	call	cnv12
+	call	phydma
 	ld	(dstl),hl
 	ld	(dsth),de
 
-	ld	c,dal3		; Transfer using DMA3
-	ld	hl,dmapb
-	call	dmaxfr
+	ld	hl,dmapb	; Transfer using DMA3
+	call	dma3xfr
     else
 	ld	a,(@ubnk)	; Save old User-mode bank on stack
 	push	af

@@ -76,7 +76,7 @@ rampg$end equ 2000h	; Page end address (high 16-bits) + 1
 ;
 ; DMA routines in BIOSKRNL
 ;
-	extrn	dmaxfr
+	extrn	dma3xfr
 	extrn	cnv12, phyahl
 
     if banked
@@ -208,10 +208,9 @@ rd$init:
 	call	cnv12
 	ld	(destl),hl
 	ld	(desth),de
-
-	ld	c,dal3		; Fetch the Volume label
+				; Fetch the Volume label
 	ld	hl,xfer		; (XFER is pre-initialised
-	call	dmaxfr		; to fetch the first 8 bytes)
+	call	dma3xfr		; to fetch the first 8 bytes)
 
 	pop	ix		; Does the label match
 	ld	b,8		;  ' RAMDISK'?
@@ -250,9 +249,8 @@ nomatch:
 	ld	(srcl),hl
 	ld	(srch),de
 
-	ld	c,dal3
 	ld	hl,xfer
-	call	dmaxfr		; Write directory label
+	call	dma3xfr		; Write directory label
 
 	pop	hl		; Recover pointer to directory label
 	ld	(hl),0E5h	; Create a deleted file entry
@@ -271,9 +269,8 @@ zapdir:	ld	(destl),hl	; Update pointer in DMA block
 	push	hl
 	push	bc
 
-	ld	c,dal3		; Write blank directory entry
-	ld	hl,xfer
-	call	dmaxfr
+	ld	hl,xfer		; Write blank directory entry
+	call	dma3xfr
 
 	pop	bc
 	pop	hl
@@ -467,9 +464,8 @@ rw$common:
 
 	ld	(count),hl
 
-	ld	c,dal3		; Use DMA3 to transfer sector(s)
-	ld	hl,xfer
-	call	dmaxfr
+	ld	hl,xfer		; Use DMA3 to transfer sector(s)
+	call	dma3xfr
 
     if banked
 	ld	a,(rwflag)	; Did we do a read or write?

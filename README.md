@@ -20,6 +20,14 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+14-Dec-2018
+-----------
+
+Squeeze a few more bytes from common memory.  Add a CLOCK$50HZ setting
+to select between the 50Hz interrupt heart-beat clock using C/T 0 & C/T 1
+cascaded (see below) and a 128Hz clock using only Counter/Timer 0.
+
+
 08-Dec-2018
 -----------
 

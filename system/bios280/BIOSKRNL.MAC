@@ -131,7 +131,11 @@
 
 	; DMA controller related
 
-	public	dmaxfr, phyahl, cnv12
+	public	dmaxfr, dma3xfr, cnv12
+
+  if banked
+	public	phyahl, phydma
+  endif
 
 	; Routines in other modules
 
@@ -359,11 +363,11 @@ boot:
 	outw	(c),hl
 
   if banked
-	ld	c,dal3		; Copy loaded common memory into
+				; Copy loaded common memory into
 	ld	hl,movcmn	;  memory adjacent (and physically
-	call	dmaxfr		;  contiguous to the TPA bank)
+	call	dma3xfr		;  contiguous to the TPA bank)
 
-;	The I/O page was changed to UARTP by DMAXFR
+;	The I/O page was changed to UARTP by DMA3XFR
 
 ;
 ; Load the MMU page description registers
@@ -496,6 +500,12 @@ clr00:	dec	hl		; (addresses 000000..0013ff)
 
       if use$timer$interrupt
 
+	ld	l,ctp		; Select the Counter/Timer I/O page
+	ld	c,iop
+	ldctl	(c),hl
+
+	if clock$50hz
+
 	; Set-up Counter/Timer 0 and Counter/Timer 1 to generate
 	; a heart-beat interrupt every 20 ms (50Hz)
 	;
@@ -512,10 +522,6 @@ clr00:	dec	hl		; (addresses 000000..0013ff)
 
 timer0$constant equ	2000h	; Lower 16 bits of time constant
 timer1$constant equ	0001h	; Upper 16 bits of time constant
-
-	ld	l,ctp		; Select the Counter/Timer I/O page
-	ld	c,iop
-	ldctl	(c),hl
 
 	ld	a,10100000b
 		; Continuous (bit 7 ON)
@@ -554,6 +560,34 @@ timer1$constant equ	0001h	; Upper 16 bits of time constant
 		; Status bits also ignored on write (bits 2..0)
 	out	(cs0),a
 	out	(cs1),a
+
+	else
+
+	; Set-up Counter/Timer 0 to generate a heart-beat
+	; interrupt every 7.8125 ms (128Hz)
+	
+	ld	a,10100000b
+		; Continuous (bit 7 ON)
+		; Non-retriggerable (bit 6 OFF)
+		; Interrupt enable (bit 5 ON)
+		; Not cascaded (bit 4 OFF)
+		; Counter Output pin disabled (bit 3 OFF)
+		; Timer mode (bit 2 OFF)
+		; No gate output (bit 1 OFF)
+		; No external trigger (bit 0 OFF)
+	out	(cr0),a
+	ld	c,tc0		; Point to time constant
+	ld	hl,28800	; 128 Hz interrupt
+	outw	(c),hl
+	ld	a,11100000b
+		; Enabled (bit 7 ON)
+		; Software gate on (bit 6 ON)
+		; Trigger gate on (bit 5 ON)
+		; Other bits are ignored (bits 4..3)
+		; Status bits also ignored on write (bits 2..0)
+	out	(cs0),a
+
+	endif ; clock$50hz
 
       endif
 
@@ -630,8 +664,12 @@ itvt:
 	defw	0,iret3		; INTA
 	defw	0,iret3		; INTB
 	defw	0,iret3		; INTC
+    if use$timer$interrupt and (not clock$50hz)
+	defw	int$mask and (not i$ct0),tiktok ; Counter/Timer 0
+    else
 	defw	0,iret3		; Counter/Timer 0
-    if use$timer$interrupt
+    endif
+    if use$timer$interrupt and clock$50hz
 	defw	int$mask and (not i$ct1),tiktok	; Counter/Timer 1 (Timer interrupt)
     else
 	defw	0,iret3		; Counter/Timer 1
@@ -688,7 +726,11 @@ tiktok:
 	ld	(ttrc),hl	; Save reason code where we can see it
       endif
 
+      if clock$50hz
 	cpw	hl,itvtoff$tc1	; Is it a Counter/Timer 1 interrupt?
+      else
+	cpw	hl,itvtoff$tc0	; Is it a Counter/Timer 0 interrupt?
+      endif
 	jr	nz,ttdone	; No
 	
 	ld	c,iop		; Save current I/O Page
@@ -704,7 +746,11 @@ tiktok:
 		; Other bits are ignored (bits 4..3)
 		; End-of-Count Condition cleared (bit 1 OFF)
 		; Count-Overrun cleared (bit 0 OFF)
+      if clock$50hz
 	out	(cs1),a
+      else
+	out	(cs0),a
+      endif
 
 	incw	(heart$beat)	; Increment counter
 
@@ -759,11 +805,7 @@ sctrap:	push	hl		; Save SC function
 	pop	hl		; Where we were called from (User-mode)
 	lda	hl,(hl-4)	; Backtrack 4 bytes (length of SC instruction)
 	call	?phexahl	; Output it as 24-bit address in current bank
-
-warm:	ld	hl,warmmsg	; Announce "Warm boot"
-	call	?pmsg
-	call	?getch		; Pause until character entered
-	jp	?wboot		; Warm boot
+	jp	iabort		; Abort back to warm boot in System-mode
 
 ;
 ; System Call vector table
@@ -927,16 +969,14 @@ stotrp:	pop	hl		; Discard MSR from stack
 	ld	hl,stomsg	; Message for "Stack Overflow"
 	jr	divtrp1
 
-warmmsg:
-	defz	cr,lf,'Press a key to warm boot'
-scmsg:	defz	cr,lf,'Bad System Call fn='
+scmsg:	defz	cr,lf,'Bad SC='
 nmimsg:	defz	cr,lf,'*NMI'
-primsg:	defz	cr,lf,'Privileged instruction MSR='
-dv0msg: defz	cr,lf,'Divide by 0 at '
+primsg:	defz	cr,lf,'Priv Trap MSR='
+dv0msg: defz	cr,lf,'Div0 at '
 atmsg	equ	$-5	; points to ' at '
-ovfmsg:	defz	cr,lf,'Divide Overflow at '
-stomsg:	defz	cr,lf,'System Stack Overflow at '
-accmsg:	defz	cr,lf,'Access Violation'
+ovfmsg:	defz	cr,lf,'DivOvf at '
+stomsg:	defz	cr,lf,'SSPOvf at '
+accmsg:	defz	cr,lf,'AccV'
 pdrmsg:	defz	' using PDR '
 
 asav:	defs	1
@@ -967,7 +1007,7 @@ iret2:	retil		; Pop MSR and return
 	common$segment	; Must be in Common
 
 wboot:
-  if 0;  banked and int$enabled
+  if banked and int$enabled
 	ld	a,(@sumode)	; Are we in System-mode?
 	or	a
 	jr	z,wbsys		; Yes
@@ -1101,22 +1141,19 @@ bnkdif:
 	ld	(mvcnt),bc	; Byte Count to parameter block
 
 	ld	a,(@mdbnk)	; Destination logical 24-bit address in AHL
-	call	phyahl		; Convert to physical address
-	call	cnv12		; Convert to two 12-bit DMA format
+	call	phydma		; Convert to physical address DMA address
 	ld	(mvdst),hl	; Save into parameter block
 	ld	(mvdst+2),de
 
 	ld	a,(@msbnk)
 	pop	hl		; Source logical 24-bit address in AHL
 	push	hl		; and put source back on stack
-	call	phyahl
-	call	cnv12
+	call	phydma
 	ld	(mvsrc),hl
 	ld	(mvsrc+2),de
 
-	ld	c,dal3		; Transfer it using DMA3
-	ld	hl, mvprog
-	call	dmaxfr
+	ld	hl, mvprog	; Transfer it using DMA3
+	call	dma3xfr
 
 	ld	bc,(mvcnt)	; Restore byte count
 
@@ -1550,6 +1587,19 @@ phyahl:
 	pop	de		; Restore registers
 	pop	bc
 	ret
+
+;
+; PHYDMA
+;
+;	Convert Logical Address in AHL to two word "DMA address
+;	format" in DE  (high 12-bits) and HL (low 12-bits)
+;
+;	(This saves a few bytes for PHYAHL/CNV12 successive calls)
+;
+phydma:	call	phyahl
+
+	; Fall through into cnv12
+
   else
 phyahl	equ	dummy
   endif ; banked
@@ -1606,9 +1656,8 @@ setjumps:
 
 ?rlccp:
     if banked and ccp$in$mem
-	ld	c,dal3		; Use DMA3
 	ld	hl,rstccp	; Copy CCP from bank 0 to bank 1
-	jp	dmaxfr		;  using DMA and return
+	jp	dma3xfr		;  using DMA and return
     else
 	; Just fall through into ?LDCCP
     endif
@@ -1653,9 +1702,8 @@ setjumps:
 	; CCP.COM was just read into 010100..010D7Fh
 	; Save a copy to 000100..000D7Fh using DMA
 
-	ld	c,dal3
 	ld	hl,savccp	; Point to DMA parameter block
-	call	dmaxfr		; Copy using DMA3
+	call	dma3xfr		; Copy using DMA3
       endif
     endif
 	ret
@@ -2047,6 +2095,8 @@ ipchl:				; vectored CALL point
 ;
 ;	On exit, no registers are saved.
 ;
+dma3xfr:
+	ld	c,dal3
 dmaxfr:
   if krnl$debug
 
