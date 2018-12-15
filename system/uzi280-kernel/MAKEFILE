@@ -1,0 +1,156 @@
+#
+# makefile for uzi280 kernel
+#
+OBJS =	data.obj \
+	machdep.obj machasm.obj newuput.obj \
+	process.obj procasm.obj \
+	filesys.obj \
+	scall1.obj scall2.obj scall3.obj scall4.obj \
+	cache.obj cachasm.obj \
+	devflop.obj devio.obj \
+	devmisc.obj devtty.obj devttyas.obj \
+	devwd.obj idecf.obj ideconf.obj 
+# idecfint.obj 
+
+OBJS2 =	bcopy.obj bzero.obj outin.obj asar.obj asdiv.obj wrelop.obj \
+	idiv.obj imul.obj shar.obj shll.obj shlr.obj csv.obj \
+	kprintf.obj itob.obj
+
+SRCS =	data.c cache.c cachasm.c devflop.c devio.c \
+	devmisc.c devtty.c devttyas.c \
+	devwd.c idecf.as ideconf.c \
+	filesys.c newuput.c \
+	machdep.c machasm.c process.c procasm.c \
+	scall1.c scall1b.c scall2.c scall3.c scall4.c 
+# idecfint.as 
+
+SRCS2 =	bcopy.c bzero.c outin.c asar.as asdiv.as wrelop.as \
+	idiv.as imul.as shar.as shll.as shlr.as csv.as \
+	kprintf.c itob.c brelop.as
+
+INCL = config.h unix.h extern.h ide.h 
+
+uzi280.obj:	$(OBJS) start.obj runtime.lib
+		lkuzi.sub
+		lk2m80.sub
+
+$(OBJS):	$(INCL)
+
+
+data.obj:	data.c
+		c280 -v -c data.c
+
+cache.obj:	cache.c cache.h ide.h
+		c280 -v -c -o2 cache.c
+
+cachasm.obj:	cachasm.c
+		c280 -v -c cachasm.c
+
+scall1.obj:	scall1.c scall1b.c
+		c280 -v -c -o2 scall1.c
+
+scall2.obj:	scall2.c
+		c280 -v -c -o2 scall2.c
+
+scall3.obj:	scall3.c
+		c280 -v -c -o2 scall3.c
+
+scall4.obj:	scall4.c
+		c280 -v -c scall4.c
+#AGN# not enough memory to optimize
+#		c280 -v -c -o2 scall4.c
+
+machdep.obj:	machdep.c
+		c280 -v -c -o2 machdep.c	
+
+process.obj:	process.c
+		c280 -v -c -o2 process.c
+
+devio.obj:	devio.c
+		c280 -v -c -o2 devio.c
+
+devwd.obj:	devwd.c ide.h
+		c280 -v -c -o2 devwd.c
+
+devflop.obj:	devflop.c
+		c280 -v -c -o2 devflop.c
+
+devmisc.obj:	devmisc.c
+		c280 -v -c -o2 devmisc.c
+
+devtty.obj:	devtty.c
+		c280 -v -c -o2 devtty.c
+
+filesys.obj:	filesys.c
+		c280 -v -c -o2 filesys.c
+
+devttyas.obj:	devttyas.c
+		c280 -v -c devttyas.c
+
+machasm.obj:	machasm.c
+		c280 -v -c machasm.c
+
+procasm.obj:	procasm.c
+		c280 -v -c procasm.c
+
+newuput.obj:	newuput.c
+		c280 -v -c newuput.c
+
+start.obj:	start.c
+		c280 -v -c start.c
+
+idecf.obj:	idecf.as ide.h
+		c280 -v -c idecf.as
+
+#idecfint.obj:	idecfint.as ide.h
+#		c280 -v -c idecfint.as
+
+runtime.lib:	$(OBJS2)
+		mklib.sub
+
+bcopy.obj:	bcopy.c
+		c280 -v -c bcopy.c 
+
+bzero.obj:	bzero.c
+		c280 -v -c bzero.c 
+
+outin.obj:	outin.c
+		c280 -v -c outin.c 
+
+asar.obj:	asar.as
+		c280 -v -c asar.as 
+
+asdiv.obj:	asdiv.as
+		c280 -v -c asdiv.as 
+
+wrelop.obj:	wrelop.as
+		c280 -v -c wrelop.as
+
+idiv.obj:	idiv.as
+		c280 -v -c idiv.as 
+
+imul.obj:	imul.as
+		c280 -v -c imul.as 
+
+shar.obj:	shar.as
+		c280 -v -c shar.as 
+
+shll.obj:	shll.as
+		c280 -v -c shll.as 
+
+shlr.obj:	shlr.as
+		c280 -v -c shlr.as 
+
+csv.obj:	csv.as
+		c280 -v -c csv.as
+
+kprintf.obj:	kprintf.c
+		c280 -v -c -o2 kprintf.c 
+
+itob.obj:	itob.c
+		c280 -v -c -o2 itob.c
+
+#AGN - added here to make sure the object is up-to-date for UNIX.CIM link
+ideconf.obj:	ideconf.c
+		c280 -v -c -o2 ideconf.c
+

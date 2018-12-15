@@ -1,0 +1,12 @@
+; Link new object library to UZI280.OBJ
+era uzi280.obj
+; LINQ is the HiTech C V3.09 link program (renamed to keep
+; the DigitalResearch linker LINK.COM on the system drive)
+a:linq 
+<-r -ouzi280.obj \
+<data.obj machasm.obj machdep.obj filesys.obj process.obj procasm.obj \
+<scall1.obj scall2.obj scall3.obj scall4.obj \
+<devtty.obj devttyas.obj \
+<devio.obj devflop.obj devmisc.obj devwd.obj idecf.obj \
+<cache.obj cachasm.obj newuput.obj \
+<runtime.lib

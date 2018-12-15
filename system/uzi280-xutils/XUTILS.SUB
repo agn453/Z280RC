@@ -1,0 +1,10 @@
+c280 -c -of2 ideconf.c
+;
+c280 -c -of2 mkfs.c
+;
+; (fsck has a missing _da_read error)
+;c280 -c -of2 fsck.c
+;
+lkxutil mkfs
+;lkxutil fsck
+lkxutil ucp

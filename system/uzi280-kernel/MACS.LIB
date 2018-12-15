@@ -1,0 +1,103 @@
+
+	macro	ldbciy	ofs		;ld	bc,(iy+ofs)
+	defb	0FDh,0EDh,06h,ofs
+	endm
+
+	macro	lddeiy	ofs		;ld	de,(iy+ofs)
+	defb	0FDh,0EDh,16h,ofs
+	endm
+
+	macro	ldhliy	ofs		;ld	hl,(iy+ofs)
+	defb	0FDh,0EDh,26h,ofs
+	endm
+
+	macro	ldasp	ofs		;ld	a,(sp+ofs)
+	defb	0DDh,78h
+	defw	ofs
+	endm
+
+	macro	ldhlsp	ofs		;ld	hl,(sp+ofs)
+	defb	0EDh,04h
+	defw	ofs
+	endm
+
+	macro	ldbcix	ofs		;ld	bc,(ix+ofs)
+	defb	0DDh,0EDh,06h,ofs
+	endm
+
+	macro	lddeix	ofs		;ld	de,(ix+ofs)
+	defb	0DDh,0EDh,16h,ofs
+	endm
+
+	macro	ldhlix	ofs		;ld	hl,(ix+ofs)
+	defb	0DDh,0EDh,26h,ofs
+	endm
+
+	macro	ldixhl	ofs		;ld	(ix+ofs),hl
+	defb	0DDh,0EDh,2Eh,ofs
+	endm
+
+	macro	ldiybc	ofs		;ld	(iy+ofs),bc
+	defb	0FDh,0EDh,0Eh,ofs
+	endm
+
+	macro	ldiyde	ofs		;ld	(iy+ofs),de
+	defb	0FDh,0EDh,1Eh,ofs
+	endm
+
+	macro	ldiyhl	ofs		;ld	(iy+ofs),hl
+	defb	0FDh,0EDh,2Eh,ofs
+	endm
+
+	macro	ldbchl			;ld	bc,(hl)
+	defb	0EDh,06h
+	endm
+
+	macro	lddehl			;ld	de,(hl)
+	defb	0EDh,16h
+	endm
+
+	macro	ldhlhl			;ld	hl,(hl)
+	defb	0EDh,26h
+	endm
+
+	macro	ldhlbc			;ld	(hl),bc
+	defb	0EDh,0Eh
+	endm
+
+	macro	ldhlde			;ld	(hl),de
+	defb	0EDh,1Eh
+	endm
+
+	macro	ldahlhl	ofs		;lda	hl,(hl+ofs)  hl:=hl+ofs
+	defb	0EDh,03Ah
+	defw	ofs
+	endm
+
+	macro	ldahlsp	ofs		;lda	hl,(sp+ofs)  hl:=sp+ofs
+	defb	0EDh,02h
+	defw	ofs
+	endm
+
+	macro	ldaixsp	ofs		;lda	ix,(sp+ofs)  ix:=sp+ofs
+	defb	0DDh,0EDh,02h
+	defw	ofs
+	endm
+
+	macro	incwix	ofs		;incw	(ix-45)
+	defb	0FDh,03h
+	defw	ofs
+	endm
+
+	macro	exahl			;ex	a,(hl)
+	defb	0EDh,37h
+	endm
+
+	macro	multuwhlde		;multuw	hl,de
+	defb	0EDH,0D3h
+	endm
+
+	macro	divuwdehlbc		;divuw	dehl,bc
+	defb	0EDh,0CBh
+	endm
+

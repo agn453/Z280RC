@@ -1,0 +1,5 @@
+; Link UZI280 core image with IDE parameters
+a:linq 
+<-munix.sym -n -pdata=0,text,bss -ounix.cim -c000 \
+<uzi280.obj ideconf.obj \
+<start.obj

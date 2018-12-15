@@ -1,0 +1,25 @@
+#
+# UZI280	ttytab
+#
+# 
+#
+# Syntax:  name   termtype   "login-program [args]"   "term-init .."
+#
+#	term-init is currently not used.
+#
+# CAUTION: Modify with care. Used only by init.
+#
+#
+# settings for Club80 terminal on tty1-tty4 and serial ansi terminal on tty5
+#
+/dev/tty1  tvi950  login  
+/dev/tty2  tvi950  login
+/dev/tty3  tvi950  login
+/dev/tty4  tvi950  login
+/dev/tty5  ansi	   login
+#
+# this starts kermit conneted to dev/tty5 (serial line)
+# in server mode at boot time. 
+#
+#/dev/tty5  kermit   "kermit -l /dev/tty5 -b 9600 -x" 
+

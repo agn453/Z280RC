@@ -1,0 +1,6 @@
+era xlib.lib
+libr
+< r xlib.lib xfs1.obj xfs2.obj devio.obj xdevtty.obj xdevwd.obj xdevflo.obj \
+< xdevmisc.obj xmachdep.obj data.obj \
+< itob.obj uput.obj idecf.obj \
+< bzero.obj bcopy.obj spl.obj bios.obj

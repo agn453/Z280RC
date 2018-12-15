@@ -1,0 +1,82 @@
+ucp 0$1
+<cd /
+<mkdir /etc
+<mkdir /bin
+<mkdir /usr
+<mkdir /usr/root
+<mkdir /Tapes
+<cd /
+<rm init
+<bget init
+<chmod init 0755
+<cd /bin
+<rm clam
+<bget clam
+<chmod clam 0755
+<rm sh
+<bget sh
+<chmod sh 0755
+<rm setuart
+<bget setuart
+<chmod setuart 0755
+<rm ls
+<bget ls
+<chmod ls 0755
+<rm ln
+<bget ln
+<chmod ln 0755
+<rm login
+<bget login
+<chmod login 0755
+<rm mkdir
+<bget mkdir
+<chmod mkdir 0755
+<rm rm
+<bget rm
+<chmod rm 0755
+<rm rmdir
+<bget rmdir
+<chmod rmdir 0755
+<rm touch
+<bget touch
+<chmod touch 0755
+<rm mount
+<bget mount
+<chmod mount 0755
+<rm umount
+<bget umount
+<chmod umount 0755
+<rm uncompress
+<bget uncompress
+<chmod uncompress 0755
+<rm sync
+<bget sync
+<chmod sync 0755
+<rm tar
+<bget tar
+<chmod tar 0755
+<rm kill
+<bget kill
+<chmod kill 0755
+<rm ps
+<bget ps
+<chmod ps 0755
+<cd /etc
+<rm rc
+<get rc
+<chmod 644 rc
+<rm passwd
+<get passwd
+<chmod passwd 0644
+<rm group
+<get group
+<chmod group 0644
+<rm ttytab
+<get ttytab
+<chmod ttytab 0644
+<rm termcap
+<get termcap
+<chmod termcap 0644
+<rm utmp
+<bget utmp
+<exit

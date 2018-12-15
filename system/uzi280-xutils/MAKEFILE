@@ -1,0 +1,64 @@
+#
+# makefile for uzi280 xutils running under CP/M
+# 
+
+OBJS = 	devio.obj xdevtty.obj xdevwd.obj xdevflo.obj xdevmisc.obj \
+	xmachdep.obj data.obj xfs1.obj xfs2.obj bcopy.obj bzero.obj spl.obj \
+	itob.obj uput.obj idecf.obj bios.obj
+
+SRCS =	devio.c xdevtty.c xdevwd.c xdevflo.c xdevmisc.c \
+	xmachdep.c data.c xfs1.c xfs2.c bcopy.c bzero.c spl.c \
+	itob.c uput.c idecf.as bios.c
+
+HDR =	unix.h config.h extern.h
+
+xlib.lib:	$(OBJS) 
+		mkxlib.sub
+
+devio.obj:	devio.c
+		c280 -c -of2 devio.c
+
+xdevtty.obj:	xdevtty.c
+		c280 -c -of2 xdevtty.c
+
+xdevwd.obj:	xdevwd.c
+		c280 -c -of2 xdevwd.c
+
+xdevflo.obj:	xdevflo.c
+		c280 -c -of2 xdevflo.c
+
+xdevmisc.obj:	xdevmisc.c
+		c280 -c -of2 xdevmisc.c
+
+xmachdep.obj:	xmachdep.c
+		c280 -c -of2 xmachdep.c
+
+data.obj:	data.c
+		c280 -c -of2 data.c
+
+xfs1.obj:	xfs1.c
+		c280 -c -of2 xfs1.c
+
+xfs2.obj:	xfs2.c
+		c280 -c -of2 xfs2.c
+
+bcopy.obj:	bcopy.c
+		c280 -c -of2 bcopy.c
+
+bzero.obj:	bzero.c
+		c280 -c -of2 bzero.c
+
+spl.obj:	spl.c
+		c280 -c -of2 spl.c
+
+itob.obj:	itob.c
+		c280 -c -of2 itob.c
+
+uput.obj:	uput.c
+		c280 -c -of2 uput.c
+
+idecf.obj:	idecf.as
+		c280 -c idecf.as
+
+bios.obj:	bios.c
+		c280 -c -of2 bios.c

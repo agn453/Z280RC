@@ -1,0 +1,80 @@
+mkfs 0$1 600 65000
+ucp 0$1
+<mkdir dev
+<cd dev
+<mknod tty  020666 5
+<mknod tty1 020666 6
+<mknod tty2 020666 7
+<mknod tty3 020666 11
+<mknod tty4 020666 12
+<mknod tty5 020666 13
+<mknod tty6 020666 14
+<mknod wd0  060644 0
+<mknod wd1  060644 2
+<mknod wd2  060644 3
+<mknod fd0  060644 1
+<mknod rwd0 020444 0
+<mknod rwd1 020444 2
+<mknod rwd2 020444 3
+<mknod lpr  020222 4
+<mknod null 020666 8
+<mknod kmem 020444 9
+<mknod rmt  020444 10
+<mknod wmt  020222 10
+<cd /
+<mkdir /etc
+<mkdir /bin
+<mkdir /usr
+<mkdir /usr/root
+<mkdir /Tapes
+<cd /
+<bget init
+<chmod init 0755
+<cd /bin
+<bget clam
+<chmod clam 0755
+<bget sh
+<chmod sh 0755
+<bget setuart
+<chmod  setuart 0755
+<bget ls
+<chmod ls 0755
+<bget ln
+<chmod ln 0755
+<bget login
+<chmod login 0755
+<bget mkdir
+<chmod mkdir 0755
+<bget rm
+<chmod rm 0755
+<bget rmdir
+<chmod rmdir 0755
+<bget touch
+<chmod touch 0755
+<bget mount
+<chmod mount 0755
+<bget umount
+<chmod umount 0755
+<bget uncompress
+<chmod uncompress 0755
+<bget sync
+<chmod sync 0755
+<bget tar
+<chmod tar 0755
+<bget kill
+<chmod kill 0755
+<bget ps
+<chmod ps 0755
+<cd /etc
+<get rc
+<chmod rc 0644
+<get passwd
+<chmod passwd 0644
+<get group
+<chmod group 0644
+<get ttytab
+<chmod ttytab 0644
+<get termcap
+<chmod termcap 0644
+<bget utmp
+<exit

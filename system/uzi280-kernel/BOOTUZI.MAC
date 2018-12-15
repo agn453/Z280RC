@@ -1,0 +1,258 @@
+;
+; UZI280 boot loader for Z280RC
+;
+; Tony Nicholson 12-Dec-2018
+;
+
+	.z280
+
+z280rc	equ	-1
+
+  if z280rc
+load$addr equ	02000h	; On a banked system this is physical address 010000h
+  else
+load$addr equ	00200h
+  endif
+
+	maclib	z280rc.inc
+
+exit	equ	0000h
+bdos	equ	0005h
+ddma	equ	0080h
+
+$print	equ	9	; BDOS print string
+$vers	equ	12	; BDOS version number
+$openf	equ	15	; BDOS open file
+$reads	equ	20	; BDOS read sequential
+$setdma	equ	26	; BDOS set dma address
+$scb	equ	49	; BDOS get/set SCB
+$parse	equ	152	; BDOS parse filename
+
+iopage	macro	page
+	ld	c,iop
+	ld	l,page
+	ldctl	(c),hl
+	endm
+
+bootuzi:
+	ld	sp,load$addr	; Stack below load address
+
+	ld	a,(ddma)	; Any command line parameter?
+	or	a
+	jr	z,nofile	; No, use default
+
+	ld	de,pfcb		; Address of parse control block
+	ld	c,$parse
+	call	bdos		; Parse filename and create FCB
+
+nofile:	ld	de,fcb	
+	ld	c,$openf
+	call	bdos		; Open file
+	cp	0ffh
+	jr	z,notfnd	; File unix.cim not found
+
+	ld	de,(dmaadr)	
+loop:	ld	c,$setdma
+	call	bdos		; Set dma address
+	ld	de,fcb	
+	ld	c,$reads
+	call	bdos		; Read in the file
+	or	a
+	jr	nz,allread
+	ld	hl,(dmaadr)
+	ld	de,128
+	add	hl,de
+	ld	(dmaadr),hl	; Update dma address
+	ex	de,hl		;  and put it in DE
+	jr	loop
+
+notfnd:	ld	de,filenf
+
+abort:	ld	c,$print
+	call	bdos
+	jp	exit
+
+filenf:	defb	13,10,'Boot image file not found.$'
+
+allread:
+  if z280rc
+
+common$base equ	0e000h
+
+	ld	c,$vers		; Is this CP/M-Plus?
+	call	bdos
+	cp	31h
+	jr	nc,plus		; Yes
+	xor	a		; No, assume CP/M 2.2 (Non-banked)
+	jr	move
+
+plus:	ld	c,$scb		; Get common memory address
+	ld	de,basescb	;  from SCB
+	call	bdos
+	ld	a,h		; Non-banked has zero common
+	or	l		;  base address 
+	jr	z,move
+	cpw	hl,common$base	; Is common memory the same as configured?
+	jr	z,move		; Yes
+
+	ld	de,noboot	; Not the same, abort
+	jp	abort		;  with an error message
+
+move:	ld	hl,from		; Copy boot routine into
+	ld	de,to		;  common memory (this
+	ld	bc,length	;  may overwrite CP/M)
+	ldir
+	ld	(banked),a	; Save banked hint
+	jp	to		; Go to common
+
+  else
+
+	; REH280 has UZI loader in BIOS USERF routine
+
+	di			; Disable all interrupts
+	ld	bc,0057h
+	ld	hl,(01)		
+	add	hl,bc		; Calculate entry address
+	ld	de,0010h	;  for function number 10h
+	ld	bc,00
+	jp	(hl)		; Do BIOS user function "load uzi"
+
+  endif
+
+dmaadr:	defw	load$addr	; Load address for UNIX.CIM
+
+pfcb:	defw	ddma+1		; Command-line argument
+	defw	fcb
+
+fcb:	defb	0,'UNIX    CIM'	; Core-Image default file name
+	defb	0,0,0,0,0
+	defw	0,0,0,0,0,0,0,0
+	defw	0
+	defb	0	
+
+  if z280rc
+
+basescb:
+	defb	05dh		; Get SCB parameter block
+	defb	0		;  to fetch common memory
+	defw	0000h		;  base address.
+
+noboot:	defb	13,10,'Common memory address mismatch.$'
+
+unix_len   equ   6000h		; Default length of image
+unix_start equ   0000h		; UZI280 entry-point
+
+from:
+	; The following is copied to common memory
+	; so that the Memory Management Unit can be
+	; reprogrammed.
+
+	.phase	common$base
+
+to	equ	$
+
+loadunix:
+	or	a		; Register A is a hint for banked
+	jr	nz,gobanked
+
+	ld	(src),load$addr	; Alter DMA src address
+				;  for non-banked system
+
+	ld	hl,(dmaadr)	; Where is the end of image?
+	subw	hl,load$addr-80h ; (add an extra 128 bytes)
+	ld	(len),hl
+
+gobanked:
+	iopage	ctp
+
+	in	a,(cs0)		; Stop Counter/Timer 0
+	and	7fh
+        out    	(cs0),a
+
+        di			; Interrupts OFF
+
+	ld	a,0
+banked	equ	$-1
+	or	a		; Only need to do DMA for non-banked
+	jr	nz,memmap
+
+	iopage	dmap
+
+	ld	c,dal3		; Use DMA3
+        ld	hl,ld_unix
+	outiw			; DAL
+	inc	c
+	dec	hl
+	outiw			; DAH
+	inc	c
+	outiw			; SAL
+	inc	c
+	dec	hl
+	outiw			; SAH
+	inc	c
+	outiw			; Length
+	inc	c
+	outiw			; Descriptor
+
+	; UZI280 core image file is now at physical address 010000h
+
+memmap:
+        iopage mmup
+
+spdr0	equ	10h
+
+	ld	hl,mmtab	; Change SYS-MMU mapping
+	ld	a,spdr0
+	out	(pdr),a
+	ld	bc,14*256+bmp	; Map PDR0..13 to 010000h..01dfffh
+	otirw
+
+updr0	equ	00h
+
+	ld	hl,mmtab	; Also change USR-MMU mapping
+;	ld	a,updr0
+	xor	a		; (saves a byte)
+	out	(pdr),a
+	ld	bc,14*256+bmp	; Map PDR0..13 to 010000h..01dfffh
+	otirw
+
+	ld	hl,1011101111100000b ; User/System mode 4K pages
+	ld	c,mmcr
+	outw	(c),hl		; Memory Management ON
+
+	iopage	0
+
+	jp     unix_start       ; Start unix_system
+
+ld_unix:
+dest:	defw	0000h
+	defb	01h		; Dest 010000h -> IVT at 010000h phys.
+src:	defw	common$base+load$addr	; load$addr is here for Banked
+	defb	00h		; Src
+len:	defw	unix_len	; Length of unix-system (in bytes)
+	defw	1000000100000000b ; descriptor -> 8-Bit Transfer mem -> mem
+
+mmtab:	defw	010ah	; PDRs for 010000h..01dfffh
+	defw	011ah
+	defw	012ah
+	defw	013ah
+	defw	014ah
+	defw	015ah
+	defw	016ah
+	defw	017ah
+	defw	018ah
+	defw	019ah
+	defw	01aah
+	defw	01bah
+	defw	01cah
+	defw	01dah
+
+	.dephase
+
+length	equ	$ - from
+
+here	equ	$		; Must be room for stack to load$addr
+
+  endif
+
+	end

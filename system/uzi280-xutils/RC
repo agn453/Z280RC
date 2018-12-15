@@ -1,0 +1,7 @@
+#
+#  startup shell script executed by init.
+# 
+# set the uart line into fast interrupt handling mode for
+# modem/kermit usage.
+# /bin/setuart fast
+

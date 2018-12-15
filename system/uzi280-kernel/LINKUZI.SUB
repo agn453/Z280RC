@@ -1,0 +1,10 @@
+; Link core image of UZI into UNIX.CIM
+a:linq 
+<-munix.sym -n -pdata=0,text,bss -ounix.cim -c000 \
+<data.obj machasm.obj machdep.obj filesys.obj process.obj procasm.obj \
+<scall1.obj scall2.obj scall3.obj scall4.obj \
+<devtty.obj devttyas.obj \
+<devio.obj devflop.obj devmisc.obj devwd.obj ide.obj \
+<cache.obj cachasm.obj newuput.obj \
+<runtime.lib \
+<start.obj

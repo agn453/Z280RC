@@ -1,0 +1,4 @@
+era runtime.lib
+libr r runtime.lib bcopy.obj bzero.obj outin.obj
+libr r runtime.lib kprintf.obj itob.obj asar.obj asdiv.obj wrelop.obj
+libr r runtime.lib idiv.obj imul.obj shar.obj shll.obj shlr.obj csv.obj

@@ -1,0 +1,1318 @@
+
+E>date
+A:DATE     COM
+Sat 15/12/2018 22:17:28
+E>make
+E:MAKE     COM
+   c280 -v -c data.c
+   c280 -v -c -o2 machdep.c
+   c280 -v -c machasm.c
+   c280 -v -c newuput.c
+   c280 -v -c -o2 process.c
+   c280 -v -c procasm.c
+   c280 -v -c -o2 filesys.c
+   c280 -v -c -o2 scall1.c
+   c280 -v -c -o2 scall2.c
+   c280 -v -c -o2 scall3.c
+   c280 -v -c scall4.c
+   c280 -v -c -o2 cache.c
+   c280 -v -c cachasm.c
+   c280 -v -c -o2 devflop.c
+   c280 -v -c -o2 devio.c
+   c280 -v -c -o2 devmisc.c
+   c280 -v -c -o2 devtty.c
+   c280 -v -c devttyas.c
+   c280 -v -c -o2 devwd.c
+   c280 -v -c idecf.as
+   c280 -v -c -o2 ideconf.c
+   c280 -v -c start.c
+   c280 -v -c bcopy.c
+   c280 -v -c bzero.c
+   c280 -v -c outin.c
+   c280 -v -c asar.as
+   c280 -v -c asdiv.as
+   c280 -v -c wrelop.as
+   c280 -v -c idiv.as
+   c280 -v -c imul.as
+   c280 -v -c shar.as
+   c280 -v -c shll.as
+   c280 -v -c shlr.as
+   c280 -v -c csv.as
+   c280 -v -c -o2 kprintf.c
+   c280 -v -c -o2 itob.c
+   mklib.sub
+   lkuzi.sub
+   lk2m80.sub
+E:MAKE@@@  SUB
+A:SUBMIT   COM
+
+E>c280 -v -c data.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: DATA.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oDATA.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 machdep.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: MACHDEP.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+MACHDEP.C: main()
+    60:     ptab_pointer    = ptab;
+                                  ^ illegal conversion of pointer to integer (warning)
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 224 bytes optimized away
+ 554 bytes replaced
+0:A:ZAS -J -N -oMACHDEP.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c machasm.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: MACHASM.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oMACHASM.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c newuput.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: NEWUPUT.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oNEWUPUT.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 process.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: PROCESS.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+PROCESS.C: init2()
+    85:     if (d_open( 13                  ) != 0)
+                   d_open() declared implicit int ^  (warning)
+    96:     if (fmount(ROOTDEV,((inoptr)0)))
+            fmount() declared implicit int ^  (warning)
+   104:     for (k=ub.u_d.u_page; k < (ub.u_d.u_page+16); ++k)
+                                ^ illegal conversion between pointer types (warning)
+                    operands of < not same pointer type ^  (warning)
+   105:         *k = ((pg_descr *)0)      ;
+                                          ^ illegal conversion of pointer to integer (warning)
+   120: }
+        ^ unused variable declaration: n_open (warning)
+PROCESS.C: psleep()
+   153: }
+        ^ unused variable definition: dummy (warning)
+PROCESS.C: ptab_alloc()
+   311:       if ((p->p_ublk = zerobuf())==0    )
+                                        ^ illegal conversion of integer to pointer (warning)
+                                        ^ zerobuf() declared implicit int (warning)
+   315: }
+        ^ unused variable definition: i (warning)
+PROCESS.C: clkint2()
+   395: }
+        ^ unused variable declaration: in_cawrite (warning)
+PROCESS.C: unix2()
+   483:     ub.u_d.u_usp = usp();
+                                ^ illegal conversion of integer to pointer (warning)
+                                ^ usp() declared implicit int (warning)
+   487:     ub.u_d.u_argn3 = ugetw(ub.u_d.u_usp+4);
+                    ugetw() declared implicit int ^  (warning)
+   492:     ub.u_d.u_retloc = ugetw(ub.u_d.u_usp);
+                                                 ^ illegal conversion of integer to pointer (warning)
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 109 bytes optimized away
+ 266 bytes replaced
+0:A:ZAS -J -N -oPROCESS.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c procasm.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: PROCASM.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+PROCASM.C: swapout()
+    96:     ub.u_d.u_usp = usp();
+                                ^ illegal conversion of integer to pointer (warning)
+                                ^ usp() declared implicit int (warning)
+PROCASM.C: dofork()
+   266:     ub.u_d.u_usp = usp();
+                                ^ illegal conversion of integer to pointer (warning)
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oPROCASM.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 filesys.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: FILESYS.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+FILESYS.C: newfile()
+   515:       if ((getperm(pino) & 0002)==0     )
+                                       ^ getperm() declared implicit int (warning)
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 741 bytes optimized away
+ 1602 bytes replaced
+0:A:ZAS -J -N -oFILESYS.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 scall1.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: SCALL1.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+SCALL1.C: _link()
+   344:     if(!(getperm(ino) & 0002) && !super())
+                                    ^ getperm() declared implicit int (warning)
+   391: }
+        ^ unused variable declaration: getmode (warning)
+SCALL1.C: _unlink()
+   462: }
+        ^ unused variable declaration: getmode (warning)
+SCALL1.C: readi()
+   592:                  (ino->c_node.i_size.o_offset-ub.u_d.u_offset.o_offset));
+                                                    min() declared implicit int ^  (warning)
+scall1b.c: _mknod()
+   117: }
+        ^ unused label: nogood2 (warning)
+        ^ unused variable declaration: super (warning)
+scall1b.c: _utime()
+   323:     if (ino->c_node.i_uid != ub.u_d.u_euid && !super())
+                                super() declared implicit int ^  (warning)
+scall1b.c: _umount()
+   727: }
+        ^ unused variable declaration: in_casync (warning)
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 562 bytes optimized away
+ 1226 bytes replaced
+0:A:ZAS -J -N -oSCALL1.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 scall2.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: SCALL2.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+SCALL2.C: wargs()
+   176:     while (ptr = ugetw(argv++))
+                                      ^ illegal conversion of integer to pointer (warning)
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 273 bytes optimized away
+ 650 bytes replaced
+0:A:ZAS -J -N -oSCALL2.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 scall3.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: SCALL3.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+SCALL3.C: _signal()
+   233:     retval = ub.u_d.u_sigvec[(int16)ub.u_d.u_argn1];
+                  illegal conversion of pointer to integer ^  (warning)
+SCALL3.C: _kill()
+   279:                 if (ub.u_d.u_ptab->p_uid == p->p_uid || super() )
+                                          super() declared implicit int ^  (warning)
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 92 bytes optimized away
+ 210 bytes replaced
+0:A:ZAS -J -N -oSCALL3.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c scall4.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: SCALL4.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+SCALL4.C: _execve()
+   137:     p = find_zombie2();
+                              ^ illegal conversion of integer to pointer (warning)
+                              ^ find_zombie2() declared implicit int (warning)
+   217:     datalen = dataptr;
+                             ^ illegal conversion of pointer to integer (warning)
+   313:                 p=make_zombie();
+                                       ^ illegal conversion of integer to pointer (warning)
+                                       ^ make_zombie() declared implicit int (warning)
+   350:     doexec((int16 *)(ub.u_d.u_isp = nenvp - 2));
+            illegal conversion between pointer types ^  (warning)
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oSCALL4.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 cache.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: CACHE.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 44 bytes optimized away
+ 90 bytes replaced
+0:A:ZAS -J -N -oCACHE.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c cachasm.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: CACHASM.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oCACHASM.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 devflop.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: DEVFLOP.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 0 bytes optimized away
+ 0 bytes replaced
+0:A:ZAS -J -N -oDEVFLOP.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 devio.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: DEVIO.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+DEVIO.C: bread()
+    90:         if (bdread(bp) == -1)
+                                    ^ bdread() declared implicit int (warning)
+DEVIO.C: bfree()
+   128:         if (bdwrite(bp) == -1)
+                                     ^ bdwrite() declared implicit int (warning)
+DEVIO.C: freebuf()
+   230: }
+        ^ unused variable definition: i (warning)
+DEVIO.C: bdread()
+   270:       if ((validdev(bp->bf_dev))==0     )
+               validdev() declared implicit int ^  (warning)
+DEVIO.C: pageread()
+   311:     swapbase = page;
+                           ^ illegal conversion of integer to pointer (warning)
+DEVIO.C: pagewrite()
+   327:     swapbase = page;
+                           ^ illegal conversion of integer to pointer (warning)
+DEVIO.C: insq()
+   421:     oldspl = spl(0);
+                           ^ spl() declared implicit int (warning)
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 290 bytes optimized away
+ 578 bytes replaced
+0:A:ZAS -J -N -oDEVIO.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 devmisc.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: DEVMISC.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 14 bytes optimized away
+ 28 bytes replaced
+0:A:ZAS -J -N -oDEVMISC.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 devtty.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: DEVTTY.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+DEVTTY.C:
+   146: char *dflt_mode = 0006000|  0000020|0000010| 0000000;
+                   illegal conversion of integer to pointer ^  (warning)
+DEVTTY.C: tty_read()
+   258:             if (remq(&ttyinq[minor],&c))
+                  remq() declared implicit int ^  (warning)
+DEVTTY.C: tty_write()
+   342:                 c = ugetc(ub.u_d.u_base);
+                  ugetc() declared implicit int ^  (warning)
+DEVTTY.C: tty_open()
+   420: }
+        ^ unused variable definition: j (warning)
+DEVTTY.C: tty_close()
+   443: }
+        ^ unused variable definition: j (warning)
+DEVTTY.C: tty_ioctl()
+   500:             break;
+                    ^ Unreachable code (warning)
+DEVTTY.C: tinproc()
+   528:     if (c == 0x1b && td->t_flags == dflt_mode)
+                        operands of == not same type ^  (warning)
+   558:             if (uninsq(&ttyinq[minor],&oc))
+                   uninsq() declared implicit int ^  (warning)
+   646:     if (insq(&ttyinq[minor],c))
+         insq() declared implicit int ^  (warning)
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 280 bytes optimized away
+ 602 bytes replaced
+0:A:ZAS -J -N -oDEVTTY.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c devttyas.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: DEVTTYAS.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oDEVTTYAS.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 devwd.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: DEVWD.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 24 bytes optimized away
+ 50 bytes replaced
+0:A:ZAS -J -N -oDEVWD.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c idecf.as
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:ZAS -OIDECF.OBJ IDECF.AS
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 ideconf.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: IDECONF.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 0 bytes optimized away
+ 0 bytes replaced
+0:A:ZAS -J -N -oIDECONF.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c start.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: START.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oSTART.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c bcopy.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: BCOPY.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oBCOPY.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c bzero.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: BZERO.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oBZERO.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c outin.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: OUTIN.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:ZAS -N -oOUTIN.OBJ M:$CTMP1.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c asar.as
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:ZAS -OASAR.OBJ ASAR.AS
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c asdiv.as
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:ZAS -OASDIV.OBJ ASDIV.AS
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c wrelop.as
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:ZAS -OWRELOP.OBJ WRELOP.AS
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c idiv.as
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:ZAS -OIDIV.OBJ IDIV.AS
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c imul.as
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:ZAS -OIMUL.OBJ IMUL.AS
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c shar.as
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:ZAS -OSHAR.OBJ SHAR.AS
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c shll.as
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:ZAS -OSHLL.OBJ SHLL.AS
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c shlr.as
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:ZAS -OSHLR.OBJ SHLR.AS
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c csv.as
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:ZAS -OCSV.OBJ CSV.AS
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 kprintf.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: KPRINTF.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 33 bytes optimized away
+ 64 bytes replaced
+0:A:ZAS -J -N -oKPRINTF.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>c280 -v -c -o2 itob.c
+E:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+0:A:CPP -DCPM -DHI_TECH_C -Dz80 -I0:A: ITOB.C M:$CTMP1.$$$
+0:A:P1 M:$CTMP1.$$$ M:$CTMP2.$$$ M:$CTMP3.$$$
+0:A:CGEN M:$CTMP2.$$$ M:$CTMP1.$$$
+0:A:OPTIM M:$CTMP1.$$$ M:$CTMP2.$$$
+0:A:OPTIMH M:$CTMP2.$$$ M:$CTMP3.$$$
+ 35 bytes optimized away
+ 82 bytes replaced
+0:A:ZAS -J -N -oITOB.OBJ M:$CTMP3.$$$
+ERA M:$CTMP1.$$$
+ERA M:$CTMP2.$$$
+ERA M:$CTMP3.$$$
+ERA M:$$EXEC.$$$
+
+E>mklib.sub
+E:MKLIB    SUB
+A:SUBMIT   COM
+
+E>era runtime.lib
+E>libr r runtime.lib bcopy.obj bzero.obj outin.obj
+A:LIBR     COM
+
+E>libr r runtime.lib kprintf.obj itob.obj asar.obj asdiv.obj wrelop.obj
+A:LIBR     COM
+
+E>libr r runtime.lib idiv.obj imul.obj shar.obj shll.obj shlr.obj csv.obj
+A:LIBR     COM
+
+E>lkuzi.sub
+E:LKUZI    SUB
+A:SUBMIT   COM
+
+E>; Link new object library to UZI280.OBJ
+E>era uzi280.obj
+No File
+E>; LINQ is the HiTech C V3.09 link program (renamed to keep
+E>; the DigitalResearch linker LINK.COM on the system drive)
+E>a:linq
+A:LINQ     COM
+link> -r -ouzi280.obj \
+link> data.obj machasm.obj machdep.obj filesys.obj process.obj procasm.obj \
+link> scall1.obj scall2.obj scall3.obj scall4.obj \
+link> devtty.obj devttyas.obj \
+link> devio.obj devflop.obj devmisc.obj devwd.obj idecf.obj \
+link> cache.obj cachasm.obj newuput.obj \
+link> runtime.lib
+
+E>lk2m80.sub
+E:LK2M80   SUB
+A:SUBMIT   COM
+
+E>; Link UZI280 core image with IDE parameters
+E>a:linq
+A:LINQ     COM
+link> -munix.sym -n -pdata=0,text,bss -ounix.cim -c000 \
+link> uzi280.obj ideconf.obj \
+link> start.obj
+
+E>era  MAKE@@@.SUB
+E>
+E>; Now the CP/M Utilities
+
+E>F:
+F>make
+F:MAKE     COM
+   c280 -c -of2 devio.c
+   c280 -c -of2 xdevtty.c
+   c280 -c -of2 xdevwd.c
+   c280 -c -of2 xdevflo.c
+   c280 -c -of2 xdevmisc.c
+   c280 -c -of2 xmachdep.c
+   c280 -c -of2 data.c
+   c280 -c -of2 xfs1.c
+   c280 -c -of2 xfs2.c
+   c280 -c -of2 bcopy.c
+   c280 -c -of2 bzero.c
+   c280 -c -of2 spl.c
+   c280 -c -of2 itob.c
+   c280 -c -of2 uput.c
+   c280 -c idecf.as
+   c280 -c -of2 bios.c
+   mkxlib.sub
+F:MAKE@@@  SUB
+A:SUBMIT   COM
+
+F>c280 -c -of2 devio.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+DEVIO.C: bread()
+    85:         if (bdread(bp) == -1)
+                                    ^ bdread() declared implicit int (warning)
+DEVIO.C: bfree()
+   126:         if (bdwrite(bp) == -1)
+                                     ^ bdwrite() declared implicit int (warning)
+DEVIO.C: bdread()
+   262:       if ((validdev(bp->bf_dev))==0     )
+               validdev() declared implicit int ^  (warning)
+DEVIO.C: pageread()
+   303:     swapbase = page;
+                           ^ illegal conversion of integer to pointer (warning)
+DEVIO.C: pagewrite()
+   315:     swapbase = page;
+                           ^ illegal conversion of integer to pointer (warning)
+DEVIO.C: insq()
+   405:     oldspl = spl(0);
+                           ^ spl() declared implicit int (warning)
+ 290 bytes optimized away
+ 582 bytes replaced
+
+F>c280 -c -of2 xdevtty.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 6 bytes optimized away
+ 16 bytes replaced
+
+F>c280 -c -of2 xdevwd.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+XDEVWD.C: wd_read()
+    42:     return(setup(minor, rawflag));
+           setup() declared implicit int ^  (warning)
+XDEVWD.C: setup()
+    70:             dptrlo  = swapbase;
+                                      ^ illegal conversion of pointer to integer (warning)
+    77:             dptrlo  = ub.u_d.u_base;
+                                           ^ illegal conversion of pointer to integer (warning)
+    84:         dptrlo  = ub.u_d.u_buf->bf_data;
+                                               ^ illegal conversion of pointer to integer (warning)
+ 19 bytes optimized away
+ 40 bytes replaced
+
+F>c280 -c -of2 xdevflo.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+XDEVFLO.C: fd_read()
+    43:     return (fd(1, minor, rawflag));
+               fd() declared implicit int ^  (warning)
+XDEVFLO.C: _1read()
+   143:   temp = (char)bdos(25);
+                               ^ bdos() declared implicit int (warning)
+ 30 bytes optimized away
+ 62 bytes replaced
+
+F>c280 -c -of2 xdevmisc.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 14 bytes optimized away
+ 28 bytes replaced
+
+F>c280 -c -of2 xmachdep.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 69 bytes optimized away
+ 184 bytes replaced
+
+F>c280 -c -of2 data.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 0 bytes optimized away
+ 0 bytes replaced
+
+F>c280 -c -of2 xfs1.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+XFS1.C: xfs_init()
+    45:     if (d_open( 6    ) != 0)
+                                   ^ d_open() declared implicit int (warning)
+    51:     if (fmount(ROOTDEV,((inoptr)0)))
+            fmount() declared implicit int ^  (warning)
+XFS1.C: _open()
+    94:     if ((uindex = uf_alloc()) == -1)
+                                    ^ uf_alloc() declared implicit int (warning)
+    97:     if ((oftindex = oft_alloc()) == -1)
+                                       ^ oft_alloc() declared implicit int (warning)
+   105:     perm = getperm(ino);
+                               ^ getperm() declared implicit int (warning)
+   113:     if (getmode(ino) == 040000 &&
+                                       ^ getmode() declared implicit int (warning)
+   120:     if (isdevice(ino) && d_open((int)ino->c_node.i_addr[0]) != 0)
+                                       isdevice() declared implicit int ^  (warning)
+XFS1.C: _close()
+   148:     return(doclose(uindex));
+                                   ^ doclose() declared implicit int (warning)
+XFS1.C: _link()
+   274:     if (getmode(ino) == 040000 && !super())
+                    super() declared implicit int ^  (warning)
+   299:     if (ch_link(parent2,"",filename(name2),ino) == 0)
+                            ch_link() declared implicit int ^  (warning)
+XFS1.C: _unlink()
+   365: }
+        ^ unused variable declaration: i_open (warning)
+XFS1.C: _write()
+   409: }
+        ^ unused variable definition: offp (warning)
+XFS1.C: readi()
+   475:                  (ino->c_node.i_size.o_offset-ub.u_d.u_offset.o_offset));
+                                                    min() declared implicit int ^  (warning)
+   504:         ub.u_d.u_count = cdread(ino->c_node.i_addr[0]);
+                               cdread() declared implicit int ^  (warning)
+XFS1.C: writei()
+   584:         ub.u_d.u_count = cdwrite(ino->c_node.i_addr[0]);
+                               cdwrite() declared implicit int ^  (warning)
+   594: }
+        ^ unused variable declaration: zerobuf (warning)
+        ^ unused variable definition: created (warning)
+XFS1.C: _stat()
+   932:       if ((valadr(buf,sizeof(struct stat)) && (ino = n_open(path,((inoptr*)0))))==0     )
+                                                        valadr() declared implicit int ^  (warning)
+ 519 bytes optimized away
+ 1166 bytes replaced
+
+F>c280 -c -of2 xfs2.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+XFS2.C: _ioctl()
+   107:       if ((isdevice(ino))==0    )
+                                        ^ isdevice() declared implicit int (warning)
+   113:       if ((getperm(ino) & 0002)==0      )
+                                      ^ getperm() declared implicit int (warning)
+   121:     if (d_ioctl(dev, request,data))
+          d_ioctl() declared implicit int ^  (warning)
+XFS2.C: _mount()
+   139:       if ((super())==0  )
+                                ^ super() declared implicit int (warning)
+   154:     if (getmode(sino) != 060000)
+                                       ^ getmode() declared implicit int (warning)
+   168:     if ( dev >=   4     || d_open(dev))
+               d_open() declared implicit int ^  (warning)
+   182:     if (fmount(dev,dino))
+                                ^ fmount() declared implicit int (warning)
+XFS2.C: _umount()
+   226:       if ((validdev(dev))==0    )
+                                        ^ validdev() declared implicit int (warning)
+XFS2.C: srch_dir()
+   399:             if (namecomp(compname,buf[curentry].d_name))
+                              namecomp() declared implicit int ^  (warning)
+XFS2.C: i_open()
+   451:     static nexti = i_tab;
+                                ^ illegal conversion of pointer to integer (warning)
+   476:     j = nexti;
+                     ^ illegal conversion of integer to pointer (warning)
+   479:         nexti =j;
+                        ^ illegal conversion of pointer to integer (warning)
+XFS2.C: blk_alloc()
+   866:     buf = bread(devno, newno, 2);
+                                        ^ illegal conversion between pointer types (warning)
+ 810 bytes optimized away
+ 1748 bytes replaced
+
+F>c280 -c -of2 bcopy.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 6 bytes optimized away
+ 12 bytes replaced
+
+F>c280 -c -of2 bzero.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 6 bytes optimized away
+ 12 bytes replaced
+
+F>c280 -c -of2 spl.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 2 bytes optimized away
+ 4 bytes replaced
+
+F>c280 -c -of2 itob.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 35 bytes optimized away
+ 82 bytes replaced
+
+F>c280 -c -of2 uput.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 12 bytes optimized away
+ 24 bytes replaced
+
+F>c280 -c idecf.as
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+
+F>c280 -c -of2 bios.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 2 bytes optimized away
+ 4 bytes replaced
+
+F>mkxlib.sub
+F:MKXLIB   SUB
+A:SUBMIT   COM
+
+F>era xlib.lib
+F>libr
+A:LIBR     COM
+libr>  r xlib.lib xfs1.obj xfs2.obj devio.obj xdevtty.obj xdevwd.obj xdevflo.obj \
+libr>  xdevmisc.obj xmachdep.obj data.obj \
+libr>  itob.obj uput.obj idecf.obj \
+libr>  bzero.obj bcopy.obj spl.obj bios.obj
+
+F>era  MAKE@@@.SUB
+F>
+F>
+
+F>; Now the Utilities
+F>XUTILS
+F:XUTILS   SUB
+A:SUBMIT   COM
+
+F>c280 -c -of2 ideconf.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+ 0 bytes optimized away
+ 0 bytes replaced
+
+F>;
+F>c280 -c -of2 mkfs.c
+A:C280     COM
+HI-TECH C COMPILER (CP/M-80) V3.09
+Copyright (C) 1984-87 HI-TECH SOFTWARE
+Special version for the Zilog Z280 MPU
+
+MKFS.C: main()
+    37:     dev = atoi(argv[1]);
+                               ^ atoi() declared implicit int (warning)
+    61:     if (!yes())
+                      ^ yes() declared implicit int (warning)
+    65:     if (d_open(dev))
+                           ^ d_open() declared implicit int (warning)
+ 79 bytes optimized away
+ 164 bytes replaced
+
+F>;
+F>; (fsck has a missing _da_read error)
+F>;c280 -c -of2 fsck.c
+F>;
+F>lkxutil mkfs
+F:LKXUTIL  SUB
+A:SUBMIT   COM
+
+F>a:linq
+A:LINQ     COM
+link> -c100h -oMKFS.com 0:a:crtcpm.obj MKFS.obj ideconf.obj \
+link> xlib.lib 0:a:lib280c.lib
+
+F>;lkxutil fsck
+F>lkxutil ucp
+F:LKXUTIL  SUB
+A:SUBMIT   COM
+
+F>a:linq
+A:LINQ     COM
+link> -c100h -oUCP.com 0:a:crtcpm.obj UCP.obj ideconf.obj \
+link> xlib.lib 0:a:lib280c.lib
+
+F>
+F>; Now make a bootable UZI volume (Starts after the 8x CP/M 8MB partitions)
+F>
+F>mkboot
+F:MKBOOT   SUB
+A:SUBMIT   COM
+
+F>mkfs 0 600 65000
+F:MKFS     COM
+Making filesystem on device 0 with isize 600 fsize 65000. Confirm? y
+
+F>ucp 0
+F:UCP      COM
+unix: mkdir dev
+unix: cd dev
+unix: mknod tty  020666 5
+unix: mknod tty1 020666 6
+unix: mknod tty2 020666 7
+unix: mknod tty3 020666 11
+unix: mknod tty4 020666 12
+unix: mknod tty5 020666 13
+unix: mknod tty6 020666 14
+unix: mknod wd0  060644 0
+unix: mknod wd1  060644 2
+unix: mknod wd2  060644 3
+unix: mknod fd0  060644 1
+unix: mknod rwd0 020444 0
+unix: mknod rwd1 020444 2
+unix: mknod rwd2 020444 3
+unix: mknod lpr  020222 4
+unix: mknod null 020666 8
+unix: mknod kmem 020444 9
+unix: mknod rmt  020444 10
+unix: mknod wmt  020222 10
+unix: cd /
+unix: mkdir /etc
+unix: mkdir /bin
+unix: mkdir /usr
+unix: mkdir /usr/root
+unix: mkdir /Tapes
+unix: cd /
+unix: bget init
+unix: chmod init 0755
+unix: cd /bin
+unix: bget clam
+unix: chmod clam 0755
+unix: bget sh
+unix: chmod sh 0755
+unix: bget setuart
+unix: chmod  setuart 0755
+unix: bget ls
+unix: chmod ls 0755
+unix: bget ln
+unix: chmod ln 0755
+unix: bget login
+unix: chmod login 0755
+unix: bget mkdir
+unix: chmod mkdir 0755
+unix: bget rm
+unix: chmod rm 0755
+unix: bget rmdir
+unix: chmod rmdir 0755
+unix: bget touch
+unix: chmod touch 0755
+unix: bget mount
+unix: chmod mount 0755
+unix: bget umount
+unix: chmod umount 0755
+unix: bget uncompress
+unix: chmod uncompress 0755
+unix: bget sync
+unix: chmod sync 0755
+unix: bget tar
+unix: chmod tar 0755
+unix: bget kill
+unix: chmod kill 0755
+unix: bget ps
+unix: chmod ps 0755
+unix: cd /etc
+unix: get rc
+unix: chmod rc 0644
+unix: get passwd
+unix: chmod passwd 0644
+unix: get group
+unix: chmod group 0644
+unix: get ttytab
+unix: chmod ttytab 0644
+unix: get termcap
+unix: chmod termcap 0644
+unix: bget utmp
+unix: exit
+
+F>
+F>
+
+F>e:
+E>
+E>; Build the boot loader
+E>zsm4 =bootuzi
+A:ZSM4     COM
+Z80/Z180/Z280 Macro-Assembler V4.0 Beta 11
+
+Errors: 0
+Finished.
+
+E>link bootuzi
+A:LINK     COM
+LINK 1.31
+
+ABSOLUTE     0000
+CODE SIZE    0183 (0100-0282)
+DATA SIZE    0000
+COMMON SIZE  0000
+USE FACTOR     00
+
+E>bootuzi
+E:BOOTUZI  COM
+
+UZI280 is (c) Copyright (1990-96) by Stefan Nitschke and Doug Braun
+
+boot: 0
+init: /usr/adm/wtmp: Bad file number
+UZI280 version 1.12
+login: root
+%ls -la
+total 12
+rwxrwxrwx   9 root          512 Apr 19     1992 ./
+rwxrwxrwx   9 root          512 Apr 19     1992 ../
+rwxrwxrwx   2 root          512 Apr 19     1992 Tapes/
+rwxrwxrwx   2 root          512 Apr 19     1992 bin/
+rwxrwxrwx   2 root          512 Apr 19     1992 dev/
+rwxrwxrwx   2 root          512 Apr 19     1992 etc/
+rwxr-xr-x   1 root         9088 Apr 19     1992 init*
+rwxrwxrwx   2 root          512 Apr 19     1992 usr/
+%cd bin
+%ls -la
+total 260
+rwxrwxrwx   2 root          512 Apr 19     1992 ./
+rwxrwxrwx   9 root          512 Apr 19     1992 ../
+rwxr-xr-x   1 root        83200 Apr 19     1992 clam*
+rwxr-xr-x   1 root         8704 Apr 19     1992 kill*
+rwxr-xr-x   1 root        10880 Apr 19     1992 ln*
+rwxr-xr-x   1 root         9728 Apr 19     1992 login*
+rwxr-xr-x   1 root        16512 Apr 19     1992 ls*
+rwxr-xr-x   1 root         8064 Apr 19     1992 mkdir*
+rwxr-xr-x   1 root         8192 Apr 19     1992 mount*
+rwxr-xr-x   1 root         9600 Apr 19     1992 ps*
+rwxr-xr-x   1 root        10752 Apr 19     1992 rm*
+rwxr-xr-x   1 root         8576 Apr 19     1992 rmdir*
+rwxr-xr-x   1 root         4736 Apr 19     1992 setuart*
+rwxr-xr-x   1 root        31104 Apr 19     1992 sh*
+rwxr-xr-x   1 root          768 Apr 19     1992 sync*
+rwxr-xr-x   1 root        30080 Apr 19     1992 tar*
+rwxr-xr-x   1 root         4224 Apr 19     1992 touch*
+rwxr-xr-x   1 root         5888 Apr 19     1992 umount*
+rwxr-xr-x   1 root        14592 Apr 19     1992 uncompress*
+%cd ..
+%mkdir /tmp
+%cd /tmp
+%ls -la >t.tmp
+%ls -la
+total 1
+rwxrwxrwx   2 root          512 Dec 11 23:59:58 ./
+rwxrwxrwx  10 root          512 Dec 11 23:59:58 ../
+rw-rw-rw-   1 root          165 Dec 11 23:59:58 t.tmp
+%sync
+%sync
+%sync
+%<ctrl-d>
+
+UZI280 version 1.12
+login:
+
+(hit reset to restart / shutdown)
+

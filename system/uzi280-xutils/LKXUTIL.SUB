@@ -1,0 +1,3 @@
+a:linq
+<-c100h -o$1.com 0:a:crtcpm.obj $1.obj ideconf.obj \
+<xlib.lib 0:a:lib280c.lib

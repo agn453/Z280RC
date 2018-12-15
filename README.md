@@ -20,6 +20,31 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+15-Dec-2018
+-----------
+
+I've managed to modify the UZI280 operating system to boot up on
+the Z280RC.  There's been a few hiccups along the way (mainly dealing
+with a mixture of word-count and byte-count DMA transfers) and the requirement
+for using a modified version of the HiTech C V3.09 compiler and Z280
+library routines to build the system.  I based my modifications on the
+UZI280 source code V1.12 for the Tillman Reh CPU280 system from
+http://oldcomputers-ddns.org/public/pub/rechner/zilog/z280/uzi280/index.html
+
+My modified sources are in the system/uzi280-kernel and system/uzi280-xutils
+folders.  There are two CP/M library files UZIKERNL.LBR and UZIXUTIL.LBR
+that can be transferred and extracted (using NULU.COM under CP/M-Plus) to
+different drives/user areas (I use E0: for the kernel files, F0: for the
+CP/M Utilities).  A MAKEFILE in each can be used to build the libraries
+and UZI system image using the MAKE command.  XUTILS.SUB will build two
+CP/M utilities MKFS and UCP for creating a UZI partition and copying files
+from CP/M.  The log-file system/kernel/UZIBUILD.LOG is a transcript of the
+build process and start-up.
+
+Still to-do is to copy the utilities and CP/M emulator onto the UZI
+partition.
+
+
 14-Dec-2018
 -----------
 

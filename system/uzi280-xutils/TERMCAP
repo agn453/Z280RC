@@ -1,0 +1,53 @@
+#
+# UZI280 termcap file
+#
+#
+# TVI950 
+#
+tvi950|club80| \\
+::ho=\036:cm=\E=%+ %+ :cl=\E*:up=\E1:do=\E3:nd=\014:bl=\007:bc=\b: \\
+:ce=\ET:vi=\E.0:ve=\E.3:vs=\E.2:as=\E$:ae=\E%:dl=\ER: \\
+:cs=\E=:bo=\EG5:be=\EG0:cd=\EY:so=\EG4:se=\EG0:sr=\E3:bs=\010: \\
+:ti=\E*:te=\E):md=\EG5:me=\EG0:us=\EG1:ue=\EG0:al=\EE:ku=\005: \\
+:kd=\030:kl=\023:kr=\002:k1=\022:k2=\003:co#80:li#25:am#00:xn#00:
+#
+# the same but small 64 x 20 Layout 
+#
+tvi-small| \\
+:pc=" ":ho=\036:cm=\E=%+ %+ :cl=\E*:up=\Ej:nd=\014:bl=\007:bc=\b: \\
+:ce=\ET: \\
+:cs=\E=:bo=\EG7:be=\EG2:cd=\EY:so=\EG4:se=\EG2:sr=\E3:bs=\010: \\
+:ti=\E*:te=\E):md=\EG5:me=\EG2:us=\EG1:ue=\EG2:al=\EE:ku=\005: \\
+:kd=\030:kl=\023:kr=\002:k1=\022:k2=\003:co#64:li#20:am#00:xn#00:
+#
+#
+#  Add your terminal here
+#
+# Syntax:  String sequence  :name=string:
+#	   numerical value  :name#val:
+#	   Terminal name    name|next_name|..|
+#
+# ANSI Terminal with 72 lines (facit)
+#
+ansi| \\
+:pc:ho=\E[H:cm=\E[%i%d;%dH:cl=\E[X: \\
+:up=\E[A:bl=\007:ue=\E[m:us=\E[4m: \\
+:bc=\E[D:ce=\E[K:bo=\E[1m:be=\E[m:cd=\E[J:so=\E[1m:se=\E[m: \\
+:sr=\EM:bs=\010:ku=\E[A:kd=\E[B:kl=\E[D:kr=\E[C:k1=\E[V:k2=\E[U: \\
+:md=\E[1m:me=\E[m:mr=\E\7m:al=\E[1L: \\
+:co#80:li#72:am#00:nd=\E[C:ho=\E[H: \\
+:vi=\E[?35h:ve=\E[?35l\E[?33h:vs=\E[?35l\E\?33l:sr=\E[:do=\E[B: \\
+:id=ansi:dl=\E[M:
+#
+# ANSI Terminal with 24 lines 
+#
+ansi-small| \\
+:pc:ho=\E[H:cm=\E[%i%d;%dH:cl=\E[X: \\
+:up=\E[A:bl=\007:ue=\E[m:us=\E[4m: \\
+:bc=\E[D:ce=\E[K:bo=\E[1m:be=\E[m:cd=\E[J:so=\E[1m:se=\E[m: \\
+:sr=\EM:bs=\010:ku=\E[A:kd=\E[B:kl=\E[D:kr=\E[C:k1=\E[V:k2=\E[U: \\
+:md=\E[1m:me=\E[m:mr=\E\7m:al=\E[1L: \\
+:co#80:li#24:am#00:nd=\E[C:ho=\E[H: \\
+:vi=\E[?35h:ve=\E[?35l\E[?33h:vs=\E[?35l\E\?33l:sr=\E[:do=\E[B:up=\E[A: \\
+:id=ansi:dl=\E[M:
+

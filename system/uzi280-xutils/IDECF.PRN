@@ -1,0 +1,1162 @@
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: IDECF.AS
+                                                                      Page   1
+
+
+   1                            ;
+   2                            ;/*-
+   3                            ; * All UZI280 source code is
+   4                            ; * Copyright (c) (1990-95) by Stefan Nitschke a
+				nd Doug Braun
+   5                            ; *
+   6                            ; * Permission is hereby granted, free of charge
+				, to any person
+   7                            ; * obtaining a copy of this software and associ
+				ated documentation
+   8                            ; * files (the "Software"), to deal in the Softw
+				are without
+   9                            ; * restriction, including without limitation th
+				e rights to use,
+  10                            ; * copy, modify, merge, publish, distribute, su
+				blicense, and/or
+  11                            ; * sell copies of the Software, and to permit p
+				ersons to whom
+  12                            ; * the Software is furnished to do so, subject 
+				to the following
+  13                            ; * conditions:
+  14                            ; *
+  15                            ; * The above copyright notice and this permissi
+				on notice shall be
+  16                            ; * included in all copies or substantial portio
+				ns of the Software.
+  17                            ; *
+  18                            ; * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WA
+				RRANTY OF ANY KIND,
+  19                            ; * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITE
+				D TO THE WARRANTIES OF
+  20                            ; * MERCHANTABILITY, FITNESS FOR A PARTICULAR PU
+				RPOSE AND
+  21                            ; * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHO
+				RS OR COPYRIGHT
+  22                            ; * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR 
+				OTHER LIABILITY,
+  23                            ; * WHETHER IN AN ACTION OF CONTRACT, TORT OR OT
+				HERWISE, ARISING FROM,
+  24                            ; * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+				 THE USE OR OTHER
+  25                            ; * DEALINGS IN THE SOFTWARE.
+  26                            ; */
+  27                            ;
+  28                            ;	title	'Harddisk Driver Module of Z280R
+				C with DMA3'
+  29                            ;
+  30                            ; 930414 Tilmann Reh
+  31                            ; 930723 Stefan Nitschke	Version for UZI2
+				80
+  32                            ; 20181212 Tony Nicholson	Version for Z280
+				RC IDE CompactFlash
+  33                            ;
+  34                            
+   1+                           ;
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: z280rc.inc
+                                                                      Page   2
+
+
+   2+                           ; Z280RC.INC  -  Z280RC Hardware I/O Port equate
+				s for HiTech ZAS assembler
+   3+                           ;
+   4+                           ; This file contains Z280 definitions taken from
+				 the July 1987
+   5+                           ; "Zilog Z280(TM) MPU Microprocessing Unit Preli
+				minary Technical Manual"
+   6+                           ; for internal control registers and on-chip per
+				ipherals.
+   7+                           ;
+   8+                           ; It also contains Z280RC device specific I/O po
+				rt definitions
+   9+                           ; for the IDE CompactFlash interface and DS1203 
+				timekeeper chip.
+  10+                           ;
+  11+                           ;
+  12+                           ; Modification History
+  13+                           ;
+  14+                           ; 27-Jul-2018	Tony Nicholson	Initial version 
+				from CPU280 BIOS sources
+  15+                           ;				file Z280EQU.MAC
+				 by Daniel A. Jacobs
+  16+                           ;				dated 13-Mar-198
+				8.
+  17+                           ; 05-Dec-2018	Tony Nicholson	Added Interrupt 
+				and Trap Vector
+  18+                           ;				Table related eq
+				uates and System-Call
+  19+                           ;				function definit
+				ions.
+  20+                           ;
+  21+                           
+  22+                           ;---------------------------------
+  23+                           ;
+  24+                           ; Z280 MPU internal devices
+  25+                           ;
+  26+                           
+  27+                           ; Master Control Register (MCR) equates:	
+				 Z280 manual	Page 5-77
+  28+                           
+  29+   0000        =           msr	equ	0	; Master Status Register
+					Page 3-4
+  30+   0016        =           isr	equ	16h	; Interrupt Status Reg.	
+					Page 3-4 & 3-5
+  31+   0006        =           itv	equ	6	; Interrupt/Trap Vector
+  32+                           			;   table pointer	
+					Page 3-5 & 6-11
+  33+   0008        =           iop	equ	8	; I/O Page register	
+				(8bit)	Page 3-5
+  34+   00FF        =           bti	equ	0ffh	; Bus Timing and
+  35+                           			;   Initialization reg.	
+				(8bit)	Page 3-1 & 3-2
+  36+   0002        =           btc	equ	2	; Bus Timing and
+  37+                           			;   Control register	
+				(8bit)	Page 3-2
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: z280rc.inc
+                                                                      Page   3
+
+
+  38+   0004        =           slr	equ	4	; Stack Limit Register	
+					Page 3-6
+  39+   0010        =           tcr	equ	10h	; Trap Control Reg.	
+				(8bit)	Page 3-5 & 3-6
+  40+   0012        =           ccr	equ	12h	; Cache Control Reg.	
+				(8bit)	Page 3-3 & 3-4
+  41+   0014        =           lar	equ	14h	; Local (global)
+  42+                           			;   Address Register	
+				(8bit)	Page 3-3
+  43+                           
+  44+                           ;---------------------------------
+  45+                           
+  46+                           ; Memory Management Unit (MMU) equates:	 Z280 ma
+				nual	Page 7-6
+  47+                           
+  48+   00FF        =           mmup	equ	0ffh	; MMU Page I/O
+  49+   00F0        =           mmcr	equ	0f0h	; MMU Master Control Reg
+				.	Page 7-5
+  50+   00F1        =           pdr	equ	0f1h	; Page Descripter Reg. p
+				ointer	Page 7-2 & 7-5
+  51+   00F5        =           dsp	equ	0f5h	; Descriptor Select Port
+					Page 7-6
+  52+   00F4        =           bmp	equ	0f4h	; Block Move Port	
+					Page 7-6
+  53+   00F2        =           ip	equ	0f2h	; Invalidation Port	
+					Page 7-6
+  54+                           
+  55+                           ;---------------------------------
+  56+                           
+  57+                           ; Refresh Rate Register (RRR) equates:	Z280 man
+				ual	Page 9-1
+  58+                           
+  59+   00FF        =           rrrp	equ	0ffh	; RRR Page I/O
+  60+   00E8        =           rrr	equ	0e8h	; Refresh Rate Register	
+					Page 9-1
+  61+                           
+  62+                           ;---------------------------------
+  63+                           
+  64+                           ; Counter Timers (C/T) equates:		Z280 man
+				ual	Page 9-7
+  65+                           
+  66+   00FE        =           ctp	equ	0feh	; Counter/Timer Page I/O
+  67+                           
+  68+   00E0        =           cr0	equ	0e0h	; Configuration reg. for
+				 Counter/Timer 0	Page 9-5
+  69+   00E8        =           cr1	equ	0e8h	; Configuration reg. for
+				 Counter/Timer 1	Page 9-5
+  70+   00F8        =           cr2	equ	0f8h	; Configuration reg. for
+				 Counter/Timer 2	Page 9-5
+  71+                           
+  72+   00E1        =           cs0	equ	0e1h	; Command Status reg for
+				 Counter/Timer 0	Page 9-6
+  73+   00E9        =           cs1	equ	0e9h	; Command Status reg for
+				 Counter/Timer 1	Page 9-6
+  74+   00F9        =           cs2	equ	0f9h	; Command Status reg for
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: z280rc.inc
+                                                                      Page   4
+
+
+				 Counter/Timer 2	Page 9-6
+  75+                           
+  76+   00E2        =           tc0	equ	0e2h	; Time Constant reg. for
+				 Counter/Timer 0	Page 9-6
+  77+   00EA        =           tc1	equ	0eah	; Time Constant reg. for
+				 Counter/Timer 1	Page 9-6
+  78+   00FA        =           tc2	equ	0fah	; Time Constant reg. for
+				 Counter/Timer 2	Page 9-6
+  79+                           
+  80+   00E3        =           ct0	equ	0e3h	; Count Time reg.    for
+				 Counter/Timer 0	Page 9-6
+  81+   00EB        =           ct1	equ	0ebh	; Count Time reg.    for
+				 Counter/Timer 1	Page 9-6
+  82+   00FB        =           ct2	equ	0fbh	; Count Time reg.    for
+				 Counter/Timer 2	Page 9-6
+  83+                           
+  84+                           ;---------------------------------
+  85+                           
+  86+                           ; Direct Memory Access (DMA) equates:	Z280 man
+				ual	Page 9-15
+  87+                           
+  88+   00FF        =           dmap	equ	0ffh	; DMA Page I/O
+  89+   001F        =           dmcr	equ	1fh	; DMA Master Control Reg
+				ister	Page 9-13 & 9-14
+  90+                           
+  91+   0000        =           dal0	equ	0	; Destination Address Lo
+				w DMA0	Page 9-14 & 9-15
+  92+   0008        =           dal1	equ	8	; Destination Address Lo
+				w DMA1	Page 9-14 & 9-15
+  93+   0010        =           dal2	equ	10h	; Destination Address Lo
+				w DMA2	Page 9-14 & 9-15
+  94+   0018        =           dal3	equ	18h	; Destination Address Lo
+				w DMA3	Page 9-14 & 9-15
+  95+                           
+  96+   0001        =           dah0	equ	1	; Destination Address Hi
+				gh DMA0	Page 9-14 & 9-15
+  97+   0009        =           dah1	equ	9	; Destination Address Hi
+				gh DMA1	Page 9-14 & 9-15
+  98+   0011        =           dah2	equ	11h	; Destination Address Hi
+				gh DMA2	Page 9-14 & 9-15
+  99+   0019        =           dah3	equ	19h	; Destination Address Hi
+				gh DMA3	Page 9-14 & 9-15
+ 100+                           
+ 101+   0002        =           sal0	equ	2	; Source Address Low DMA
+				0	Page 9-14 & 9-15
+ 102+   000A        =           sal1	equ	0ah	; Source Address Low DMA
+				1	Page 9-14 & 9-15
+ 103+   0012        =           sal2	equ	12h	; Source Address Low DMA
+				2	Page 9-14 & 9-15
+ 104+   001A        =           sal3	equ	1ah	; Source Address Low DMA
+				3	Page 9-14 & 9-15
+ 105+                           
+ 106+   0003        =           sah0	equ	3	; Source Address High DM
+				A0	Page 9-14 & 9-15
+ 107+   000B        =           sah1	equ	0bh	; Source Address High DM
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: z280rc.inc
+                                                                      Page   5
+
+
+				A1	Page 9-14 & 9-15
+ 108+   0013        =           sah2	equ	13h	; Source Address High DM
+				A2	Page 9-14 & 9-15
+ 109+   001B        =           sah3	equ	1bh	; Source Address High DM
+				A3	Page 9-14 & 9-15
+ 110+                           
+ 111+   0004        =           dcr0	equ	4	; Counter Register for D
+				MA0	Page 9-14
+ 112+   000C        =           dcr1	equ	0ch	; Counter Register for D
+				MA1	Page 9-14
+ 113+   0014        =           dcr2	equ	14h	; Counter Register for D
+				MA2	Page 9-14
+ 114+   001C        =           dcr3	equ	1ch	; Counter Register for D
+				MA3	Page 9-14
+ 115+                           
+ 116+   0005        =           tdr0	equ	5	; Transaction Descriptor
+				 DMA0	Page 9-13 & 9-14
+ 117+   000D        =           tdr1	equ	0dh	; Transaction Descriptor
+				 DMA1	Page 9-13 & 9-14
+ 118+   0015        =           tdr2	equ	15h	; Transaction Descriptor
+				 DMA2	Page 9-13 & 9-14
+ 119+   001D        =           tdr3	equ	1dh	; Transaction Descriptor
+				 DMA3	Page 9-13 & 9-14
+ 120+                           
+ 121+                           ;---------------------------------
+ 122+                           
+ 123+                           ; Universal Asynchronous Receiver/Transmitter (U
+				ART) equates:   Page 9-20
+ 124+                           
+ 125+   00FE        =           uartp	equ	0feh	; UART Page I/O
+ 126+   0010        =           ucr	equ	10h	; UART Configuration Reg
+				.	Page 9-18
+ 127+   0012        =           tcs	equ	12h	; Transmitter Control/St
+				atus	Page 9-19
+ 128+   0014        =           rcs	equ	14h	; Receiver Control/Statu
+				s reg.	Page 9-20
+ 129+   0016        =           rdr	equ	16h	; Receiver Data Register
+ 130+   0018        =           tdr	equ	18h	; Transmitter Data Regis
+				ter
+ 131+                           
+ 132+   0080        =           uart$en	equ	10000000B ; Enable bit for TCS a
+				nd RCS
+ 133+   0001        =           tcstbe	equ	00000001B ; Transmit Buffer Empt
+				y bit
+ 134+   0010        =           rcsdav	equ	00010000B ; Receive Data Availab
+				le bit
+ 135+                           
+ 136+                           ; UART Configuration Register (UCR) bits
+ 137+                           
+ 138+   00C0        =           ucr$bcm	equ	11000000B ; BC field of UART con
+				trol register
+ 139+   0000        =           ucr$5bv	equ	00000000B	; 5-bits per cha
+				racter
+ 140+   0040        =           ucr$6bv	equ	01000000B	; 6-bits
+ 141+   0080        =           ucr$7bv	equ	10000000B	; 7-bits
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: z280rc.inc
+                                                                      Page   6
+
+
+ 142+   00C0        =           ucr$8bv	equ	11000000B	; 8-bits
+ 143+   0020        =           ucr$pm	equ	00100000B ; P - Parity bit enabl
+				e
+ 144+   0020        =           ucr$pv	equ	00100000B	; extra bit with
+				 parity
+ 145+   0010        =           ucr$eom	equ	00010000B ; E/O - parity even / 
+				odd
+ 146+   0010        =           ucr$ev	equ	00010000B	; Even Parity
+ 147+   0000        =           ucr$ov	equ	00000000B	; Odd Parity
+ 148+   0008        =           ucr$csm	equ	00001000B ; CS - Clock select
+ 149+   0008        =           ucr$ct1v equ	00001000B	; Use Counter/Ti
+				mer 1 output for clock
+ 150+   0000        =           ucr$cexv equ	00000000B	; External clock
+				 input from Counter/Timer 1 input
+ 151+   0006        =           ucr$crm	equ	00000110B ; CR - Clock Rate mult
+				iplier
+ 152+   0000        =           ucr$x1v	equ	00000000B	; x1
+ 153+   0002        =           ucr$x16v equ	00000010B	; x16
+ 154+   0004        =           ucr$x32v equ	00000100B	; x32
+ 155+   0006        =           ucr$x64v equ	00000110B	; x64
+ 156+   0001        =           ucr$lbm	equ	00000001B ; LB - Loop Back Enabl
+				e
+ 157+   0001        =           ucr$lbv	equ	00000001B	; Local Loop bac
+				k mode
+ 158+                           
+ 159+                           ;---------------------------------
+ 160+                           
+ 161+                           ; Bit Masks for Z280 Master Status Register and 
+				Interrupt Status Register
+ 162+                           
+ 163+   0000        =           i$none	equ	00000000B ; No Interrupts
+ 164+   0001        =           i$a	equ	00000001B ; Bit Value INTA Inter
+				rupt
+ 165+   0002        =           i$ct0	equ	00000010B ; Bit Value Counter/Ti
+				mer 0 & DMA0 Interrupt
+ 166+   0002        =           i$dma0	equ	i$ct0
+ 167+   0004        =           i$b	equ	00000100B ; Bit Value INTB Inter
+				rupt
+ 168+   0008        =           i$ct1	equ	00001000B ; Bit Value Counter/Ti
+				mer 1, UART Rx & DMA1 Interrupt
+ 169+   0008        =           i$rx	equ	i$ct1
+ 170+   0008        =           i$dma1	equ	i$ct1
+ 171+   0010        =           i$c	equ	00010000B ; Bit Value INTC Inter
+				rupt
+ 172+   0020        =           i$tx	equ	00100000B ; Bit Value UART Tx & 
+				DMA2 Interrupt
+ 173+   0020        =           i$dma2	equ	i$tx
+ 174+   0040        =           i$ct2	equ	01000000B ; Bit Value Counter/Ti
+				mer 2 & DMA3 Interrupt
+ 175+   0040        =           i$dma3	equ	i$ct2
+ 176+                           
+ 177+                           ;---------------------------------
+ 178+                           
+ 179+                           ; IDE CompactFlash Interface in 16-bit mode
+ 180+                           
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: z280rc.inc
+                                                                      Page   7
+
+
+ 181+   0000        =           cfp	equ	00h	; CF I/O page
+ 182+   00C0        =           cfdata	equ	0c0h	; CF data register (R/W)
+ 183+   00C2        =           cferr	equ	0c2h	; CF error register (R)
+ 184+   00C2        =           cffeat	equ	0c2h	; CF features register (
+				W)
+ 185+   00C5        =           cfsectcnt equ	0c5h	; CF sector count
+ 186+   00C7        =           cf07	equ	0c7h	; CF LA0-7
+ 187+   00C9        =           cf815	equ	0c9h	; CF LA8-15
+ 188+   00CB        =           cf1623	equ	0cbh	; CF LA16..23
+ 189+   00CD        =           cf2427	equ	0cdh	; CF LA24..27 and LBA mo
+				de (bit 6 high)
+ 190+   00CF        =           cfstat	equ	0cfh	; CF status register (R)
+ 191+   00CF        =           cfcmd	equ	0cfh	; CF command register (W
+				)
+ 192+                           
+ 193+                           ;---------------------------------
+ 194+                           
+ 195+                           ; DS1302 timekeeper clock chip
+ 196+                           
+ 197+   0000        =           watchp	equ	00h	; DS1302 I/O page
+ 198+   00A2        =           watch	equ	0a2h	; DS1302 3-wire interfac
+				e
+ 199+   0001        =           w$sclk	equ	00000001B	; SCLK bit
+ 200+   0002        =           w$nrst	equ	00000010B	; nRST bit
+ 201+   0080        =           w$data	equ	10000000B	; data I/O bit
+ 202+                           
+ 203+                           ;---------------------------------
+ 204+                           ;
+ 205+                           ; Interrupt and Trap Vector Table offsets (Page 
+				6-11)
+ 206+                           ;
+ 207+   0004        =           itvtoff$nmi	equ	04h	; NMI vector
+ 208+   0008        =           itvtoff$inta	equ	08h	; Interrupt line
+				 A vector
+ 209+   000C        =           itvtoff$intb	equ	0ch	; Interrupt line
+				 B vector
+ 210+   0010        =           itvtoff$intc	equ	10h	; Interrupt line
+				 C vector
+ 211+   0014        =           itvtoff$tc0	equ	14h	; Counter/Timer 
+				0 vector
+ 212+   0018        =           itvtoff$tc1	equ	18h	; Counter/Timer 
+				1 vector
+ 213+   0020        =           itvtoff$tc2	equ	20h	; Counter/Timer 
+				2 vector
+ 214+   0024        =           itvtoff$dma0	equ	24h	; DMA channel 0 
+				vector
+ 215+   0028        =           itvtoff$dma1	equ	28h	; DMA channel 1 
+				vector
+ 216+   002C        =           itvtoff$dma2	equ	2ch	; DMA channel 2 
+				vector
+ 217+   0030        =           itvtoff$dma3	equ	30h	; DMA channel 3 
+				vector
+ 218+   0034        =           itvtoff$uar	equ	34h	; UART receiver 
+				vector
+ 219+   0038        =           itvtoff$uat	equ	38h	; UART transmitt
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: z280rc.inc
+                                                                      Page   8
+
+
+				er vector
+ 220+   003C        =           itvtoff$ss	equ	3ch	; Single-Step tr
+				ap vector
+ 221+   0040        =           itvtoff$boh	equ	40h	; Breakpoint-on-
+				Halt trap vector
+ 222+   0044        =           itvtoff$dive	equ	44h	; Division Excep
+				tion trap vector
+ 223+   0048        =           itvtoff$stkovf equ	48h	; Stack Overflow
+				 Warning trap vector
+ 224+   004C        =           itvtoff$accv	equ	4ch	; Access Violati
+				on trap vector
+ 225+   0050        =           itvtoff$sc	equ	50h	; System Call tr
+				ap vector
+ 226+   0054        =           itvtoff$priv	equ	54h	; Privileged Ins
+				truction trap vector
+ 227+   0058        =           itvtoff$mem2epu equ	58h	; EPU <- Memory 
+				Extended Instruction trap vector
+ 228+   005C        =           itvtoff$epu2mem equ	5ch	; Memory <- EPU 
+				Extended Instruction trap vector
+ 229+   0060        =           itvtoff$epu2a	equ	60h	; A <- EPU Exten
+				ded Instruction trap vector
+ 230+   0064        =           itvtoff$epuintop equ	64h	; EPU Internal O
+				peration Extended Instr. trap vector
+ 231+   0070        =           itvtoff$nmiav	equ	70h	; NMI Int A vect
+				ors (128 PC values)
+ 232+   0170        =           itvtoff$ibv	equ	170h	; Int B vectors 
+				(128 PC values)
+ 233+   0270        =           itvtoff$icv	equ	270h	; Int C vectors 
+				(128 PC values)
+ 234+                           
+  36                            
+   1+                           ;
+   2+                           ; HiTech ZAS include file for assembly language 
+				modules
+   3+                           ;
+   4+   FFFF        =           Z280RC	equ	0FFFFh		; Enable Z280RC 
+				specific code
+   5+                           				; If zero, use t
+				he original REH280 code
+   6+                           
+   7+   FFFF        =           XUTIL	equ	0FFFFh		; TRUE when buil
+				ding XUTILs
+   8+                           
+  38                            
+   1+                           ;ld  a,(sp+nn)
+   2+                           MACRO	LDASX,NN
+   3+                                   DEFB     0DDH,078H
+   4+                                   DEFW     NN   
+   5+                           ENDM
+   6+                           ;lda hl,(hl+nn)
+   7+                           MACRO	LDAHL,NN
+   8+                                   DEFB      0EDH,03AH
+   9+                                   DEFW      NN
+  10+                           ENDM
+  11+                           ;ld  de,(hl)
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: macro.lib
+                                                                      Page   9
+
+
+  12+                           MACRO	LDDEM
+  13+                           	DEFB	0EDH, 016H
+  14+                           ENDM
+  15+                           ;ld  hl,(hl)
+  16+                           MACRO	LDHLM	
+  17+                           	DEFB	0EDH, 026H
+  18+                           ENDM
+  19+                           ;ld  (hl),de
+  20+                           MACRO	LDMDE
+  21+                           	DEFB	0EDH, 01EH
+  22+                           ENDM
+  23+                           ;exts a  -> hl
+  24+                           MACRO	EXTS
+  25+                           	DEFB	0EDH, 064H
+  26+                           ENDM
+  27+                           ;exts hl -> de
+  28+                           MACRO	EXTSHL
+  29+                                   DEFB      0EDH, 06CH
+  30+                           ENDM
+  31+                           ;sub hl,de	
+  32+                           MACRO	SUBDE
+  33+                           	DEFB	0EDH, 0DEH
+  34+                           ENDM
+  35+                           
+  36+                           MACRO	LDCTL
+  37+                           	DEFB 	0edh
+  38+                           	DEFB 	06eh 
+  39+                           ENDM
+  40+                           
+  41+                           MACRO	RDCTL
+  42+                           	DEFB 	0edh
+  43+                           	DEFB 	066h 
+  44+                           ENDM
+  45+                           
+  46+                           MACRO	OUTW
+  47+                           	DEFB 	0edh
+  48+                           	DEFB 	0bfh 
+  49+                           ENDM
+  50+                           
+  51+                           MACRO	INW
+  52+                           	DEFB 	0edh
+  53+                           	DEFB 	0b7h 
+  54+                           ENDM
+  55+                           
+  56+                           MACRO	OUTIW
+  57+                           	DEFB 	0edh
+  58+                           	DEFB 	083h 
+  59+                           ENDM
+  60+                           
+  61+                           MACRO	OTIRW
+  62+                           	DEFB 	0edh
+  63+                           	DEFB 	093h 
+  64+                           ENDM
+  65+                           
+  66+                           MACRO	INIRW
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: macro.lib
+                                                                      Page  10
+
+
+  67+                           	DEFB 	0edh
+  68+                           	DEFB 	092h 
+  69+                           ENDM
+  70+                           
+  71+                           MACRO	PCACHE
+  72+                           	DEFB 	0edh
+  73+                           	DEFB 	065h 
+  74+                           ENDM
+  75+                           
+  76+                           MACRO	IM3
+  77+                           	DEFB 	0EDH
+  78+                           	DEFB 	04EH
+  79+                           ENDM
+  80+                           
+  81+                           MACRO	RETIL
+  82+                           	DEFB 	0EDH
+  83+                           	DEFB 	055H
+  84+                           ENDM
+  85+                           
+  86+                           MACRO 	SC,NN
+  87+                           	DEFB 	0EDH
+  88+                           	DEFB 	071H
+  89+                           	DEFW 	NN
+  90+                           ENDM
+  91+                           
+  92+                           MACRO	OUTIR
+  93+                           	DEFB	0EDH
+  94+                           	DEFB	0B3H
+  95+                           ENDM
+  96+                           
+  97+                           ;MACRO	OUTI	
+  98+                           ;	DEFB	0EDH
+  99+                           ;	DEFB	0A3H
+ 100+                           ;ENDM
+ 101+                           
+ 102+                           MACRO	LDUSP	
+ 103+                           	DEFB	0EDH
+ 104+                           	DEFB	08FH
+ 105+                           ENDM
+ 106+                           
+ 107+                           MACRO	RDUSP	
+ 108+                           	DEFB	0EDH
+ 109+                           	DEFB	087H
+ 110+                           ENDM
+ 111+                           
+ 112+                           MACRO	LDUD	
+ 113+                           	DEFB	0EDH
+ 114+                           	DEFB	086H
+ 115+                           ENDM
+ 116+                           
+ 117+                           MACRO	STUD	
+ 118+                           	DEFB	0EDH
+ 119+                           	DEFB	08EH
+ 120+                           ENDM
+ 121+                           
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: macro.lib
+                                                                      Page  11
+
+
+ 122+                           MACRO	STUP	
+ 123+                           	DEFB	0EDH
+ 124+                           	DEFB	09EH
+ 125+                           ENDM
+ 126+                           ;ld  hl,(sp+nn)
+ 127+                           MACRO	LDHLSX,NN
+ 128+                           	DEFB	0EDH
+ 129+                           	DEFB	004H
+ 130+                           	DEFW	NN
+ 131+                           ENDM
+ 132+                           ;ld  (sp+nn),hl
+ 133+                           MACRO	STHLSX,NN
+ 134+                           	DEFB	0EDH
+ 135+                           	DEFB	005H
+ 136+                           	DEFW	NN
+ 137+                           ENDM
+ 138+                           
+  40                            
+  41    0000        =           Stand_Alone	equ	0	; not tested yet
+  42    0001        =           CPM_Boot	equ	1	; means UZI is b
+				ooted from CP/M
+  43                            
+  44                            	global	_WD_Cyls,_WD_Heads,_WD_Sector ; 
+				defined in ideconf.c
+  45                            
+  46    0000'                   	psect      text
+  47                            
+  48                            	global     _wdsec,_wdtrk,_dptrlo,_wd_rdw
+				r,_wd_io,_hdinit
+  49                            
+  50                            COND XUTIL .eq. 0	; XUTIL programs don't u
+				se these under CP/M
+  51                            
+  52                            	global	_dptrhi,_iopg00,_iopgff
+  53                            
+  54                            	global	_wd_error,_rw_flag
+  55                            ENDC
+  56                            		
+  57                            COND	CPM_Boot
+  58    0000'                   _hdinit:
+  59    0000' 21 0000           	ld	hl,0	; Started from CP/M - no
+				 initialisation required
+  60    0003' C9                	ret
+  61                            ENDC
+  62                            
+  63                            COND	Stand_Alone
+  64                            _hdinit:
+  65                            	ret		; Stand-alone init **not
+				 yet implemented**
+  66                            ENDC
+  67                            
+  68                            ; write/read entry from devwd.c
+  69                            
+  70    0004'                   _wd_io:
+  71    0004' CD 0099'          	call	_iopg00		; Select CF I/O 
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: IDECF.AS
+                                                                      Page  12
+
+
+				page
+  72                            
+  73    0007'                   loop01:
+  74    0007' DB CF             	in	a,(cfstat)	; Spin until not
+				 busy (bit 7 clear)
+  75    0009' E6 80             	and	080h
+  76    000B' 20 FA             	jr	nz,loop01
+  77                            
+  78    000D' 3E E0             	ld	a,0E0h		; Logical addres
+				sing mode (bit 6 high)
+  79    000F' D3 CD             	out	(cf2427),a	; Unit number 0 
+				(bit 4), bits 7&5 high
+  80                            
+  81    0011' 2A 0000*          	ld	hl,(_wdtrk)	; Track number m
+				aps to bits 23..8
+  82    0014' 7C                	ld	a,h		;  of logical bl
+				ock number
+  83    0015' D3 CB             	out	(cf1623),a
+  84    0017' 7D                	ld	a,l
+  85    0018' D3 C9             	out	(cf815),a
+  86                            
+  87    001A' 3A 0000*          	ld	a,(_wdsec)	; Sector is 0..2
+				55 and maps to
+  88    001D' D3 C7             	out	(cf07),a	;  bits 7..0 of 
+				logical block number
+  89                            
+  90    001F' 3E 01             	ld	a,1		; One sector
+  91    0021' D3 C5             	out	(cfsectcnt),a
+  92                            
+  93    0023' DB CF             loop02:	in	a,(cfstat)	; Spin until not
+				 BUSY (bit 7 off) and
+  94    0025' E6 C0             	and	0c0h		;  Drive Ready (
+				bit 6 on)
+  95    0027' EE 40             	xor	040h
+  96    0029' 20 F8             	jr	nz,loop02
+  97                            
+  98    002B' 2A 0000*          	ld	hl,(_wd_rdwr)	; Is is a Read o
+				r Write?
+  99    002E' 7D                	ld	a,l
+ 100    002F' B4                	or	h
+ 101    0030' 20 23             	jr	nz,write	; Write
+ 102                            
+ 103    0032' 3E 20             	ld	a,020h		; Read command
+ 104    0034' D3 CF             	out	(cfcmd),a
+ 105                            
+ 106    0036' DB CF             loop04:	in	a,(cfstat)	; Spin until not
+				 BUSY (bit 7 off) and
+ 107    0038' E6 88             	and	088h		;  DRQ (bit 3 on
+				)
+ 108    003A' EE 08             	xor	008h
+ 109    003C' 20 F8             	jr	nz,loop04
+ 110                            
+ 111    003E' DB CF             	in	a,(cfstat)	; Error (bit 0 o
+				n)?
+ 112    0040' E6 01             	and	001h
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: IDECF.AS
+                                                                      Page  13
+
+
+ 113    0042' 28 07             	jr	z,contrd	; No, continue r
+				ead
+ 114                            
+ 115    0044' CD 0099'          error:	call	_iopg00
+ 116    0047' CD 0092'          	call	_wd_error
+ 117    004A' C9                	ret
+ 118                            
+ 119    004B'                   contrd:
+ 120                            
+ 121                            COND XUTIL .eq. 0
+ 122                            
+ 123                            	; Read from cfdata I/O port using DMA3
+ 124                            	; This must be to a buffer with an *even
+				* address
+ 125                            	; since the data is read in 16-bit mode 
+				from
+ 126                            	; the CompactFlash drive
+ 127                            
+ 128                            	ld	hl,cfdata	; Low 12-bit I/O
+				 address
+ 129                            	ld	(hdsrc),hl
+ 130                            	ld	l,h
+ 131                            	ld	h,cfp		; High 12-bit I/
+				O page
+ 132                            	ld	(hdsrc+2),hl
+ 133                            	ld	hl,idebuf	; make sure buff
+				er address is *EVEN*
+ 134                            	ld	a,l
+ 135                            	and	01H
+ 136                            	jr	z,even0
+ 137                            	inc	hl
+ 138                            even0:	ld	(hddest),hl	; dest is bounce
+				 buffer
+ 139                            	ld	l,h
+ 140                            	ld	h,01h		; System page
+ 141                            	ld	(hddest+2),hl
+ 142                            	ld	hl,256		; WORD count
+ 143                            	ld	(count),hl
+ 144                            	ld	hl,1110001100000000B
+ 145                            		; EN (bit 15)=1
+ 146                            		; Source is I/O address unmodifi
+				ed (bits 14..12)=110b
+ 147                            		; No interrupt (bit 11)=0
+ 148                            		; Word size (bits 10..9)=01b
+ 149                            		; Continuous mode (bits 8..7)=10
+				b
+ 150                            		; Flowthrough (bits 6..5)=00b
+ 151                            		; Transfer complete (bit 4)
+ 152                            		; Destination Auto-increment mem
+				ory (bits 3..1)=000b
+ 153                            		; End-of-process Signalled
+ 154                            	call	hddmaio		; Start DMA
+ 155                            
+ 156                            	; Now use DMA3 in byte mode to copy the 
+				buffer
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: IDECF.AS
+                                                                      Page  14
+
+
+ 157                            	; to the _dptr{hi,lo} address (which can
+				 be an odd or even
+ 158                            	; address).
+ 159                            
+ 160                            	ld	hl,idebuf	; make sure buff
+				er address is even
+ 161                            	ld	a,l
+ 162                            	and	01H
+ 163                            	jr	z,even1
+ 164                            	inc	hl
+ 165                            even1:	ld	(hdsrc),hl	; source is boun
+				ce buffer
+ 166                            	ld	l,h
+ 167                            	ld	h,01h		; System page
+ 168                            	ld	(hdsrc+2),hl
+ 169                            	ld	hl,(_dptrlo)
+ 170                            	ld	(hddest),hl
+ 171                            	ld	hl,(_dptrhi)
+ 172                            	ld	(hddest+2),hl
+ 173                            	ld	hl,512		; BYTE count
+ 174                            	ld	(count),hl
+ 175                            	ld	hl,1000000100000000B
+ 176                            		; EN (bit 15)=1
+ 177                            		; Source is Auto-increment memor
+				y (bits 14..12)=000b
+ 178                            		; No interrupt (bit 11)=0
+ 179                            		; BYTE size (bits 10..9)=00b
+ 180                            		; Continuous mode (bits 8..7)=10
+				b
+ 181                            		; Flowthrough (bits 6..5)=00b
+ 182                            		; Transfer complete (bit 4)
+ 183                            		; Destination Auto-increment mem
+				ory (bits 3..1)=000b
+ 184                            		; End-of-process Signalled
+ 185                            	call	hddmaio		; Start DMA
+ 186                            
+ 187                            ENDC
+ 188                            
+ 189                            COND XUTIL
+ 190                            
+ 191    004B' 2A 0000*          	ld	hl,(_dptrlo)	; XUTIL reads in
+				to TPA
+ 192    004E' 01 00C0           	ld	bc,cfdata
+ 193                            	INIRW
+    +   0051' ED                	DEFB 	0edh
+    +   0052' 92                	DEFB 	092h 
+ 194                            
+ 195                            ENDC
+ 196    0053' 18 21             	jr	done
+ 197                            
+ 198    0055' 3E 30             write:	ld	a,030h		; CF  Write comm
+				and
+ 199    0057' D3 CF             	out	(cfcmd),a
+ 200                            
+ 201    0059' DB CF             loop07:	in	a,(cfstat)	; Spin until not
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: IDECF.AS
+                                                                      Page  15
+
+
+				 BUSY (bit 7 off) and
+ 202    005B' E6 88             	and	088h		;  DRQ (bit 3 on
+				)
+ 203    005D' EE 08             	xor	008h
+ 204    005F' 20 F8             	jr	nz,loop07
+ 205                            
+ 206                            COND XUTIL .eq. 0
+ 207                            
+ 208                            	; Write the block to the cfdata I/O port
+				 using DMA3
+ 209                            	; must first copy it to the bounce buffe
+				r at an *even*
+ 210                            	; address
+ 211                            
+ 212                            	ld	hl,(_dptrlo)
+ 213                            	ld	(hdsrc),hl
+ 214                            	ld	hl,(_dptrhi)
+ 215                            	ld	(hdsrc+2),hl
+ 216                            	ld	hl,idebuf	; make sure buff
+				er address is even
+ 217                            	ld	a,l
+ 218                            	and	01H
+ 219                            	jr	z,even2
+ 220                            	inc	hl
+ 221                            even2:	ld	(hddest),hl	; dest is bounce
+				 buffer
+ 222                            	ld	l,h
+ 223                            	ld	h,01h		; System page
+ 224                            	ld	(hddest+2),hl
+ 225                            	ld	hl,512		; BYTE count
+ 226                            	ld	(count),hl
+ 227                            	ld	hl,1000000100000000B
+ 228                            		; EN (bit 15)=1
+ 229                            		; Source is Auto-increment memor
+				y (bits 14..12)=000b
+ 230                            		; No interrupt (bit 11)=0
+ 231                            		; Byte size (bits 10..9)=00b
+ 232                            		; Continuous mode (bits 8..7)=10
+				b
+ 233                            		; Flowthrough (bits 6..5)=00b
+ 234                            		; Transfer complete (bit 4)
+ 235                            		; Destination Auto-increment mem
+				ory (bits 3..1)=000b
+ 236                            		; End-of-process Signalled
+ 237                            	call	hddmaio		; Start DMA
+ 238                            
+ 239                            	; Now ready to write it out using WORD a
+				ddresses
+ 240                            	; to the IDE CompactFlash drive
+ 241                            
+ 242                            	ld	hl,idebuf	; make sure buff
+				er address is even
+ 243                            	ld	a,l
+ 244                            	and	01H
+ 245                            	jr	z,even3
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: IDECF.AS
+                                                                      Page  16
+
+
+ 246                            	inc	hl
+ 247                            even3:	ld	(hdsrc),hl	; source is boun
+				ce buffer
+ 248                            	ld	l,h
+ 249                            	ld	h,01h		; System page
+ 250                            	ld	(hdsrc+2),hl
+ 251                            	ld	hl,cfdata	; Destination I/
+				O port
+ 252                            	ld	(hddest),hl
+ 253                            	ld	l,h
+ 254                            	ld	h,cfp
+ 255                            	ld	(hddest+2),hl
+ 256                            	ld	hl,256		; WORD count
+ 257                            	ld	(count),hl
+ 258                            	ld	hl,1000001100001100B
+ 259                            		; EN (bit 15)=1
+ 260                            		; Source Auto-increment memory (
+				bits 14..12)=000b
+ 261                            		; No interrupt (bit 11)=0
+ 262                            		; Word size (bits 10..9)=01b
+ 263                            		; Continuous mode (bits 8..7)=10
+				b
+ 264                            		; Flowthrough (bits 6..5)=00b
+ 265                            		; Transfer complete (bit 4)
+ 266                            		; Destination I/O address unmodi
+				fied (bits 3..1)=110b
+ 267                            		; End-of-process Signalled
+ 268                            	call	hddmaio		; Start DMA
+ 269                            
+ 270                            ENDC
+ 271                            
+ 272                            COND XUTIL
+ 273                            
+ 274    0061' 2A 0000*          	ld	hl,(_dptrlo)	; XUTIL writes i
+				nto TPA
+ 275    0064' 01 00C0           	ld	bc,cfdata
+ 276                            	OTIRW
+    +   0067' ED                	DEFB 	0edh
+    +   0068' 93                	DEFB 	093h 
+ 277                            
+ 278                            ENDC
+ 279                            
+ 280    0069' DB CF             loop08:	in	a,(cfstat)	; Spin until not
+				 BUSY (bit 7 off)
+ 281    006B' E6 80             	and	080h
+ 282    006D' 20 FA             	jr	nz,loop08
+ 283                            
+ 284    006F' DB CF             	in	a,(cfstat)	; Error (bit 0 o
+				n)
+ 285    0071' E6 01             	and	001h
+ 286    0073' C2 0044'          	jp	nz,error
+ 287                            
+ 288    0076' CD 0099'          done:	call	_iopg00		; Done, restore 
+				I/O page
+ 289                            
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: IDECF.AS
+                                                                      Page  17
+
+
+ 290    0079' C9                	ret
+ 291                            
+ 292                            
+ 293    007A'                   hddmaio:
+ 294    007A' 22 000A'          	ld	(descr),hl	; Save descripto
+				r
+ 295                            
+ 296    007D' CD 0093'          	call	_iopgff		; DMA I/O page
+ 297                            
+ 298    0080' 0E 18             	ld	c,dal3
+ 299    0082' 21 0000'          	ld	hl,hddest
+ 300    0085' 06 06             	ld	b,6
+ 301    0087'                   loop00:	OUTIW
+    +   0087' ED                	DEFB 	0edh
+    +   0088' 83                	DEFB 	083h 
+ 302    0089' 0C                	inc	c
+ 303    008A' 04                	inc	b
+ 304    008B' 05                	dec	b
+ 305    008C' 20 F9             	jr	nz,loop00
+ 306                            
+ 307    008E' CD 0099'          	call	_iopg00
+ 308    0091' C9                	ret
+ 309                            
+ 310                            COND XUTIL
+ 311                            
+ 312    0092'                   	psect	text
+ 313                            
+ 314    0092'                   _wd_error:
+ 315    0092' C9                	ret
+ 316                            
+ 317    0093'                   _iopgff:
+ 318    0093' C5                	push	bc
+ 319    0094' E5                	push	hl
+ 320    0095' 2E FF             	ld	l,0FFh
+ 321    0097' 18 04             	jr	selpg
+ 322                            
+ 323    0099'                   _iopg00:
+ 324    0099' C5                	push	bc
+ 325    009A' E5                	push	hl
+ 326    009B' 2E 00             	ld	l,0
+ 327                            
+ 328    009D' 0E 08             selpg:	ld	c,iop
+ 329                            	LDCTL
+    +   009F' ED                	DEFB 	0edh
+    +   00A0' 6E                	DEFB 	06eh 
+ 330    00A1' 00                	nop
+ 331    00A2' 00                	nop
+ 332    00A3' 00                	nop
+ 333    00A4' 00                	nop
+ 334    00A5' E1                	pop	hl
+ 335    00A6' C1                	pop	bc
+ 336    00A7' C9                	ret
+ 337                            
+ 338                            ENDC
+ 339                            
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: IDECF.AS
+                                                                      Page  18
+
+
+ 340                            ; dummy routine
+ 341                            
+ 342                            	global	_dma3_int
+ 343                            
+ 344    00A8'                   	psect	text
+ 345                            
+ 346    00A8'                   _dma3_int:
+ 347    00A8' 33                	inc	sp	;Discard reason code
+ 348    00A9' 33                	inc	sp
+ 349                            	RETIL
+    +   00AA' ED                	DEFB 	0EDH
+    +   00AB' 55                	DEFB 	055H
+ 350    00AC' 00                	nop
+ 351                            
+ 352                            ;------------------------------
+ 353                            ; Variable Field for DMA3
+ 354                            ;------------------------------
+ 355                            
+ 356    0000'                   	psect	data
+ 357                            
+ 358    0000' 0000 0000         hddest:	defw	0,0	
+ 359    0004' 0000 0000         hdsrc:	defw	0,0
+ 360    0008' 0100              count:	defw	256	; length: 256 words
+ 361    000A' 0000              descr:	defw	0	; descriptor
+ 362                            
+ 363    000C' 0000              Counter:	defw	0	; retry counter
+ 364    000E' 0000              _rw_flag:	defw	0	; reserved for i
+				nterrupt driven hard disk io
+ 365                            
+ 366                            COND XUTIL .eq. 0
+ 367                            
+ 368                            	psect	bss
+ 369                            
+ 370                            	; Sector bounce buffer to overcome Odd a
+				ddress
+ 371                            	; restrictions for Word DMA transfers
+ 372                            
+ 373                            idebuf:	defs	512+2		; We adjust this
+				 to use an
+ 374                            				; *EVEN* address
+				 for word transfers
+ 375                            ENDC
+ 376                            
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: 
+                                                                      Page  19
+
+
+
+                      ---------- Symbol Table ----------
+
+           (ABS) 0000#          CPM_Boot 0001            Counter 000C'  
+     Stand_Alone 0000              XUTIL FFFF             Z280RC FFFF   
+        _WD_Cyls 0000*         _WD_Heads 0000*        _WD_Sector 0000*  
+       _dma3_int 00A8'           _dptrlo 0000*           _hdinit 0000'  
+         _iopg00 0099'           _iopgff 0093'          _rw_flag 000E'  
+       _wd_error 0092'            _wd_io 0004'          _wd_rdwr 0000*  
+          _wdsec 0000*            _wdtrk 0000*               bmp 00F4   
+             btc 0002                bti 00FF                ccr 0012   
+            cf07 00C7             cf1623 00CB             cf2427 00CD   
+           cf815 00C9              cfcmd 00CF             cfdata 00C0   
+           cferr 00C2             cffeat 00C2                cfp 0000   
+       cfsectcnt 00C5             cfstat 00CF             contrd 004B'  
+           count 0008'               cr0 00E0                cr1 00E8   
+             cr2 00F8                cs0 00E1                cs1 00E9   
+             cs2 00F9                ct0 00E3                ct1 00EB   
+             ct2 00FB                ctp 00FE               dah0 0001   
+            dah1 0009               dah2 0011               dah3 0019   
+            dal0 0000               dal1 0008               dal2 0010   
+            dal3 0018               data 0010#              dcr0 0004   
+            dcr1 000C               dcr2 0014               dcr3 001C   
+           descr 000A'              dmap 00FF               dmcr 001F   
+            done 0076'               dsp 00F5              error 0044'  
+          hddest 0000'           hddmaio 007A'             hdsrc 0004'  
+             i$a 0001                i$b 0004                i$c 0010   
+           i$ct0 0002              i$ct1 0008              i$ct2 0040   
+          i$dma0 0002             i$dma1 0008             i$dma2 0020   
+          i$dma3 0040             i$none 0000               i$rx 0008   
+            i$tx 0020                iop 0008                 ip 00F2   
+             isr 0016                itv 0006       itvtoff$accv 004C   
+     itvtoff$boh 0040       itvtoff$dive 0044       itvtoff$dma0 0024   
+    itvtoff$dma1 0028       itvtoff$dma2 002C       itvtoff$dma3 0030   
+   itvtoff$epu2a 0060    itvtoff$epu2mem 005C   itvtoff$epuintop 0064   
+     itvtoff$ibv 0170        itvtoff$icv 0270       itvtoff$inta 0008   
+    itvtoff$intb 000C       itvtoff$intc 0010    itvtoff$mem2epu 0058   
+     itvtoff$nmi 0004      itvtoff$nmiav 0070       itvtoff$priv 0054   
+      itvtoff$sc 0050         itvtoff$ss 003C     itvtoff$stkovf 0048   
+     itvtoff$tc0 0014        itvtoff$tc1 0018        itvtoff$tc2 0020   
+     itvtoff$uar 0034        itvtoff$uat 0038                lar 0014   
+          loop00 0087'            loop01 0007'            loop02 0023'  
+          loop04 0036'            loop07 0059'            loop08 0069'  
+            mmcr 00F0               mmup 00FF                msr 0000   
+             pdr 00F1                rcs 0014             rcsdav 0010   
+             rdr 0016                rrr 00E8               rrrp 00FF   
+            sah0 0003               sah1 000B               sah2 0013   
+            sah3 001B               sal0 0002               sal1 000A   
+            sal2 0012               sal3 001A              selpg 009D'  
+             slr 0004                tc0 00E2                tc1 00EA   
+             tc2 00FA                tcr 0010                tcs 0012   
+          tcstbe 0001                tdr 0018               tdr0 0005   
+            tdr1 000D               tdr2 0015               tdr3 001D   
+            text 00AD#           uart$en 0080              uartp 00FE   
+             ucr 0010            ucr$5bv 0000            ucr$6bv 0040   
+
+
+HI-TECH SOFTWARE Z80 Macro Assembler: 
+                                                                      Page  20
+Symbol Table
+
+         ucr$7bv 0080            ucr$8bv 00C0            ucr$bcm 00C0   
+        ucr$cexv 0000            ucr$crm 0006            ucr$csm 0008   
+        ucr$ct1v 0008            ucr$eom 0010             ucr$ev 0010   
+         ucr$lbm 0001            ucr$lbv 0001             ucr$ov 0000   
+          ucr$pm 0020             ucr$pv 0020           ucr$x16v 0002   
+         ucr$x1v 0000           ucr$x32v 0004           ucr$x64v 0006   
+          w$data 0080             w$nrst 0002             w$sclk 0001   
+           watch 00A2             watchp 0000              write 0055'  
+
