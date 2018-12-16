@@ -20,6 +20,25 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+16-Dec-2018
+-----------
+
+Added UZI280 binaries to system/uzi280-bintar/UZIBNTAR.LBR.  Use the
+XFRBNTAR.SUB submit file to transfer these to the /Tapes directory on
+the UZI filesystem partition, then boot up UZI280, login as root (no
+password) and extract the tar files using something like the following
+
+`
+	/bin/sh
+	cd /bin; for f in /Tapes/bin_0*.tar; do tar -xvf $f; done
+`
+
+CP/M utilities for manipulating library archives (.LBR files) and Disk
+Utility V8.9 (suitable for manipulation the CP/M-Plus disk drive
+partitions) have also been added to the utilities folder as NULU.COM
+and DU.COM.
+
+
 15-Dec-2018
 -----------
 
