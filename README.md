@@ -29,12 +29,8 @@ the UZI filesystem partition, then boot up UZI280, login as root (no
 password) and extract the tar files using something like the following
 
 `
-	/bin/sh
-`
-
-`
-	cd /bin; for f in /Tapes/bin_0*.tar; do tar -xvf $f; done
-
+/bin/sh
+cd /bin; for f in /Tapes/bin_0*.tar; do tar -xvf $f; done
 `
 
 CP/M utilities for manipulating library archives (.LBR files) and Disk
