@@ -221,14 +221,7 @@ time_t *tloc;
     spl(is);
 }
 
-#ifdef Z280RC
-/* Just a dummy time of day for Z280RC for now */
-rdtod()
-{
-    tod.t_time = ( 59>>1 ) | (59<<5) | (23<<11); /* 23:59:59 */
-    tod.t_date = 10 | (12<<5) | (118<<9);	/* 10-Dec-2018 */
-}
-#else
+#ifndef Z280RC
 
 /* Update global time of day */
 /* This is for the CPU280 SN */

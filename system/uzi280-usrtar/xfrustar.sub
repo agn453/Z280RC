@@ -1,0 +1,7 @@
+; Transfer the UZI280 binary tar files from the current directory
+; into the UZI filesystem partition in the /Tapes directory.
+ucp 0$1
+<cd /Tapes
+<bget uzi112u.tar
+<chmod uzi112u.tar 0644
+<exit

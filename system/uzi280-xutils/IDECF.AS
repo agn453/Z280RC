@@ -68,7 +68,10 @@ ENDC
 ; write/read entry from devwd.c
 
 _wd_io:
+
+COND	XUTIL
 	call	_iopg00		; Select CF I/O page
+ENDC
 
 loop01:
 	in	a,(cfstat)	; Spin until not busy (bit 7 clear)
@@ -112,7 +115,11 @@ loop04:	in	a,(cfstat)	; Spin until not BUSY (bit 7 off) and
 	and	001h
 	jr	z,contrd	; No, continue read
 
-error:	call	_iopg00
+error:
+
+COND	XUTIL
+	call	_iopgfe
+ENDC
 	call	_wd_error
 	ret
 
@@ -285,7 +292,10 @@ loop08:	in	a,(cfstat)	; Spin until not BUSY (bit 7 off)
 	and	001h
 	jp	nz,error
 
-done:	call	_iopg00		; Done, restore I/O page
+done:
+COND	XUTIL
+	call	_iopgfe		; Done, restore CP/M I/O page
+ENDC
 
 	ret
 
@@ -318,6 +328,12 @@ _iopgff:
 	push	bc
 	push	hl
 	ld	l,0FFh
+	jr	selpg
+
+_iopgfe:
+	push	bc
+	push	hl
+	ld	l,uartp
 	jr	selpg
 
 _iopg00:

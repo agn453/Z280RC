@@ -20,6 +20,34 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+18-Dec-2018
+-----------
+
+I've implemented support for the DS1302 timekeeper chip in UZI280
+to set the time-of-day and fixed an issue with I/O page selection affecting
+maskable interrupts in my CompactFlash device support routine (IDECF.AS).
+You can fetch MACHDEP.C MACHASM.C and IDECF.AS from system/uzi280-kernel/
+and re-compile the kernel using MAKE - or download the UZIKERNL.LBR file
+again to get the complete kit of kernel build files.  Fixing the aforementioned
+issues has introduced another problem the the UZI280 "ps" command which was
+previously working but now gives a "Can't read /dev/kmem: Error 0" which I
+am investigating.
+
+Also, a couple more UZI280 binary tar files for the HiTech C compiler (uses
+CPM emulation) and "User Binaries" have been added to system/uzi280-usrtar
+as well as in the CP/M library files UZICTAR.LBR and UZIUSTAR.LBR. Under
+CP/M use NULU to extract the two .tar files and execute the XFRCTAR.SUB
+and XFRUSTAR.SUB to transfer them to the /Tapes directory on the UZI
+file system partition.  Extract these files under UZI280 using a command
+like the following -
+```
+/bin/sh
+cd /
+/bin/tar xvf /Tapes/uzi112c.tar
+/bin/tar xvf /Tapes/uzi112u.tar
+```
+
+
 16-Dec-2018
 -----------
 
@@ -30,7 +58,7 @@ password) and extract the tar files using something like the following
 
 ```
 /bin/sh
-cd /bin; for f in /Tapes/bin_0*.tar; do tar -xvf $f; done
+cd /bin; for f in /Tapes/bin_0*.tar; do /bin/tar -xvf $f; done
 ```
 
 CP/M utilities for manipulating library archives (.LBR files) and Disk

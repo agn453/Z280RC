@@ -564,8 +564,11 @@ _RTclock:
 	pop	bc
 	ret
 
+#endasm
+
 /* clear C/T 0 interrupt and retrigger next interrupt */
 
+#asm
 	psect	text
 	global	_RDclock
 _RDclock:
@@ -581,6 +584,211 @@ _RDclock:
 
 	pop	bc
 	ret
+#endasm
+
+/* rdtod()  Read timekeeper time-of-day */
+
+#asm
+	global	_rdtod
+	global	_tod
+	global	shll
+	global	_spl
+
+	psect	text
+_rdtod:
+	push	bc
+	call	getclk
+	ld	b,11
+	ld	a,(_hour)
+	ld	l,a
+	ld	h,0
+	call	shll
+	ex	de,hl
+	push	de
+	ld	b,5
+	ld	a,(_min)
+	ld	l,a
+	ld	h,0
+	call	shll
+	ex	de,hl
+	ld	a,(_sec)
+	ld	l,a
+	ld	h,0
+	srl	h
+	rr	l
+	ld	a,l
+	or	e
+	ld	l,a
+	ld	a,h
+	or	d
+	ld	h,a
+	pop	de
+	ld	a,l
+	or	e
+	ld	l,a
+	ld	a,h
+	or	d
+	ld	h,a
+	ld	(_time),hl
+	ld	b,9
+	ld	a,(_yy)
+	ld	e,a
+	ld	d,0
+	ld	hl,100		; Adjust for year >2000
+	add	hl,de
+	call	shll
+	ex	de,hl
+	push	de
+	ld	b,5
+	ld	a,(_mm)
+	ld	l,a
+	ld	h,0
+	call	shll
+	ex	de,hl
+	ld	a,(_dd)
+	dec	a		; (day of month seems to be one off)
+	ld	h,0
+	or	e
+	ld	l,a
+	ld	a,h
+	or	d
+	ld	h,a
+	pop	de
+	ld	a,l
+	or	e
+	ld	l,a
+	ld	a,h
+	or	d
+	ld	h,a
+	ld	(_date),hl
+	pop	bc
+	ret	
+
+	psect	bss
+timeblk:		; Time values from DS1302 timekeeper chip
+			; (the order must match that in watrdc)
+_hour:	defs	1
+_min:	defs	1
+_sec:	defs	1
+_dd:	defs	1
+_mm:	defs	1
+_yy:	defs	1
+
+todei:	defs	2	; Store for saved interrupt enable
+
+_time	equ	_tod	; Time of Day pointers
+_date	equ	_tod+2
+
+	psect	text
+
+getclk:
+
+	; watchp is at the default I/O page 0
+
+	ld	l,i$none	;disable interrupts, and store previous status
+	push	hl
+	call	_spl
+	pop	de
+	ld	(todei),hl
+
+	ld	hl,watrdc	; Point to Read Command bytes
+	ld	de,timeblk	; Time values from clock go here
+gclklp:	ld	a,(hl)
+	or	a
+	jr	z,gclkdn	; Zero byte means done reading clock
+	push	de		; Save pointer to clock value
+	ld	d,a		; command byte to D
+	inc	hl
+	ld	a,00000010B	; enable DS1302 (nRST 1 SCLK 0)
+	out	(watch),a
+	ld	b,8		; counter to write 8 bits
+gclko:	ld	a,00000100B	; (nRST 1 SCLK 0) shifted left
+	srl	d		; move LSB into carry
+	rra			;  then into MSB (data bit)
+	out	(watch),a	; output bit (nRST 1 SCLK 0, data in bit 7)
+	or	00000001B	; raise SCLK to 1 to latch data output bit
+	out	(watch),a	; output bit (nRST 1 SCLK 1, data in bit 7)
+	nop	;outjmp
+	nop
+	nop
+	nop
+	djnz	gclko		; repeat for each bit of command byte
+	push	hl
+	push	bc
+	ld	d,0		; initialise result
+	ld	c,watch
+	ld	b,8		; counter to read 8 bits
+gclki:	ld	a,10000010B
+	out	(watch),a	; output (nRST 1 SCLK 0) to latch input bit
+;	inw	hl,(c)		; read bit into L (bit 7)
+	INW
+	ld	a,10000011B
+	out	(watch),a	; output (nRST 1 SCLK 1)
+	rl	l		; shift data bit into CY
+	rr	d		; then into result
+	djnz	gclki		; repeat for each bit of read data
+	ld	a,d		; Result to A
+	pop	bc
+	pop	hl
+	pop	de		; Restore time value pointer
+	ld	(de),a		; Save the result byte
+	inc	de		; Point to next value to be read
+	ld	a,00000010B
+	out	(watch),a	; output (nRST 1 SCLK 0)
+	nop			; delay about a microsecond
+	nop
+	nop
+	ld	a,00000000B
+	out	(watch),a	; output (nRST 0 SCLK 0)
+	nop			; delay about a microsecond
+	nop
+	nop
+	jr	gclklp		; get next time value
+
+gclkdn:
+	ld	hl,(todei)	;restore interrupts to saved status
+	push	hl
+	call	_spl
+	pop	de
+
+	ld	hl,timeblk	; convert bcd values to binary
+	ld	b,6
+cvtval:	call	bcdbin
+	inc	hl
+	djnz	cvtval
+
+clkdone:
+	ret
+
+bcdbin:	push	bc		; Convert byte pointed to by HL
+	ld	a,(hl)		;  from BCD to binary and replace it
+	ld	c,a
+	and	0fh
+	ld	b,a
+	ld	a,c
+	and	0f0h
+	rrca
+	rrca
+	rrca
+	ld	c,a
+	rlca
+	rlca
+	add	a,c
+	add	a,b
+	ld	(hl),a
+	pop	bc
+	ret
+
+	psect	data
+watrdc:
+	defb	10000101B	; hours
+	defb	10000011B	; minutes
+	defb	10000001B	; seconds
+	defb	10000111B	; day
+	defb	10001001B	; month
+	defb	10001101B	; year
+	defb	0 ; end of watch read command table
+
 #endasm
 
 #else
