@@ -20,6 +20,56 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+21-Dec-2018
+-----------
+
+Some more tinkering with I/O page selection, interrupt routine and word
+address alignment.  Also I found the missing .tar file with HiTech C
+header files and the UZI280 system libraries.  I've put this UZISYTAR.LBR
+in system/uzi280-usrtar with the other .LBR files that can be extracted
+and written to the UZI partition using the XFRSYTAR.SUB submit file.
+When you boot UZI280 you'll need to extract this tar file below the root
+directory using
+```
+/bin/sh
+cd /
+/bin/tar xvf /Tapes/uzi112s.tar
+```
+
+The HiTech C compiler now works.
+```
+/bin/sh
+cd /usr/root
+cat >hello.c <<EOF
+#include <stdio.h>
+main()
+{
+  printf("Hello world from UZI280 on the Z280RC!\n");
+}
+EOF
+cc hello.c
+./hello
+```
+
+I also added some utilities to the MKBOOT.SUB and COPYALL.SUB submit files
+in the system/uzi280-xutils directory.  This allows an UZI system partition
+for system recovery to be created (on either /dev/wd1 or /dev/wd2).  When
+you run (say) MKBOOT.SUB you'll need to specify a parameter to select the
+partition.  Use "2" for /dev/wd1 or "3" for /dev/wd2.  After running this
+your can BOOTUZI and answer the boot: prompt with 2 or 3 (instead of 0) to
+start the corresponding partition, Login as root and do a file system check
+on the other (non-mounted) partitions - e.g. `fsck /dev/wd0` to check the
+primary UZI partition.  You can also create mount-points and mount the other
+file systems for backup purposes -
+```
+/bin/sh
+mkdir /disk0
+mount /dev/wd0 /disk0
+cd /disk0; tar cvf /Tapes/backup-wd0.tar .
+umount /dev/wd0
+```
+
+
 18-Dec-2018
 -----------
 
@@ -29,7 +79,7 @@ maskable interrupts in my CompactFlash device support routine (IDECF.AS).
 You can fetch MACHDEP.C MACHASM.C and IDECF.AS from system/uzi280-kernel/
 and re-compile the kernel using MAKE - or download the UZIKERNL.LBR file
 again to get the complete kit of kernel build files.  Fixing the aforementioned
-issues has introduced another problem the the UZI280 "ps" command which was
+issues has introduced another problem with the UZI280 "ps" command which was
 previously working but now gives a "Can't read /dev/kmem: Error 0" which I
 am investigating.
 
@@ -62,9 +112,9 @@ cd /bin; for f in /Tapes/bin_0*.tar; do /bin/tar -xvf $f; done
 ```
 
 CP/M utilities for manipulating library archives (.LBR files) and Disk
-Utility V8.9 (suitable for manipulation the CP/M-Plus disk drive
-partitions) have also been added to the utilities folder as NULU.COM
-and DU.COM.
+Utility V8.9 (suitable for accessing the CP/M-Plus disk drive
+partitions and sector view/editing) have also been added to the utilities
+folder as NULU.COM and DU.COM
 
 
 15-Dec-2018

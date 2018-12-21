@@ -49,7 +49,6 @@ _bcopy:
 	LDHLSX	2	; src -> hl
 	LDIR
 	ret
-	nop
 
 #endasm
 

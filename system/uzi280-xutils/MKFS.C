@@ -43,7 +43,7 @@ char *argv[];
 	printf("Invalid device\n");
 	exit(-1);
     }
-    if (dev < 0 || dev >= NDEVS)
+    if (dev < 0 || dev >= NDEVS || (dev == 1))	/*AGN Disallow floppy dev 1 */
     {
 	printf("Invalid device\n");
 	exit(-1);

@@ -1,3 +1,8 @@
+; devices are
+;   0 /dev/wd0
+;   2 /dev/wd1
+;   3 /dev/wd2
+;
 mkfs 0$1 600 65000
 ucp 0$1
 <mkdir dev
@@ -25,7 +30,10 @@ ucp 0$1
 <mkdir /etc
 <mkdir /bin
 <mkdir /usr
-<mkdir /usr/root
+<cd /usr
+<mkdir root
+<mkdir adm
+<cd /
 <mkdir /Tapes
 <cd /
 <bget init
@@ -65,6 +73,22 @@ ucp 0$1
 <chmod kill 0755
 <bget ps
 <chmod ps 0755
+<bget shutdown
+<chmod shutdown 0750
+<bget df
+<chmod df 0755
+<bget cp
+<chmod cp 0755
+<bget mv
+<chmod mv 0755
+<bget pwd
+<chmod pwd 0755
+<bget date
+<chmod date 0755
+<bget cat
+<chmod cat 0755
+<bget fsck
+<chmod fsck 0750
 <cd /etc
 <get rc
 <chmod rc 0644
@@ -77,4 +101,8 @@ ucp 0$1
 <get termcap
 <chmod termcap 0644
 <bget utmp
+<chmod utmp 0666
+<cd /usr/adm
+<bget wtmp
+<chmod wtmp 0666
 <exit

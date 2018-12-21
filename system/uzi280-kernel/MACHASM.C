@@ -66,17 +66,16 @@ _fs_init:
 	; now we're not executing code in the physical 01E000..01FFFF
 	; address space.
 
-	ld	c,iop		; I/O Page to MMUP
-	ld	l,mmup
-	LDCTL
+	call	_iopgff		; I/O page to MMUP
 	ld	a,1Eh		; Select Sys-PDR 14
 	out	(pdr),a		;  in the PDR pointer
 
 	ld	c,bmp		; point C to the MMU BMP
 	ld	hl,01EAh	; Sys-PDR 14 to 01E000
 	OUTW
-	ld	hl,01FAh	; Sys-PDR 15 to 01F000
+	ld	l,0FAh		; Sys-PDR 15 to 01F000
 	OUTW
+	call	_iopg00		; Back to default I/O page (and interrupts)
 #endasm
 
 #endif
@@ -317,7 +316,7 @@ _iopg40:
 
 _iopgfe:
 	push	bc
-	ld	l,i$rx	;disable interrupts, and store previous status
+	ld	l,i$rx		;disable interrupts, and store previous status
 	push	hl
 	call	_spl
 	pop	de
@@ -332,7 +331,7 @@ _iopgfe:
 
 _iopgff:
 	push	bc
-	ld	l,i$rx	;disable interrupts, and store previous status
+	ld	l,i$none	;disable interrupts, and store previous status
 	push	hl
 	call	_spl
 	pop	de
@@ -674,7 +673,7 @@ _dd:	defs	1
 _mm:	defs	1
 _yy:	defs	1
 
-todei:	defs	2	; Store for saved interrupt enable
+;todei:	defs	2	; Store for saved interrupt enable
 
 _time	equ	_tod	; Time of Day pointers
 _date	equ	_tod+2
@@ -685,11 +684,11 @@ getclk:
 
 	; watchp is at the default I/O page 0
 
-	ld	l,i$none	;disable interrupts, and store previous status
-	push	hl
-	call	_spl
-	pop	de
-	ld	(todei),hl
+;	ld	l,i$none	;disable interrupts, and store previous status
+;	push	hl
+;	call	_spl
+;	pop	de
+;	ld	(todei),hl
 
 	ld	hl,watrdc	; Point to Read Command bytes
 	ld	de,timeblk	; Time values from clock go here
@@ -746,10 +745,10 @@ gclki:	ld	a,10000010B
 	jr	gclklp		; get next time value
 
 gclkdn:
-	ld	hl,(todei)	;restore interrupts to saved status
-	push	hl
-	call	_spl
-	pop	de
+;	ld	hl,(todei)	;restore interrupts to saved status
+;	push	hl
+;	call	_spl
+;	pop	de
 
 	ld	hl,timeblk	; convert bcd values to binary
 	ld	b,6
@@ -787,7 +786,7 @@ watrdc:
 	defb	10000111B	; day
 	defb	10001001B	; month
 	defb	10001101B	; year
-	defb	0 ; end of watch read command table
+	defw	0 ; end of watch read command table
 
 #endasm
 

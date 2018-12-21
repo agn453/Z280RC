@@ -42,7 +42,7 @@ ansi| \\
 # ANSI Terminal with 24 lines 
 #
 ansi-small| \\
-:pc:ho=\E[H:cm=\E[%i%d;%dH:cl=\E[X: \\
+:pc:ho=\E[H:cm=\E[%i%d;%dH:cl=\E[H\E[0J: \\
 :up=\E[A:bl=\007:ue=\E[m:us=\E[4m: \\
 :bc=\E[D:ce=\E[K:bo=\E[1m:be=\E[m:cd=\E[J:so=\E[1m:se=\E[m: \\
 :sr=\EM:bs=\010:ku=\E[A:kd=\E[B:kl=\E[D:kr=\E[C:k1=\E[V:k2=\E[U: \\
@@ -50,4 +50,3 @@ ansi-small| \\
 :co#80:li#24:am#00:nd=\E[C:ho=\E[H: \\
 :vi=\E[?35h:ve=\E[?35l\E[?33h:vs=\E[?35l\E\?33l:sr=\E[:do=\E[B:up=\E[A: \\
 :id=ansi:dl=\E[M:
-

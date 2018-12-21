@@ -157,6 +157,7 @@ static struct devsw dev_tab[] =  /* The device driver switch table */
 
 /* some system variables for command ps. */
 
+unsigned char word_alignment=0;	/*AGN*/
 unsigned ptab_pointer=0;
 unsigned number_of_pages=0;
 unsigned proc_tab_size=PTABSIZE;

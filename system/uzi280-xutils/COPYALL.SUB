@@ -3,7 +3,9 @@ ucp 0$1
 <mkdir /etc
 <mkdir /bin
 <mkdir /usr
-<mkdir /usr/root
+<cd /usr
+<mkdir root
+<cd /
 <mkdir /Tapes
 <cd /
 <rm init
@@ -61,6 +63,30 @@ ucp 0$1
 <rm ps
 <bget ps
 <chmod ps 0755
+<rm cp
+<bget cp
+<chmod cp 0755
+<rm df
+<bget df
+<chmod df 0755
+<rm shutdown
+<bget shutdown
+<chmod shutdown 0750
+<rm mv
+<bget mv
+<chmod mv 0755
+<rm pwd
+<bget pwd
+<chmod pwd 0755
+<rm date
+<bget date
+<chmod date 0755
+<rm cat
+<bget cat
+<chmod cat 0755
+<rm fsck
+<bget fsck
+<chmod fsck 0755
 <cd /etc
 <rm rc
 <get rc
@@ -79,4 +105,5 @@ ucp 0$1
 <chmod termcap 0644
 <rm utmp
 <bget utmp
+<chmod utmp 0666
 <exit

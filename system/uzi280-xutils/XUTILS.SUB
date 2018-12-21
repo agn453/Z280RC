@@ -4,7 +4,9 @@ c280 -c -of2 mkfs.c
 ;
 ; (fsck has a missing _da_read error)
 ;c280 -c -of2 fsck.c
+c280 -c -of2 fsck2.c
 ;
 lkxutil mkfs
 ;lkxutil fsck
+lkxutil fsck2
 lkxutil ucp
