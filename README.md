@@ -20,6 +20,12 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+12-Jun-2019
+-----------
+
+I found the original DU-V88.LBR of Ward Christensen's Disk Utility
+(better late than never) and added it to the "utilities" subdirectory
+
 21-Dec-2018
 -----------
 
@@ -56,7 +62,7 @@ in the system/uzi280-xutils directory.  This allows an UZI system partition
 for system recovery to be created (on either /dev/wd1 or /dev/wd2).  When
 you run (say) MKBOOT.SUB you'll need to specify a parameter to select the
 partition.  Use "2" for /dev/wd1 or "3" for /dev/wd2.  After running this
-your can BOOTUZI and answer the boot: prompt with 2 or 3 (instead of 0) to
+you can BOOTUZI and answer the boot: prompt with 2 or 3 (instead of 0) to
 start the corresponding partition, Login as root and do a file system check
 on the other (non-mounted) partitions - e.g. `fsck /dev/wd0` to check the
 primary UZI partition.  You can also create mount-points and mount the other
