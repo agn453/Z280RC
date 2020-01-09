@@ -16,6 +16,7 @@
 ;
 ;	27-Jun-2018	Tony Nicholson	Initial Z280RC system support
 ;					for DS1302 clock chip
+;	09-Jan-2020	Tony Nicholson	More accurate 1 microsecond delays
 ;
 ; NB: Only dates after 31-Dec-2017 supported unless DBASE is changed.
 ; Also there are hard-coded Leap Year values in the LEAPS table until 2056.
@@ -51,6 +52,20 @@ time:	ret		; Not implemented for LDRBIOS
 	; Z280 I/O Port selection
 
 	extrn	iopwatch, pshiop, popiop
+
+; Macro to delay about a microsecond (in-line code)
+;
+; EX (SP),HL (5 each) = 30 cycles.  At 29.491200MHz
+; this is approx. 1.02 microseconds.
+;
+udelay	macro
+	ex	(sp),hl
+	ex	(sp),hl
+	ex	(sp),hl
+	ex	(sp),hl
+	ex	(sp),hl
+	ex	(sp),hl
+	endm
 
 ;
 ; TIME - Set time and date clock
@@ -132,14 +147,10 @@ gclki:	ld	a,10000010b
 	inc	de		; Point to next value to be read
 	ld	a,00000010b
 	out	(watch),a	; output (nRST 1 SCLK 0)
-	nop			; delay about a microsecond
-	nop
-	nop
+	udelay			; delay about a microsecond
 	ld	a,00000000b
 	out	(watch),a	; output (nRST 0 SCLK 0)
-	nop			; delay about a microsecond
-	nop
-	nop
+	udelay			; delay about a microsecond
 	jr	gclklp		; get next time value
 
 gclkdn:
@@ -255,14 +266,10 @@ wrloop:	ld	a,(hl)
 	call	outbytes
 	ld	a,00000010b	; nRST high, SCLK low
 	out	(watch),a
-	nop			; delay about a microsecond
-	nop
-	nop
+	udelay			; delay about a microsecond
 	ld	a,00000000b	; nRST and SCLK low
 	out	(watch),a
-	nop			; delay about a microsecond
-	nop
-	nop
+	udelay			; delay about a microsecond
 	jr	wrloop
 
 ;

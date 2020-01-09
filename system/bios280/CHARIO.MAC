@@ -80,7 +80,6 @@ ucr$lbv	equ	00000001b	; Local Loop back mode
 ; Transmitter Data Register (TDR)
 
 ctrlp	equ	010h		; CTRL-P to enter BIOSDBG
-ctrlz	equ	01ah		; CTRL-Z end-of-file character
 
 	common$segment	; All character I/O is in common memory
 
@@ -147,7 +146,7 @@ brktst:	pop	af
 
   if use$device$io
 null$input:
-	ld	a,ctrlz		; return EOF (ctrl-Z) for NULL device
+	ld	a,ctlz		; return EOF (ctrl-Z) for NULL device
 	ret
   endif
 

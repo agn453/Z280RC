@@ -20,6 +20,16 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+09-Jan-2020
+-----------
+
+Fixed some erratic date/time setting under CP/M-Plus.
+
+I've tweaked the DS1302 time-keeping chip routines in the BIOS CLOCK
+module (and the TIME.COM utility) to adjust the read/write timing
+to use a more accurate 1 microsecond serial timing for the 3-wire
+interface.
+
 12-Jun-2019
 -----------
 

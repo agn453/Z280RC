@@ -91,6 +91,19 @@ outjmp	macro
 	nop
 	endm
 
+;
+; Approximate 1 microsecond delay
+;
+; Each EX (SP),HL instruction is 5 clock cycles, Z280 CPU runs
+; at 29.4912 MHz with bus timing scaled by 1/4 (7.3728MHz).
+; Time for six is 30/29491200 = 1.05 microseconds.
+; 
+udelay	macro
+	  rept	6
+	  ex	(sp),hl
+	  endm
+	endm
+
   endif	;Z280RC
 ;
 BDOS	equ	0005h
@@ -1066,9 +1079,7 @@ rddone:
 ;
 enRTC:	ld	a,00000010b	;Drive nRST high, SCLK low, DATA low
 	out	(watch),a
-	nop			;Delay a little (about a microsecond)
-	nop
-	nop
+	udelay			;Delay a little (about a microsecond)
 	ret
 
 ;
@@ -1077,14 +1088,10 @@ enRTC:	ld	a,00000010b	;Drive nRST high, SCLK low, DATA low
 ;
 disRTC:	ld	a,00000010b	;nRST high, SCLK low
 	out	(watch),a
-	nop			;Delay a little (about a microsecond)
-	nop
-	nop
+	udelay			;Delay a little (about a microsecond)
 	ld	a,00000000b	;Drive nRST and SCLK low
 	out	(watch),a
-	nop			;Delay a little (about a microsecond)
-	nop
-	nop
+	udelay			;Delay a little (about a microsecond)
 	ret
 
 ;
