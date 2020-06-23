@@ -128,7 +128,7 @@ cd /bin; for f in /Tapes/bin_0*.tar; do /bin/tar -xvf $f; done
 ```
 
 CP/M utilities for manipulating library archives (.LBR files) and Disk
-Utility V8.9 (suitable for accessing the CP/M-Plus disk drive
+Utility V8.8 (suitable for accessing the CP/M-Plus disk drive
 partitions and sector view/editing) have also been added to the utilities
 folder as NULU.COM and DU.COM
 
