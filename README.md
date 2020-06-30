@@ -23,7 +23,7 @@ Modification History (in reverse chronological order):
 30-Jun-2020
 -----------
 
-Added support for Bill Shen's QuadSer Rev1 4-port UART module in RC2014
+Added CP/M Plus support for Bill Shen's QuadSer Rev1 4-port UART module in RC2014
 form-factor.  This is a UART module using the Oxford Semiconductor Ltd.
 OX16C954 rev B chip with 128-byte FIFOs for each receiver and
 transmitter.  For hardware details see
@@ -95,6 +95,13 @@ LST:    = Null Device
 A>
 ```
 
+Pre-built versions of the various banked configurations can be found
+in the system/bios280 subdirectory.
+
+You can also download all the CP/M Plus BIOS files in the following
+ZIP file -
+
+https://github.com/agn453/Z280RC/blob/master/system/bios280/bios280.zip
 
 09-Jan-2020
 -----------
