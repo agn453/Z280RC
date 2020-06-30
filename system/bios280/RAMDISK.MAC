@@ -114,7 +114,7 @@ hdtype	equ	20h		; Media Type for Memory Disk
 	; Get Hard-coded $date for RAMDISK label
 
     if banked
-$day	aset	16
+$day	aset	16		;use 16-Nov-2018 18:20:00
 $month	aset	11
 $year	aset	2018-1900	;years >= 2000 are >= 100
 $hour	equ	18h		; hour and minute in BCD
@@ -522,7 +522,7 @@ dlabel:	defb	' RAMDISK    ',31h,0,0,0
 	defb	$hour, $min
 
 init$msg: defz	cr,lf,'%RAMDISK label missing. Initialise (Y/N) ? '
-done$msg: defz	'Y - RAMDISK initialised.',cr,lf
+done$msg: defz	'Y - Done.',cr,lf
 no$msg:	defz	'N',cr,lf
     endif
 

@@ -17,6 +17,9 @@
 ;	27-Jun-2018	Tony Nicholson	Initial Z280RC system support
 ;					for DS1302 clock chip
 ;	09-Jan-2020	Tony Nicholson	More accurate 1 microsecond delays
+;	25-Jun-2020	Tony Nicholson	Use the BIOSKRNL ?BANKIO routine
+;					for invoking set/get in Bank 0
+;					and save a few bytes
 ;
 ; NB: Only dates after 31-Dec-2017 supported unless DBASE is changed.
 ; Also there are hard-coded Leap Year values in the LEAPS table until 2056.
@@ -35,7 +38,7 @@ base$year$bcd equ 17h	; Base year (in BCD)
 
 	; Uses BIOS stack to minimise common memory usage
 
-	extrn	@tstack, @cbnk, ?bnksl
+	extrn	?bankio
   endif
 
   if ldrbios
@@ -74,16 +77,8 @@ udelay	macro
 
 time:
     if banked
-	ld	(@tstack),sp	; Switch to local BIOS stack
-	ld	sp,@tstack
-	ld	a,(@cbnk)	; Save current bank
-	push	af
-	xor	a		; Switch to bank 0
-	call	?bnksl
-	call	do$time		; Call the routine in bank 0
-	pop	af
-	call	?bnksl		; Restore caller's bank
-	ld	sp,(@tstack)	; Back to entry stack
+	call	?bankio		; Invoke the DO$TIME routine
+	defw	do$time		;  in Bank 0
 	ret
 
 	bank0$segment
@@ -148,7 +143,11 @@ gclki:	ld	a,10000010b
 	ld	a,00000010b
 	out	(watch),a	; output (nRST 1 SCLK 0)
 	udelay			; delay about a microsecond
+  if 0
 	ld	a,00000000b
+  else
+	xor	a		; save a byte
+  endif
 	out	(watch),a	; output (nRST 0 SCLK 0)
 	udelay			; delay about a microsecond
 	jr	gclklp		; get next time value
@@ -267,7 +266,11 @@ wrloop:	ld	a,(hl)
 	ld	a,00000010b	; nRST high, SCLK low
 	out	(watch),a
 	udelay			; delay about a microsecond
+  if 0
 	ld	a,00000000b	; nRST and SCLK low
+  else
+	xor	a		; save a byte
+  endif
 	out	(watch),a
 	udelay			; delay about a microsecond
 	jr	wrloop
@@ -311,8 +314,7 @@ cvd1:	ld	c,e
 	add	hl,bc		;     + leap bias
 	ex	de,hl
 	pop	hl
-	or	a
-	sbc	hl,de		; day = rem days - HL
+	subw	hl,de		; day = rem days - HL
 	ld	a,l
 	call	binbcd
 	ld	(day),a
@@ -379,8 +381,7 @@ cy1:	ld	de,365		; Year length
 	inc	de		; Yes, year length to 366
 cy2:	push	hl
 	dec	de
-	or	a
-	sbc	hl,de		; Rem days - year length
+	subw	hl,de		; Rem days - year length
 	jr	c,cy3		; return if <= 0
 	pop	af	; Discard from stack???
 	dec	hl
@@ -423,7 +424,6 @@ cm2:	ld	hl,mdoy
 	jp	p,cm1
 cm3:	pop	hl
 	ret
-
 
 ;
 ; Bit bang output commands to timekeeper chip

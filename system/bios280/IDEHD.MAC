@@ -30,6 +30,7 @@
 ;					contiguous with the TPA bank
 ;					so USE$DMA$TO$COPY TRUE now works
 ;	28-Nov-2018	Tony Nicholson	Prune LDRBIOS to just HD$READ
+;	25-Jun-2020	Tony Nicholson	Squeeze a few less bytes of code
 ;
 
 	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
@@ -572,8 +573,15 @@ loopcmdrdy:
 	out	(cfcmd),a
 	; Spin until not BUSY (bit 7 clear)
 ini$lp:	in	a,(cfstat)
+
+    if 0
 	and	10000000b
 	jr	nz,ini$lp
+    else
+	rla			; save a byte
+	jr	c,ini$lp
+    endif
+
 	in	a,(cfstat)	; Error? (bit 0 set)
 	or	a
   endif
@@ -698,8 +706,13 @@ more$retries:
 	; Spin until not BUSY (bit 7 clear)
 loopbusy:
 	in	a,(cfstat)
+  if 0
 	and	10000000b
 	jr	nz,loopbusy
+  else
+	rla			; save a byte
+	jr	c,loopbusy
+  endif
 
 	ld	a,11100000b	; set Logical Addressing mode (bit 6 high)
 				; Unit number 0 (bit 4). Bits 7 and 5 are high
@@ -751,8 +764,13 @@ readdrq:
 	jr	nz,readdrq
 
 	in	a,(cfstat)	; Error? (bit 0 set)
+  if 0
 	and	00000001b
 	jp	nz,tryagain
+  else
+	rra			; save a byte
+	jr	c,tryagain
+  endif
 
 	inirw			; Read sector (256 Words = 512 bytes)
 
@@ -819,12 +837,22 @@ readdrq2:
 
 loopnotbusy:
 	in	a,(cfstat)
+    if 0
 	and	10000000b
 	jr	nz,loopnotbusy
+    else
+	rla			; save a byte
+	jr	c,loopnotbusy
+    endif
 
 	in	a,(cfstat)	; Error? (bit 0 set)
+    if 0
 	and	00000001b
 	jr	nz,tryagain
+    else
+	rra			; save a byte
+	jr	c,tryagain
+    endif
   endif ; not ldrbios
 
 ide$done:

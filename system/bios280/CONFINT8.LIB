@@ -11,11 +11,11 @@
 ; This date is included in the sign-on message
 
 build$date macro
-	defb	'INT8 20200109'
+	defb	'INT8 20200630'
 	endm
 
-true	equ	-1
-false	equ	not true
+false	equ	0
+true	equ	not false
 
 debug	equ	false		; TRUE to include BIOSDBG module
 ldrbios equ	false		; TRUE to generate Loader BIOS 
@@ -58,6 +58,12 @@ clock$set$support equ true	; TRUE to include time set support in CLOCK
 
 dma$burst$mode equ false	; TRUE burst mode/FALSE continuous mode DMA
 
+baud$rate$set equ false		; TRUE to include setting baud rate
+
+  if use$device$io
+quadser	equ	false		; TRUE to include QuadSer 4-port serial I/O
+  endif
+
 ; Now construct the sign-on message
 
 config	macro	
@@ -74,7 +80,7 @@ config	macro
   endif
 	build$date
 	defb	cr,lf
-  	defb	'Built with '
+  	defb	'With '
   if int$enabled
 	defb	'Interrupts '
   endif
@@ -91,22 +97,27 @@ config	macro
   endif
   if banked
     if use$dma$to$copy
-	defb	'MOVE-w/DMA '
+	defb	'DMAMOVE '
     else
-	defb	'MOVE-w/MMU '
+	defb	'MMUMOVE '
     endif
   endif
   if partn8 and use$big$drm
-	defb	'BigDirE-H '
+	defb	'BigE-H '
   endif
   if dma$burst$mode
-	defb	'Burst-DMA '
+	defb	'DMABurst '
   else
-	defb	'Cont.-DMA '
+	defb	'DMACont. '
   endif
   if not ldrbios
+    if use$device$io
+      if quadser
+	defb	'QuadSer '
+      endif
+    endif
     if not use$disk$macros
-	defb	'Alloc-CSV'
+	defb	'CSVAlloc'
     endif
   endif
 	defb	cr,lf
@@ -115,17 +126,17 @@ config	macro
   endif
   if idehd
     if ldrbios
-	defb	'CompactFlash A: '
+	defb	'CF A: '
     else
       if partn8
-	defb	'CompactFlash A:..H: '
+	defb	'CF A-H: '
       else
-	defb	'CompactFlash A:..D: '
+	defb	'CF A-D: '
       endif
     endif
   endif
   if ramdisk
-	defb	'RamDisk M:'
+	defb	'Ram M:'
   endif
 	defz	cr,lf
 	endm ; signon
@@ -160,14 +171,35 @@ ccp$size equ	ccp$len/128	; number of 128-byte records in CCP.COM
 ;
 ; Bits in vector are -
 ;
-; UART		08000h	Z280 MCU On-chip UART
-; NULL		00000h	Null device
+CIO$NULL equ	00000h	; Null device
+CIO$UART equ	08000h	; Z280 MCU On-chip UART
+
+  if	use$device$io
+    if quadser
+CIO$TTY0 equ	04000h	; QuadSer port 0
+CIO$TTY1 equ	02000h	; QuadSer port 1
+CIO$TTY2 equ	01000h	; QuadSer port 2
+CIO$TTY3 equ	00800h	; QuadSer port 3
+    endif
+  endif
 ;
-def$civec equ	08000h		; Console input UART
-def$covec equ	08000h		; Console output UART
-def$aivec equ	00000h		; Auxilary input NULL
-def$aovec equ	00000h		; Auxilary input NULL
-def$lovec equ	00000h		; List output NULL
+def$civec equ	CIO$UART	; Console input UART
+def$covec equ	CIO$UART	; Console output UART
+
+  if	use$device$io
+    if quadser		; Use TTY3
+def$aivec equ	CIO$TTY3	; Auxilary input TTY3
+def$aovec equ	CIO$TTY3	; Auxilary input TTY3
+    else
+def$aivec equ	CIO$NULL	; Auxilary input NULL
+def$aovec equ	CIO$NULL	; Auxilary input NULL
+    endif
+  else
+def$aivec equ	CIO$NULL	; Auxilary input NULL
+def$aovec equ	CIO$NULL	; Auxilary input NULL
+  endif
+
+def$lovec equ	CIO$NULL	; List output NULL
 
   if	banked
 common$base equ	0e000h		; Common memory base address

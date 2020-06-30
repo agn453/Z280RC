@@ -7,7 +7,8 @@
 ; for internal control registers and on-chip peripherals.
 ;
 ; It also contains Z280RC device specific I/O port definitions
-; for the IDE CompactFlash interface and DS1203 timekeeper chip.
+; for the IDE CompactFlash interface, DS1203 timekeeper chip
+; and the OX16C954 QuadSer serial interface board.
 ;
 ;
 ; Modification History
@@ -18,6 +19,8 @@
 ; 05-Dec-2018	Tony Nicholson	Added Interrupt and Trap Vector
 ;				Table related equates and System-Call
 ;				function definitions.
+; 23-Jun-2020	Tony Nicholson	Added QuadSer module equates for the
+;				OX16C954 quad serial port board.
 ;
 
 ;---------------------------------
@@ -200,6 +203,142 @@ watch	equ	0a2h	; DS1302 3-wire interface
 w$sclk	equ	00000001b	; SCLK bit
 w$nrst	equ	00000010b	; nRST bit
 w$data	equ	10000000b	; data I/O bit
+
+;---------------------------------
+
+; QuadSer Rev 1 board serial ports on OX16C954 UART
+
+qserp	equ	00h	; QuadSer I/O page
+qser$base equ	0d0h	; QuadSer base address
+qser0	equ	qser$base+00h	; channel 0
+qser1	equ	qser$base+08h	; channel 1
+qser2	equ	qser$base+10h	; channel 2
+qser3	equ	qser$base+18h	; channel 3
+
+; OX16C954 register offsets
+
+qs_THR	equ	000b	; transmitter holding register
+qs_RHR	equ	000b	; receiver holding register
+qs_IER	equ	001b	; interrupt enable register
+qs_FCR	equ	010b	; FIFO control register
+qs_ISR	equ	010b	; interrupt status register
+qs_LCR	equ	011b	; line control register
+qs_MCR	equ	100b	; modem control register
+qs_LSR	equ	101b	; line status register
+qs_MSR	equ	110b	; modem status register
+qs_SPR	equ	111b	; scratch pad register
+
+; OX16C954 additional standard registers, accessed when LCR:7 is 1
+
+qs_DLL	equ	000b	; divisor latch register, LSB
+qs_DLM	equ	001b	; divisor latch register, MSB
+
+; OX16C954 650-compatible registers, accessed when LCR is set to 0BFh
+
+qs_EFR	equ	010b	; enhanced features register
+qs_XON1	equ	100b	; automatic in-band flow control
+qs_XON2	equ	101b	; automatic in-band flow control
+qs_XOFF1	equ	110b	; automatic in-band flow control
+qs_XOFF2	equ	111b	; automatic in-band flow control
+
+; OX16C954 950-specific registers
+
+qs_ASR	equ	001b	; additional status register
+qs_RFL	equ	011b	; receiver FIFO fill level
+qs_TFL	equ	100b	; transmitter FIFO fill level
+qs_ICR	equ	101b	; indexed control register data
+
+; OX16C954 indexed register set
+
+qs_ACR	equ	00h	; additional control register
+qs_CPR	equ	01h	; clock prescaler register
+qs_TCR	equ	02h	; times control register
+qs_CKS	equ	03h	; clock select register
+qs_TTL	equ	04h	; transmitter interrupt trigger level
+qs_RTL	equ	05h	; receiver interrupt trigger level
+qs_FCL	equ	06h	; flow control level low
+qs_FCH	equ	07h	; flow control level high
+qs_ID1	equ	08h	; device identifier register
+qs_ID2	equ	09h	; device identifier register
+qs_ID3	equ	0ah	; device identifier register
+qs_REV	equ	0bh	; 950 core revision
+qs_CSR	equ	0ch	; channel software reset
+qs_NMR	equ	0dh	; 9-bit mode register
+qs_MDM	equ	0eh	; modem disable mask
+qs_RFC	equ	0fh	; readable FCR
+qs_GDS	equ	10h	; good data status register
+qs_DMS	equ	11h	; DMA stattus register
+qs_PIDX	equ	12h	; port index register
+qs_CKA	equ	13h	; clock alteration register
+
+; Common bit masks for the Line Status Register (LSR)
+
+qsm$rxrdy equ	00000001b	; RxRDY (data available)
+qsm$overrun equ	00000010b	; Overrun
+qsm$parity equ	00000100b	; Parity error
+qsm$framing equ	00001000b	; Framing error
+qsm$rxbreak equ	00010000b	; Rx Break received
+qsm$THRempty equ 00100000b	; Tx Holding Register (FIFO) empty
+qsm$txempty equ	01000000b	; TxEmpty
+qsm$dataerror equ 10000000b	; Data Error
+
+; Line Control Register bit combinations
+
+lcr_5_bit_data equ 00h		; 5-bit data
+lcr_6_bit_data equ 01h		; 6-bit data
+lcr_7_bit_data equ 02h		; 7-bit data
+lcr_8_bit_data equ 03h		; 8-bit data
+lcr_1_stop_bit equ 00h		; 1 stop bit
+lcr_1_5_stop_bits equ 04h	; 1.5 stop bits (5-bit data only)
+lcr_2_stop_bits equ 04h		; 2 stop bits
+lcr_no_parity equ 00h		; no parity
+lcr_odd_parity equ 08h		; odd parity
+lcr_even_parity equ 18h		; even parity
+lcr_force_high_parity equ 28h	; mark parity
+lcr_force_low_parity equ 38h	; space parity
+lcr_force_break equ 40h		; force break
+
+; Common modes
+
+lcr_8N1	equ	lcr_8_bit_data+lcr_1_stop_bit+lcr_no_parity
+lcr_8N2	equ	lcr_8_bit_data+lcr_2_stop_bits+lcr_no_parity
+lcr_8E1	equ	lcr_8_bit_data+lcr_1_stop_bit+lcr_even_parity
+lcr_8E2	equ	lcr_8_bit_data+lcr_2_stop_bits+lcr_even_parity
+lcr_8O1	equ	lcr_8_bit_data+lcr_1_stop_bit+lcr_odd_parity
+lcr_8O2	equ	lcr_8_bit_data+lcr_2_stop_bits+lcr_odd_parity
+lcr_7E2 equ	lcr_7_bit_data+lcr_2_stop_bits+lcr_even_parity
+lcr_7O2	equ	lcr_7_bit_data+lcr_2_stop_bits+lcr_odd_parity
+lcr_5E1_5 equ	lcr_5_bit_data+lcr_1_5_stop_bits+lcr_even_parity
+
+; Baud Rate Divisors
+;
+; Uses RC2014 primary clock of 7.3728 MHz with
+; the Clock Prescaler Register (CPR) set upon
+; a hardware reset to 20h (divide by 4). This
+; gives an effective UART clock of 1.8432MHz.
+; The sample clock is x16.
+;
+; value = 1842000/(16xbaudrate)
+
+d115k2	equ	0001h	; 115200 baud
+d57k6	equ	0002h	;  57600 baud
+d38k4	equ	0003h	;  38400 baud
+d28k8	equ	0004h	;  28800 baud
+d19k2	equ	0006h	;  19200 baud
+d9k6	equ	000ch	;   9600 baud
+d7k2	equ	0010h	;   7200 baud
+d4k8	equ	0018h	;   4800 baud
+d3k6	equ	0020h	;   3600 baud
+d2k4	equ	0030h	;   2400 baud
+d1k8	equ	0040h	;   1800 baud
+d1k2	equ	0060h	;   1200 baud
+d600	equ	00c0h	;    600 baud
+d300	equ	0180h	;    300 baud
+d150	equ	0300h	;    150 baud
+d134	equ	035bh	;    134 baud
+d110	equ	0417h	;    110 baud
+d75	equ	0600h	;     75 baud
+d50	equ	0900h	;     50 baud
 
 ;---------------------------------
 ;

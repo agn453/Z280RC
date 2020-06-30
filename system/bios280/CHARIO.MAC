@@ -1,4 +1,4 @@
-	title 'Z280RC Character I/O handler for console UART'
+	title 'Z280RC Character I/O handler for Console UART and QuadSer board'
 
 ;		+-----------------------+
 ;		|			|
@@ -22,6 +22,7 @@
 ;					echo).
 ;	28-Nov-2018	Tony Nicholson	Only use Z280 UART routines
 ;					for LDRBIOS use (no device support)
+;	29-Jun-2020	Tony Nicholson	Add support for QuadSer 4-port board
 ;
 
 	maclib	CONFIG.LIB
@@ -31,66 +32,93 @@
 	public	?cinit
 	public	@ctbl
 
+  if banked
+	extrn	?bankio		; call the routines in bank 0
+  endif
+
   if use$device$io
+
 	public	?co,?cost	; Use multiple
 	public	?ci,?cist	;  device support
 
-max$devices equ 1	; Only Z280 UART for now
+    if quadser
 
-  else
-	public	conost,conout	; Only console I/O via Z280 UART
-	public	const,conin
+	extrn	pshiop, popiop	; push and pop the I/O page register
+	extrn	iopqs		; selects I/O page for QuadSer board
+	public	@qsactv		; number of QuadSer ports detected
+
+    endif
+
   endif
 
-	extrn	iopuart		; I/O Page select
+  if use$device$io
+
+    if quadser
+
+max$devices equ 5		; Console plus 4-ports on QuadSer board
+
+    else
+
+max$devices equ 1		; Only Z280 UART Console
+
+    endif
+
+  else
+
+	public	conost,conout	; Only console I/O via Z280 UART
+	public	const,conin
+
+max$devices equ 1		; Only Z280 UART
+
+  endif
+
+	extrn	iopuart		; I/O Page select for console UART
 
   if debug
 	extrn	biosdbg		; BIOS debugger
 	extrn	@indbg		; Debugger active flag
-  endif
-
-; Single Built-in UART
-;
-; UART Configuration Register (UCR) bits
-
-ucr$bcm	equ	11000000b ; BC field of UART control register
-ucr$5bv	equ	00000000b	; 5-bits per character
-ucr$6bv	equ	01000000b	; 6-bits
-ucr$7bv	equ	10000000b	; 7-bits
-ucr$8bv	equ	11000000b	; 8-bits
-ucr$pm	equ	00100000b ; P - Parity bit enable
-ucr$pv	equ	00100000b	; extra bit with parity
-ucr$eom	equ	00010000b ; E/O - parity even / odd
-ucr$ev	equ	00010000b	; Even Parity
-ucr$ov	equ	00000000b	; Odd Parity
-ucr$csm	equ	00001000b ; CS - Clock select
-ucr$ct1v equ	00001000b	; Use CT1 output for clock
-ucr$cexv equ	00000000b	; External clock input from CT1 input
-ucr$crm	equ	00000110b ; CR - Clock Rate multiplier
-ucr$x1v	equ	00000000b	; x1
-ucr$x16v equ	00000010b	; x16
-ucr$x32v equ	00000100b	; x32
-ucr$x64v equ	00000110b	; x64
-ucr$lbm	equ	00000001b ; LB - Loop Back Enable
-ucr$lbv	equ	00000001b	; Local Loop back mode
-
-; Transmitter Control/Status (TCS)
-; Receiver Control/Status (RCS)
-; Receiver Data Register (RDR)
-; Transmitter Data Register (TDR)
 
 ctrlp	equ	010h		; CTRL-P to enter BIOSDBG
-
-	common$segment	; All character I/O is in common memory
-
-?cinit:
-  if use$device$io
-	ld	a,c
-	cp	max$devices	; Valid device code? (only 1)
-	ret	nc		; No, return
   endif
 
-	; Configure and Enable Console UART
+	common$segment
+
+?cinit:
+
+  if banked
+	call	?bankio		; call the CINIT routine
+	defw	cinit		;  in bank 0 to reduce
+	ret			;  common memory usage
+  endif
+
+if banked
+	; The init routines are banked to save space
+
+	bank0$segment
+else
+	common$segment
+endif
+
+cinit:	ld	a,c
+	cp	max$devices	; valid device code?
+	ret	nc		; no, return
+
+  if use$device$io
+    if quadser
+	or	a
+	jr	nz,quad$init	; devices 1..4
+    endif
+  endif
+
+coninit:
+	; Configure and Enable Console UART device 0
+	;
+	; The Built-in UART I/O ports are -
+	;
+	; Transmitter Control/Status (TCS)
+	; Receiver Control/Status (RCS)
+	; Receiver Data Register (RDR)
+	; Transmitter Data Register (TDR)
 
 	call	iopuart		; Select UART I/O Page
 
@@ -104,6 +132,9 @@ ctrlp	equ	010h		; CTRL-P to enter BIOSDBG
 	out	(tcs),a
 
   if ldrbios and (not debug)
+
+	; loader BIOS does not enable receiver
+
 	xor	uart$en		; toggle to disable
   endif
 
@@ -115,14 +146,260 @@ ctrlp	equ	010h		; CTRL-P to enter BIOSDBG
 
   if use$device$io
 
-?ci:				; character input
+    if quadser
 
+;
+; Probe and initialise the QuadSer 4-port serial device
+;
+; Enter with CP/M device number in A
+;
+quad$init:
+	call	quad$dev8	; get device offset (0,8,16,24) to DE
+
+      if baud$rate$set
+
+	; Extract the baud rate value from @CTBL for this device and
+	; plug new baud rate divisor into the initialisation table
+
+	push	de		; save port*8 to stack
+	ld	hl,tty0+mb$speed ; point to baud rate for TTY0
+	add	hl,de
+	ld	a,(hl)		; fetch baud rate code (0..15)
+	or	a		; no baud rate change if
+	jr	z,nochange	;  it is zero (baud$none)
+	cp	baud$19200+1	;  or greater than maximum
+	jr	nc,nochange	;  (baud$19200)
+	dec	a		; normalise to (0..14)
+	ld	l,a		; baud rate code to HL
+	ld	h,d		;  (D contains 0)
+	add	hl,hl		; double it for word offset
+	ld	de,speed$table	; look-up speed table
+	add	hl,de		;  divisor entries
+	ex	de,hl		; pointer in DE
+	ld	hl,baudlo
+	ld	a,(de)		; plug init table with divisor
+	ld	(hl),a		;  low byte
+	inc	de
+	inc	hl		; advance to high byte position
+	inc	hl
+	ld	a,(de)		; divisor high byte
+	ld	(hl),a
+nochange:
+	pop	de
+      endif
+
+	ld	a,e		; E contains port number*8, D=0
+	add	qser$base	; now form port address
+	ld	e,a		;  and save it back to
+	push	de		;  stack
+
+	call	iopqs		; select the QuadSer board I/O page
+
+	; check the board is plugged in (we only check
+	; the port 0 registers ID1, ID2, ID3 and REV)
+
+	xor	a
+	out	(qser0+qs_LCR),a ; select the ACR
+	out	(qser0+qs_SPR),a
+	ld	a,01000000b	; enable indexed register read
+	out	(qser0+qs_ICR),a
+	ld	hl,quad$id	; match the bytes here
+	ld	d,qs_ID1	; start with qs_ID1
+	ld	b,4		;  then qs_ID2, qs_ID3 and qs_REV
+id1:	ld	a,d
+	out	(qser0+qs_SPR),a ; select register
+	in	a,(qser0+qs_ICR) ; read value
+	cp	(hl)		; compare with expected
+	scf			; assume no-match
+	jr	nz,id2		; not the same
+	inc	hl
+	inc	d
+	djnz	id1		; try next
+	xor	a		; All matched - clear carry flag
+id2:	push	af
+	xor	a
+	out	(qser0+qs_SPR),a ; reselect ACR
+	out	(qser0+qs_ICR),a ; enable access to standard regs again
+	pop	af
+
+	pop	de		; restore base port address to E
+
+	jr	c,quad$none	; IDs and REV not found - disable the device
+
+iniq1:	ld	hl,quad$initbl	; point to initialisation table
+	ld	b,quad$tblen	; number of bytes
+iniq2:	ld	a,(hl)		; get register address
+	add	a,e		;  add in the base port address
+	ld	c,a		; port address in register C
+	inc	hl
+	ld	a,(hl)		; get value and output it
+	out	(c),a
+	inc	hl
+	djnz	iniq2		; repeat for all registers
+
+flush:
+	ld	c,e		; now flush any spurious
+	in	a,(c)		;  input characters from RHR FIFO
+
+	ld	a,e
+	add	qs_LSR
+	ld	c,a
+	in	a,(c)		; fetch LSR
+	and	qsm$rxrdy	; more data?
+	jr	nz,flush
+
+	inc	(@qsactv)	; increment active ports
+				;  to indicate board present to
+				;  BIOSKRNL BOOT routine
+
+iniq3:
+	jp	iopuart		; back to UART I/O page and return
+
+quad$none:
+	xor	a		; board not detected
+	ld	(tty0),a	;  so disable CHRTBL entries
+	jr	iniq3		;  for TTY0-TTY3 and return
+
+quad$id:
+	defb	16h,0c9h,54h,04h ; device identifier bytes for OX16C954
+
+@qsactv: defb	0	; Changed to non-zero if QuadSer board detected
+
+quad$initbl:
+	;	 port
+	;	offset,	value
+	;	------	------
+
+	defb	qs_LCR,	lcr_8N1		; ensure LCR is not 0BFh
+	defb	qs_SPR,	qs_CSR		; select CSR register
+	defb	qs_ICR,	0		; reset UART channel, select 450 mode
+
+	defb	qs_SPR, qs_CPR		; select clock prescaler register
+	defb	qs_ICR, 00100000b	; divide CLK by 4 (bits 7..3)
+
+	defb	qs_SPR,	qs_TCR		; select times clock register
+	defb	qs_ICR,	00000000b	; bits 3..0 off (SC=16)
+
+	defb	qs_LCR, lcr_8N1+10000000b ; enable access to divisor
+					;  (set bit 7)
+
+	defb	qs_DLL
+baudlo:	defb		d19k2 and 0FFh	; baud rate divisor (low byte)
+	defb	qs_DLM
+baudhi:	defb		d19k2 shr 8	; baud rate divisor (high byte)
+
+	defb	qs_LCR,	0BFh		; enable access to 650-mode registers
+	defb	qs_EFR,	00010000b	; enable enhanced mode (bit 4 on)
+					; no in-band Rx flow (bits 0,1 off)
+					; no in-band Tx flow (bits 2,3 off)
+					; no special char detection (bit 5 off)
+					; no automatic RTS flow (bit 6 off)
+					; no automatic CTS flow (bit 7 off)
+
+	defb	qs_LCR,	lcr_8N1		; set final line control register
+					; no parity (bit 3 off),
+					; one stop-bit (bit 2 off),
+					; eight data bits (bits 1 and 0)
+
+	defb	qs_FCR,	00000001b	; enable FIFO, Rx threshold level = 1
+
+	defb	qs_IER,	00000000b	; interrupts all disabled
+
+	defb	qs_MCR,	10000011b	; enable prescaler (bit 7 on),
+					; interrupt OUT2 disabled (bit 3 off),
+					; RTS (bit 1) and DTR (bit 0) active
+
+quad$tblen equ ($-quad$initbl)/2	; length of table
+
+      if baud$rate$set
+speed$table:
+
+	; The supported baud rates have been extended to
+	; utilise the additional higher speeds available
+	; on the OX16C954 Quad UART.
+	;
+	; Older and less common speeds have been substituted
+	; as follows -
+	;
+	;	Old	Now
+	;	75	28800
+	;	134	38400
+	;	150	57600
+	;	1800	115200
+	;
+	; A replacement DEVICE.COM utility will accept
+	; the new values.
+
+;		        50, 28k8,  110, 38k4, 57k6,  300,  600
+	defw	       d50,d28k8, d110,d38k4,d57k6, d300, d600
+;		1200,115k2, 2400, 3600, 4800, 7200, 9600, 19k2
+	defw	d1k2,d115k2,d2k4, d3k6, d4k8, d7k2, d9k6,d19k2
+
+      endif
+    endif
+  endif
+
+	; Back to common memory
+
+	common$segment
+
+  if use$device$io
+    if quadser
+;
+; Convert device in A (1..4) to the QuadSer
+; port offset (0,8,16,24) in DE
+;
+quad$dev8:
+	dec	a		; get device number to 0..3
+	add	a,a		; multiply by 8
+	add	a,a
+	add	a,a
+	ld	e,a		; to DE
+	ld	d,0
+	ret
+
+    endif
+  endif
+
+  if use$device$io
+
+?ci:				; character input
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$input
-  else
-conin:
+
+    if quadser
+
+	or	a
+	jr	z,conin		; 0 = console UART
+
+	; QuadSer input for device 1..4
+
+	call	quad$dev8	; get device offset to DE
+	push	bc
+	call	pshiop		; save current I/O pointer to stack
+				;  (BC and HL lost)
+	push	de
+qsi1:
+	call	?cist
+	jr	z,qsi1		; wait for character ready
+
+	call	iopqs
+	pop	de		; restore port*8 to DE
+	ld	a,e
+	add	qser$base+qs_RHR ; point to QuadSer data received port
+	ld	c,a
+	in	a,(c)		; read character
+	call	popiop		; restore I/O pointer
+	pop	bc		; restore BC
+	ret			;  and return
+
+    endif
   endif
+
+	; Console UART input
+
+conin:
 ci1:
 	call	?cist
 	jr	z,ci1		; wait for character ready
@@ -145,6 +422,9 @@ brktst:	pop	af
 	ret
 
   if use$device$io
+
+	; NULL device input
+
 null$input:
 	ld	a,ctlz		; return EOF (ctrl-Z) for NULL device
 	ret
@@ -156,16 +436,43 @@ null$input:
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$status
-  else
-const:
+
+    if quadser
+
+	or	a
+	jr	z,const		; Console UART input status
+
+	; QuadSer port input status
+
+	call	quad$dev8	; get device offset to DE
+
+	call	pshiop		; save I/O page to stack (BC and HL lost)
+
+	call	iopqs		; select QuadSer I/O page
+	ld	a,e		; calculate port address
+	add	qser$base+qs_LSR ;  of status register
+	ld	c,a
+	in	a,(c)		; read status port
+
+	call	popiop		; restore I/O page (BC and HL lost)
+
+	and	qsm$rxrdy	; test RxRDY bit
+	jr	ci4
+
+    endif
   endif
 
+	; Console UART input status
+
+const:
 	call	iopuart
 	ld	c,rcs
 ci3:	in	a,(c)		; read from status port
 	and	rcsdav		; Receiver CA bit
 
 ci4:	ret	z		; return with zero
+
+	; NULL device input status
 
 null$status:
 	or	0ffh		; return indicating character available
@@ -176,10 +483,50 @@ null$status:
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$output
-  else
-conout:
+
+    if quadser
+
+	or	a
+	jr	z,conout	; Console UART output
+
+	; QuadSer port output
+
+	call	quad$dev8	; get device offset to DE
+
+	push	hl
+	push	bc		; save BC (B has device, C character)
+	push	de		;  and DE (device offset)
+qs$spin:
+	call	?cost
+	jr	z,qs$spin	; wait for TxEmpty
+
+	ld	c,iop
+	ldctl	hl,(c)		; get current I/O page to HL
+	push	hl
+	ld	l,qserp
+	ldctl	(c),hl		; select QuadSer I/O page
+	pop	hl		; HL is saved I/O page
+
+	pop	de		; get back port offset to DE
+	ld	a,e
+	add	qser$base+qs_THR ; point to transmit register
+	ld	c,a		;  and into C
+	pop	de		; restore character to E
+
+	out	(c),e		; transmit character
+
+	ld	c,iop
+	ldctl	(c),hl		; restore I/O page
+
+	pop	hl
+	ret
+
+    endif
   endif
 
+	; Console UART output
+
+conout:
 	ld	a,c
 	push	af		; save character from <C>
 co$spin:
@@ -193,33 +540,88 @@ co$spin:
 	out	(c),a		; send data
 	pop	bc
 
+	; NULL device output
+
 null$output:
 				; swallow data
 	ret
 
 ?cost:				; character output status
+
   if use$device$io
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$status
-  else
-conost:
+
+    if quadser
+
+	or	a
+	jr	z,conost	; console UART output status
+
+	; QuadSer port output status
+
+	call	quad$dev8	; get device offset to DE
+
+	call	pshiop		; save I/O page to stack (BC and HL lost)
+
+	call	iopqs		; select QuadSer I/O page
+
+	ld	a,e		; calculate port address
+	add	qser$base+qs_LSR ;  of status register
+	ld	c,a
+
+	in	a,(c)		; read status port
+
+	call	popiop		; restore I/O page (BC and HL lost)
+
+	and	qsm$txempty	; test TxEmpty bit
+	jr	cost1
+
+    endif
   endif
 
+	; Console UART output status
+
+conost:
 	call	iopuart
 	push	bc
 	ld	c,tcs
 	in	a,(c)		; get input status
 	pop	bc
 	and	tcstbe		; is TBE bit set in TCS?
-	ret	z		; test transmitter empty
+cost1:	ret	z		; test transmitter empty
 	or	0ffh
 	ret			; return true if ready
 
+;
+; The Character Device Table CHRTBL
+;
 @ctbl:
 	defb	'UART  '	; device 0, On-chip UART
 	defb	mb$in$out+mb$serial
 	defb	baud$none	; Fixed-speed 115200 bps 8O1
+
+  if use$device$io
+    if quadser
+
+tty0:	defb	'TTY0  '	; device 1, QuadSer port 0
+	defb	mb$in$out+mb$serial+mb$soft$baud
+	defb	baud$19200	; 19200 bps 8N1
+
+	defb	'TTY1  '	; device 2, QuadSer port 1
+	defb	mb$in$out+mb$serial+mb$soft$baud
+	defb	baud$19200	; 19200 bps 8N1
+
+	defb	'TTY2  '	; device 3, QuadSer port 2
+	defb	mb$in$out+mb$serial+mb$soft$baud
+	defb	baud$19200	; 19200 bps 8N1
+
+	defb	'TTY3  '	; device 4, QuadSer port 3
+	defb	mb$in$out+mb$serial+mb$soft$baud
+	defb	baud$19200	; 19200 bps 8N1
+
+    endif
+  endif
 
 	defb	0		; table terminator
 

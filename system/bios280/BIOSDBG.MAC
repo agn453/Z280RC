@@ -27,6 +27,8 @@
 ;					This is used to disable the
 ;					<CTRL-P> test in the CHARIO
 ;					module.
+;	24-Jun-2020	Tony Nicholson	Save a byte - use SUBW instead
+;					of AND A/SBC
 ;
 
 	maclib	CONFIG.LIB
@@ -453,11 +455,10 @@ getend:	call	space
 	jp	nz,parmerr	; No
 
 dispit:	call	crlf
-	and	a		; Clear CY
 	inc	hl
 	ld	(lastaddr),hl	; Save End address+1
 	dec	hl
-	sbc	hl,de		; Subtract (Start) DE from (End) HL
+	subw	hl,de		; Subtract (Start) DE from (End) HL
 	ex	de,hl		; Start to HL and count in DE
 	inc	de
 di01:

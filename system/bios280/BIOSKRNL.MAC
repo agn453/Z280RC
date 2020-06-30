@@ -28,7 +28,7 @@
 ;   IDEHD	IDE Hard Disk interface
 ;   RAMDISK	RAM Disk using free memory
 ;   CLOCK	DS1302 timekeeper clock
-;   CHARIO	Console Serial port I/O
+;   CHARIO	Console and QuadSer board Serial I/O
 ;   SCB		System Control Block interface to BDOS
 ;
 ;   In addition there is a primitive debugging module BIOSDBG
@@ -74,6 +74,10 @@
 ;					mode
 ;	07-Dec-2018	Tony Nicholson	Interrupt timer for heartbeat
 ;					to provide a 50Hz (20ms) counter
+;	24-Jun-2020	Tony Nicholson	Add QuadSer 4-port serial I/O
+;					support and common dispatch
+;					routine to call the banked
+;					portion of character I/O
 ;
 	page
 	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
@@ -96,6 +100,13 @@
 	public	iopuart, iopct, iopdef
 	public	pshiop, popiop
 
+  if use$device$io
+    if quadser
+	public	iopqs		; I/O page selecting QuadSer board
+	extrn	@qsactv		; QuadSer board detected (in CHARIO)
+    endif
+  endif
+
 	; Utility routines used by other modules
 
 	public	dummy, ?pmsg, ?pderr
@@ -109,10 +120,10 @@
 	public	?usrsl
   endif
 
-	; BIOS modules Temporary Common Stack
+	; BIOS Banked memory Dispatch routine using Temporary Common Stack
 
   if banked
-	public	@tstack
+	public	?bankio, @tstack
   endif
 
 	; Disk communication data items
@@ -415,12 +426,16 @@ boot:
 ;
 ; Initialize Character devices
 ;
-	ld	c,15		; Count down from 15..0
+; Start with the console UART (device 0)
+;
+	ld	c,0		; Count up from 0..15
 initc0:	push	bc
 	call	?cinit		; Call the CHARIO module
 	pop	bc
-	dec	c
-	jp	p,initc0
+	inc	c
+	ld	a,c
+	cp	15+1
+	jr	c,initc0
   else
 	outjmp			; (there was an OUTW before this)
 	call	?cinit		; Initialise console only
@@ -433,7 +448,7 @@ initc0:	push	bc
 	ldir
   endif
 
-	; ?CINIT has set the I/O page to UARTP
+	; ?CINIT has set the I/O page back to UARTP
 
   if not ldrbios
 ;
@@ -597,8 +612,26 @@ timer1$constant equ	0001h	; Upper 16 bits of time constant
 
   endif ; banked
 
+  if use$device$io
+    if quadser
+
+	; All I/O is now initialised.
+
+	; if QuadSer board is not detected then report it
+
+	ld	a,(@qsactv)	; Fetch number of detected ports
+	or	a
+	jr	nz,qsfound	; Non-zero means we found it
+
+	ld	hl,noqsmsg	; Report it (sign-on banner follows too)
+	jr	banner
+
+qsfound:
+    endif
+  endif
+
 	ld	hl,signon
-	call	?pmsg		; Output system BIOS sign-on message
+banner:	call	?pmsg		; Output system BIOS sign-on message
 
   if banked
 	jp	bootc		; Back to common memory
@@ -633,6 +666,16 @@ bootc:
 ; Default character I/O device vectors
 ;
 	bank0$segment	; No need for the sign-on to be in common memory
+
+  if use$device$io
+    if quadser
+noqsmsg:
+	defb	cr,lf,'%QUADSER I/O board not detected',cr,lf
+
+	; no terminating NUL character continues to print signon
+
+    endif
+  endif
 
 signon:	config			; macro has a DEFZ signon string and date
 				; See CONFIG.LIB
@@ -2270,6 +2313,12 @@ seliop:	ld	c,iop
 	pop	hl
 	ret
 
+  if use$device$io
+    if quadser
+iopqs:			; QuadSer I/O page select
+    endif
+  endif
+
 iopwatch:
 iopcf:
 	push	hl
@@ -2299,6 +2348,48 @@ pshiop:
 	outjmp
 	ex	(sp),hl		; Exchange it with the return address
 	jp	(hl)		;  on the stack and return
+
+;
+; Dispatch and Return to/from Banked Portion of
+; Character I/O using the local @tstack stack
+;
+; Enter with the banked routine address pointed
+; to by the SP (instruction following the call
+; to ?BANKIO)
+;
+; Contents of the HL register are not preserved and
+; IX is reserved for updatng the return address.
+; Others are kept as modified by the routine
+;
+  if banked
+
+	common$segment
+
+?bankio:
+	ex	(sp),ix		; save IX and get parameter address to IX
+	ld	(@tstack),sp	; save current stack pointer
+	ld	sp,@tstack	; switch to stack in common memory
+	ld	a,(@cbnk)	; get and save current bank to stack
+	push	af
+	xor	a		; select the banked bios routine
+	call	?bnksl		;  bank (bank 0)
+	ldw	hl,(ix+0)	; fetch routine address (in bank 0) to HL
+	push	?bioret		; push address of return routine
+	jp	(hl)		; off we go into bank 0
+
+?bioret:
+	pop	hl		; restore saved bank to H
+	push	af		; save handler routine result
+	ld	a,h		; reselect the previously
+	call	?bnksl		;  current bank
+	pop	af		; restore the result
+	ld	sp,(@tstack)	;  original stack pointer
+	inc	ix		; fix-up return address
+	inc	ix
+	ex	(sp),ix		; put it on stack, restore IX and
+	ret			;  and return
+
+  endif
 
 ;
 ; Disk I/O interface routines
@@ -2913,38 +3004,7 @@ sel$msg: defz	cr, lf, 'SELMEM Select Bank '
 
   endif ; krnl$debug
 
-;
-;	Disk I/O sector buffer
-;
-  if idehd or ramdisk	; Define disk sector buffer here
-
-    if banked
-
-	bank0$segment	; This can be in Bank 0 with Disk I/O routines
-
-	public	bk0buf
-
-bk0buf:	defs	512
-
-    endif
-  endif
-
-;
-; Kernel debug stack
-;
 	common$segment
-
-  if krnl$debug
-
-	public	@dstack		; Show this in LINK map
-
-	; Marked with D to see how much is used'
-	defb	'Debug StackDDDDDDDDDDDDDDDDDDDDD'
-	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
-	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
-
-@dstack: defs	2
-  endif
 
 ;
 ; Temporary stack for BIOS modules wishing to change banks
@@ -2954,7 +3014,7 @@ bk0buf:	defs	512
 	public	@tstack		; Show this in LINK map
 
 	defb	'Temporary BIOS StackTTTTTTTTTTTT'
-	defb	'TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT'
+	defb	'TTTTTTTTTTTTTTTTTTTTTTTTTTTTTT' ;'TT'
 
 @tstack:
 	defs	2
@@ -2967,7 +3027,7 @@ bk0buf:	defs	512
 	public	@stack		; Show this in LINK map
 
 	defb	'System-mode StackSSSSSSSSSSSSSSS'
-	defb	'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS'
+	defb	'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSS' ;'SS'
 
   if int$enabled ; extra stack to 48 words
 	defb	'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS'
@@ -2987,9 +3047,40 @@ bk0buf:	defs	512
 
 	defb	'User-mode StackUUUUUUUUUUUUUUUUU'
 	defb	'UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU'
-	defb	'UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU'
+	defb	'UUUUUUUUUUUUUUUUUUUUUUUUUUUUUU' ;'UU'
 
 @ustack:
+  endif
+
+;
+; Kernel debug stack
+;
+  if krnl$debug
+
+	public	@dstack		; Show this in LINK map
+
+	; Marked with D to see how much is used'
+	defb	'Debug StackDDDDDDDDDDDDDDDDDDDDD'
+	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD'
+	defb	'DDDDDDDDDDDDDDDDDDDDDDDDDDDDDD' ;'DD'
+
+@dstack: defs	2
+  endif
+
+;
+;	Disk I/O sector buffer
+;
+  if idehd or ramdisk	; Define disk sector buffer here
+
+    if banked
+
+	bank0$segment	; This can be in Bank 0 with Disk I/O routines
+
+	public	bk0buf
+
+bk0buf:	defs	512
+
+    endif
   endif
 
 	end

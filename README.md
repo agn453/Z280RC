@@ -20,6 +20,82 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+30-Jun-2020
+-----------
+
+Added support for Bill Shen's QuadSer Rev1 4-port UART module in RC2014
+form-factor.  This is a UART module using the Oxford Semiconductor Ltd.
+OX16C954 rev B chip with 128-byte FIFOs for each receiver and
+transmitter.  For hardware details see
+https://www.retrobrewcomputers.org/doku.php?id=builderpages:plasmo:quadser:ec4z280rc
+
+This module has 4 independent UART ports with program selectable baud
+rates between 50 and 115200 bps in a variety of framing formats.  Higher
+speeds are also possible - but not implemented for CP/M-Plus.
+
+The configuration files now contain a "quadser" equate that you set
+to "true", along with a "use$device$io" equate to enable this support.
+
+The current implementation uses polled I/O (and I intend to add support
+using interrupts soon).
+
+With "quadser" enabled, four additional serial devices named TTY0,
+TTY1, TTY2 and TTY3 will be enabled.  You can assign one or more of
+these to the console (CON:), auxiliary (AUX:) or printer device (LST:)
+using the DEVICE command.  Speed settings can also be adjusted (see below).
+
+For example, to specify TTY3 as the AUX device at 9600 bps use
+
+```
+A>device aux:=tty3[9600]
+```
+
+or to have the console input and output simultaneously on two devices
+(e.g. the Z280's UART and TTY0 at 19200 bps with XON/XOFF flow control) use 
+
+```
+A>device con:=uart,tty0[19200,xon]
+```
+
+Since CP/M Plus was released, it is now common to use higher speeds than
+the 19200 bps maximum that the DEVICE command and internal CP/M data
+structures allow.  Therefore I have substituted four of the less
+common data rates as follows -
+
+```
+    CP/M Old    Now
+        75      28800
+       134      38400
+       150      57600
+      1800     115200
+```
+
+Until I produce a modified CP/M Plus DEVICE program, you can specify
+higher speeds by using the corresponding old value on a DEVICE command.
+
+For example, to use TTY3 at 115200 bps use -
+
+```
+A>device tty3[1800]
+A:DEVICE   COM
+
+Physical Devices:
+I=Input,O=Output,S=Serial,X=Xon-Xoff
+UART   NONE  IOS    TTY0   19200 IOS    TTY1   19200 IOS
+TTY2   19200 IOS    TTY3   1800  IOS
+
+Current Assignments:
+CONIN:  = UART
+CONOUT: = UART
+AUXIN:  = TTY3
+AUXOUT: = TTY3
+LST:    = Null Device
+
+
+A>
+```
+
+
 09-Jan-2020
 -----------
 

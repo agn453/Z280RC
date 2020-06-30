@@ -1,4 +1,15 @@
 	.xlist
+;
+; MODEBAUD.LIB  -  CP/M Plus Serial I/O mode bit field equates
+;
+;
+; Modification History
+;
+; 23-Jun-2020	Tony Nicholson	Additional baud-rate definitions
+;				(re-use less common values to
+;				allow higher speeds)
+;
+;---------------------------------
 
 	; equates for mode byte bit fields
 
@@ -12,6 +23,14 @@ mb$soft$baud	equ 00000100b	; software selectable
 mb$serial	equ 00001000b	; device may use protocol
 mb$xon$xoff	equ 00010000b	; XON/XOFF protocol
 				; enabled
+
+	; CHRTBL offsets
+
+mb$name		equ 0		; Device name (6 characters)
+mb$mode		equ 6		; Operating mode
+mb$speed	equ 7		; Baud rate (0..15)
+
+	; baud rates
 
 baud$none	equ 0		; no baud rate associated
 				; with this device
@@ -30,5 +49,12 @@ baud$4800	equ 12		; 4800 baud
 baud$7200	equ 13		; 7200 baud
 baud$9600	equ 14		; 9600 baud
 baud$19200	equ 15		; 19.2k baud
+
+; Higher speed ones replace less common values
+
+baud$28800	equ baud$75	; 28.8k baud
+baud$38400	equ baud$134	; 38.4k baud
+baud$57600	equ baud$150	; 57.6k baud
+baud$115200	equ baud$1800	; 115.2k baud
 
 	.list
