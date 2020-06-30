@@ -16,7 +16,6 @@ Both Hector and I used 10Kohm 0.1W radial lead resistors - you'll need
 four of these, and they're soldered directly to the rear of the QuadSer
 Rev1 module that has already been modified for the Z280RC.
 
-Hector provided a photo here with the resistors in place (highlighted).
-
-[Photo of QuadSer modification](QuadSer-notes/QuadSer-10Kohm-pullups.jpg)
-
+Hector provided this
+[Photo of the QuadSer modification](https://github.com/agn453/Z280RC/blob/master/QuadSer-notes/QuadSer-10Kohm-pullups.jpg)
+with the resistors in place (highlighted).
