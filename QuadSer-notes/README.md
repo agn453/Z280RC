@@ -18,5 +18,5 @@ Rev1 module that has already been modified for the Z280RC.
 
 Hector provided a photo here with the resistors in place (highlighted).
 
-[https://github.com/agn453/Z280RC/blob/master/QuadSer-notes/QuadSer-10Kohm-pullups.jpg]
+[Photo of QuadSer modification](QuadSer-notes/QuadSer-10Kohm-pullups.jpg)
 
