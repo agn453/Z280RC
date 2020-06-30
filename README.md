@@ -24,14 +24,17 @@ Modification History (in reverse chronological order):
 -----------
 
 Added CP/M Plus support for Bill Shen's QuadSer Rev1 4-port UART module in RC2014
-form-factor.  This is a UART module using the Oxford Semiconductor Ltd.
-OX16C954 rev B chip with 128-byte FIFOs for each receiver and
-transmitter.  For hardware details see
-https://www.retrobrewcomputers.org/doku.php?id=builderpages:plasmo:quadser:ec4z280rc
+form-factor.
 
-This module has 4 independent UART ports with program selectable baud
+This is a UART module using the Oxford Semiconductor Ltd.
+OX16C954 rev B chip with 128-byte FIFOs for each receiver and
+transmitter.  It has 4 independent UART ports with program selectable baud
 rates between 50 and 115200 bps in a variety of framing formats.  Higher
 speeds are also possible - but not implemented for CP/M-Plus.
+
+For hardware details see Bill Shen's pages at 
+
+https://www.retrobrewcomputers.org/doku.php?id=builderpages:plasmo:quadser:ec4z280rc
 
 The configuration files now contain a "quadser" equate that you set
 to "true", along with a "use$device$io" equate to enable this support.
