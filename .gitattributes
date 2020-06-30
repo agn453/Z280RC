@@ -17,4 +17,5 @@ README.md text eol=crlf
 *.zip binary
 *.ZIP binary
 *.SYS binary
+*.jpg binary
 

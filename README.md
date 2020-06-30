@@ -20,6 +20,15 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+01-Jul-2020
+-----------
+
+I added some notes regarding a hardware modification to the QuadSer
+4-port module that prevents spurious interrupts from floating inputs
+on the serial Rx pins of each port.  You'll find it in the QuadSer-notes
+folder with a README and photo (courtesy of Hector Peraza) of the mods.
+
+
 30-Jun-2020
 -----------
 
