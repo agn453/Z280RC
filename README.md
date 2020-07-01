@@ -26,7 +26,7 @@ Modification History (in reverse chronological order):
 I added some notes regarding a hardware modification to the QuadSer
 4-port module that prevents spurious interrupts from floating inputs
 on the serial Rx pins of each port.  You'll find it in the QuadSer-notes
-folder with a README and photo (courtesy of Hector Peraza) of the mods.
+folder with a [README](https://github.com/agn453/Z280RC/blob/master/QuadSer-notes/README.md) and photo (courtesy of Hector Peraza) of the mods.
 
 
 30-Jun-2020
