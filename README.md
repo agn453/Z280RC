@@ -23,14 +23,44 @@ Modification History (in reverse chronological order):
 01-Jul-2020
 -----------
 
-I added some notes regarding a hardware modification to the QuadSer
+Built a modified version of the CP/M-Plus DEVICE utility to support
+substituted baudrates.  The new version will accept 28800, 38400,
+57600 and 115200 as speed values.  The modified PL/M-80 sourcecode,
+[DEVICE.COM](https://github.com/agn453/Z280RC/blob/master/utilities/DEVICE.COM)
+as well as updated CP/M Plus
+[HELP.HLP](https://github.com/agn453/Z280RC/blob/master/utilities/HELP.HLP)
+(and source in HELP.DAT) are in the utilities subdirectory.
+
+Just copy DEVICE.COM and HELP.HLP to your system drive and set them
+with the SYS attribute to make them available.
+
+```
+A>device tty3[115200
+A:DEVICE   COM
+
+Physical Devices:
+I=Input,O=Output,S=Serial,X=Xon-Xoff
+UART   NONE  IOS    TTY0   19200 IOS    TTY1   19200 IOS
+TTY2   19200 IOS    TTY3   115K2 IOS
+
+Current Assignments:
+CONIN:  = UART
+CONOUT: = UART
+AUXIN:  = TTY3
+AUXOUT: = TTY3
+LST:    = Null Device
+
+A>
+```
+
+Also, I added some notes regarding a hardware modification to the QuadSer
 4-port module that prevents spurious interrupts from floating inputs
 on the serial Rx pins of each port.  You'll find it in the QuadSer-notes
 folder with a
 [README](https://github.com/agn453/Z280RC/blob/master/QuadSer-notes/README.md)
 and photo (courtesy of Hector Peraza) of the mods.
 
-Also, I included an
+And finally, I included an
 [application note](https://github.com/agn453/Z280RC/blob/master/QuadSer-notes/oxan5-Software-Examples-for-the-OX16C95x.pdf)
 PDF retrieved from the Oxford Semiconductor pages on the Wayback machine.
 These were useful to me when I was writing the drivers for the OX16C954
