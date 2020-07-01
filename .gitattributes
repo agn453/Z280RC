@@ -19,4 +19,6 @@ README.md text eol=crlf
 *.SYS binary
 *.jpg binary
 *.pdf binary
-
+*.HLP binary
+*.PLM text eol=crlf
+*.DAT text eol=crlf
