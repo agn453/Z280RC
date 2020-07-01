@@ -26,7 +26,15 @@ Modification History (in reverse chronological order):
 I added some notes regarding a hardware modification to the QuadSer
 4-port module that prevents spurious interrupts from floating inputs
 on the serial Rx pins of each port.  You'll find it in the QuadSer-notes
-folder with a [README](https://github.com/agn453/Z280RC/blob/master/QuadSer-notes/README.md) and photo (courtesy of Hector Peraza) of the mods.
+folder with a
+[README](https://github.com/agn453/Z280RC/blob/master/QuadSer-notes/README.md)
+and photo (courtesy of Hector Peraza) of the mods.
+
+Also, I included an
+[application note](https://github.com/agn453/Z280RC/blob/master/QuadSer-notes/oxan5-Software-Examples-for-the-OX16C95x.pdf)
+PDF retrieved from the Oxford Semiconductor pages on the Wayback machine.
+These were useful to me when I was writing the drivers for the OX16C954
+4-port UART chip.
 
 
 30-Jun-2020
