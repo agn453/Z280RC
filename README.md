@@ -20,6 +20,25 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+07-Jul-2020
+-----------
+
+Included a copy of CP/M KERMIT V4.11 (configured for CP/M-Plus) so
+you can test the QuadSer ports.
+[KERMIT.COM](https://github.com/agn453/Z280RC/blob/master/utilities/KERMIT.COM)
+is available in the utilities subdirectory (or click the link).
+
+Just set the AUX: port assignment
+and baud rate prior to running KERMIT.  When you use the connect
+command, what you type will be sent out the QuadSer port, and any
+received characters will be displayed on the console.  If you connect
+the port to another computer capable of running its version of
+kermit in server mode, you will be able to transfer files.
+
+Further details (and sourcecode) for KERMIT can be downloaded from
+http://www.kermitproject.org/archive.html#cpm80
+
+
 01-Jul-2020
 -----------
 
