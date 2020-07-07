@@ -28,12 +28,13 @@ you can test the QuadSer ports.
 [KERMIT.COM](https://github.com/agn453/Z280RC/blob/master/utilities/KERMIT.COM)
 is available in the utilities subdirectory (or click the link).
 
-Just set the AUX: port assignment
-and baud rate prior to running KERMIT.  When you use the connect
+Just set the AUX: port assignment and baud rate prior to running KERMIT
+using the DEVICE command (see below).  When you use KERMIT's *connect*
 command, what you type will be sent out the QuadSer port, and any
 received characters will be displayed on the console.  If you connect
 the port to another computer capable of running its version of
-kermit in server mode, you will be able to transfer files.
+kermit in *server* mode, you will be able to transfer files using
+KERMIT's *get* and *send* commands.
 
 Further details (and sourcecode) for KERMIT can be downloaded from
 http://www.kermitproject.org/archive.html#cpm80
