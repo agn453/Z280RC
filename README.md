@@ -20,6 +20,95 @@ New Utilities are in the "utilities" subdirectory.
 Modification History (in reverse chronological order):
 ======================================================
 
+10-Jul-2020
+-----------
+
+This is just a note about the way I set-up CP/M 3 on my Z280RC.
+
+You might have noticed that I set the default login disk as drive C:.
+This is mainly as a convenience - as this is my working directory.  You
+can change this using the GENCPM program when you do a system generation
+by answering the question with your desired default (some people like
+it to be A:) -
+
+```
+C>gencpm
+A:GENCPM   COM  (User 0)
+
+
+CP/M 3.0 System Generation
+
+ 
+Default entries are shown in (parens).
+Default base is Hex, precede entry with # for decimal
+
+Use GENCPM.DAT for defaults (Y) ?
+
+Create a new GENCPM.DAT file (N) ? y
+
+Display Load Map at Cold Boot (Y) ?
+
+Number of console columns (#80) ?
+Number of lines in console page (#24) ?
+Backspace echoes erased character (N) ?
+Rubout echoes erased character (N) ?
+
+Initial default drive (C:) ? a:
+...
+(answer all remaining prompts with Return key)
+```
+
+Also, since this is the default drive upon booting, you'll need to
+place a copy of SUBMIT.COM on this drive so you can use a PROFILE.SUB
+file to tweak the system search path and device settings after boot-up.
+
+If you have the CP/M 3 system files on drive A: then make these
+accessible from all user area and drives by ensuring they have the
+SYS attribute (and read-only if you're extra cautious).  Do this using -
+
+```
+C>a:set a:*.com [sys ro]
+C>a:set a:help.hlp [sys ro]
+```
+
+(also you may wish to include various libraries and programming header
+files) and then
+
+```
+C>a:pip c:=a:submit.com[r
+```
+
+Finally create a PROFILE.SUB like the following (create this with editor
+if you prefer).  As you see, I set my search path to use the current
+drive, the RAMdisk, drive C: and finally drive A:.  I also copy the
+XMODEM configuration file to each disk in user 0 so I don't have to
+specify the parameters to force it to use the console UART.
+
+
+```
+C>a:pip c:profile.sub=con:
+; C:PROFILE.SUB
+;
+; XMODEM default configuration to M:
+a:pip m:=a:xmz280rc.cfg[wrg0]
+a:set m:xmz280rc.cfg [sys ro]
+; Search path is current drive, RAMdisk, drive C and drive A
+a:setdef * m: c: a: [order=(com,sub) display page uk temporary=m]
+; Use QuadSer port TTY3 at 115200 bps for Kermit (using the AUX: device)
+a:device aux:=tty3[115200]
+a:date
+^Z
+C>
+```
+
+(That last line is a Ctrl-Z to end the file).
+
+With the system set-up like this, I no longer need to specify
+the disk drive to run a program.  Also, configure programs like
+TurboPascal and WordStar with their SETUP programs to load their
+overlays etc from drive A: too.
+
+
 07-Jul-2020
 -----------
 
