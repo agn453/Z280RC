@@ -78,7 +78,7 @@ files) and then
 C>a:pip c:=a:submit.com[r
 ```
 
-Finally create a PROFILE.SUB like the following (create this with editor
+Finally create a PROFILE.SUB like the following (create this with an editor
 if you prefer).  As you see, I set my search path to use the current
 drive, the RAMdisk, drive C: and finally drive A:.  I also copy the
 XMODEM configuration file to each disk in user 0 so I don't have to
