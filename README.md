@@ -17,11 +17,46 @@ subdirectory.
 
 New Utilities are in the "utilities" subdirectory.
 
-Modification History (in reverse chronological order):
-======================================================
+## Modification History (in reverse chronological order):
 
-10-Jul-2020
------------
+### 29-Nov-2020
+
+I've included my cpmtools diskdef file entries in the "utilities"
+subdirectory.  This allows you to perform file copies and manipulations
+to an image file of the Z280RC's CompactFlash CP/M file partitions using
+the cpmtools utilities on Windows, macOS and Linux.
+
+Please note that you need to create or write images that have the
+bytes swapped (the Z280RC interface has the bytes written in big-endian
+order).  The Linux 'dd' command has a 'conv=swab' option that does this.
+
+The definition file can be downloaded from
+[here](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/diskdefs-z280rc-swab)
+
+After adding these entries to the system's diskdefs file you can manipulate
+disk images by specifying the '-f z280rc-X' format (where X corresponds
+to the CP/M drive letter in lower case).
+
+For example, from macOS or Linux -
+
+```
+# Copy CP/M partition from CompactFlash mounted on the device /dev/sda
+sudo dd if=/dev/sda of=z280rc-cf.img bs=512 count=131072 conv=swab
+
+# list the CP/M directory of the B: drive partition
+cpmls -f z280rc-b -l z280rc-cf.img
+[directory of B: partition ommitted]
+
+# copy a file to the CP/M E: drive in user area 10
+cpmcp -f z280rc-e z280rc-cf.img filename.txt 10:FILE.TXT
+
+# To write it back to CompactFlash use -
+#
+sudo dd if=z280rc-cf.img of=/dev/sda bs=512 count=131072 conv=swab
+```
+
+
+### 10-Jul-2020
 
 This is just a note about the way I set-up CP/M 3 on my Z280RC.
 
@@ -109,8 +144,7 @@ TurboPascal and WordStar with their SETUP programs to load their
 overlays etc from drive A: too.
 
 
-07-Jul-2020
------------
+### 07-Jul-2020
 
 Included a copy of CP/M KERMIT V4.11 (configured for CP/M-Plus) so
 you can test the QuadSer ports.
@@ -129,8 +163,7 @@ Further details (and sourcecode) for KERMIT can be downloaded from
 http://www.kermitproject.org/archive.html#cpm80
 
 
-01-Jul-2020
------------
+### 01-Jul-2020
 
 Built a modified version of the CP/M-Plus DEVICE utility to support
 substituted baudrates.  The new version will accept 28800, 38400,
@@ -176,8 +209,7 @@ These were useful to me when I was writing the drivers for the OX16C954
 4-port UART chip.
 
 
-30-Jun-2020
------------
+### 30-Jun-2020
 
 Added CP/M Plus support for Bill Shen's QuadSer Rev1 4-port UART module in RC2014
 form-factor.
@@ -262,8 +294,7 @@ ZIP file -
 
 https://github.com/agn453/Z280RC/blob/master/system/bios280/bios280.zip
 
-09-Jan-2020
------------
+### 09-Jan-2020
 
 Fixed some erratic date/time setting under CP/M-Plus.
 
@@ -272,14 +303,12 @@ module (and the TIME.COM utility) to adjust the read/write timing
 to use a more accurate 1 microsecond serial timing for the 3-wire
 interface.
 
-12-Jun-2019
------------
+### 12-Jun-2019
 
 I found the original DU-V88.LBR of Ward Christensen's Disk Utility
 (better late than never) and added it to the "utilities" subdirectory
 
-21-Dec-2018
------------
+### 21-Dec-2018
 
 Some more tinkering with I/O page selection, interrupt routine and word
 address alignment.  Also I found the missing .tar file with HiTech C
@@ -328,8 +357,7 @@ umount /dev/wd0
 ```
 
 
-18-Dec-2018
------------
+### 18-Dec-2018
 
 I've implemented support for the DS1302 timekeeper chip in UZI280
 to set the time-of-day and fixed an issue with I/O page selection affecting
@@ -356,8 +384,7 @@ cd /
 ```
 
 
-16-Dec-2018
------------
+### 16-Dec-2018
 
 Added UZI280 binaries to system/uzi280-bintar/UZIBNTAR.LBR.  Use the
 XFRBNTAR.SUB submit file to transfer these to the /Tapes directory on
@@ -375,8 +402,7 @@ partitions and sector view/editing) have also been added to the utilities
 folder as NULU.COM and DU.COM
 
 
-15-Dec-2018
------------
+### 15-Dec-2018
 
 I've managed to modify the UZI280 operating system to boot up on
 the Z280RC.  There's been a few hiccups along the way (mainly dealing
@@ -400,16 +426,14 @@ Still to-do is to copy the utilities and CP/M emulator onto the UZI
 partition.
 
 
-14-Dec-2018
------------
+### 14-Dec-2018
 
 Squeeze a few more bytes from common memory.  Add a CLOCK$50HZ setting
 to select between the 50Hz interrupt heart-beat clock using C/T 0 & C/T 1
 cascaded (see below) and a 128Hz clock using only Counter/Timer 0.
 
 
-08-Dec-2018
------------
+### 08-Dec-2018
 
 Implement and test Z280 on-chip device interrupts with a 20ms heart-beat
 counter (a single word counter at BIOS+063h) using cascaded Counter/Timer
@@ -420,8 +444,7 @@ the dual banked testing version (CPM3BNK1.SYS) - but you may still
 generate it if required using the BNK1BIOS.SUB submit command file.
 
 
-05-Dec-2018
------------
+### 05-Dec-2018
 
 Updated the DS1302 timekeeper chip TIME program (in the utilities directory)
 to support a Banked system (this makes adjusting the time-of-day easier
@@ -435,8 +458,7 @@ file (CONFINT8.LIB is supplied with DEBUG still enabled). CPM3INT8.SYS is
 a bootable system image with this feature active.
 
 
-29-Nov-2018
------------
+### 29-Nov-2018
 
 Squeeze as much as possible out of the Banked system common memory
 to maximise the size of the CP/M transient program area - resulting in
@@ -453,8 +475,7 @@ the File menu Send file... option of Tera Term VT) and do a "C3" command
 to write it to the CP/M-Plus boot loader (sectors 1..15 of track 0).
 
 
-26-Nov-2018
------------
+### 26-Nov-2018
 
 Revised the banked memory layout to make the TPA and common memory
 contiguous.  The DMAXFR routine now works properly (so you may choose
@@ -463,8 +484,7 @@ using the Z280's on-chip DMA controller instead of the Memory Management
 Unit).  Coming up next... Interrupts and System/User mode operation.
 
 
-20-Nov-2018
------------
+### 20-Nov-2018
 
 I examined the DMAXFR code with a view to fixing the defect regarding
 transfers crossing the common memory address boundary.  The modifications
@@ -477,8 +497,7 @@ common memory contiguous).  Do not set the USE$DMA$TO$COPY configuration
 item to TRUE in any of the configuration CONF*.LIB files for now.
 
 
-16-Nov-2018
------------
+### 16-Nov-2018
 
 USE$BIG$DRM now causes the extra drives E: thru H: to have 2048 directory
 entries (the maximum for the 4096 byte block size).  Updated IDEHD.MAC and
@@ -491,8 +510,7 @@ Also added an initialisation routine to the RAMDISK module to prompt for
 and format drive M: if it doesn't have a valid CP/M directory label.
 
 
-15-Nov-2018
------------
+### 15-Nov-2018
 
 I was running out of space/directory entries so I built a version of
 Banked CP/M-Plus with eight 8MB CompactFlash drives.  See the CONFBNK8.LIB,
@@ -507,8 +525,7 @@ new configuration option USE$BIG$DRM enables 1024 directory entries
 (512 is the default for all other drives).
 
 
-15-Nov-2018
------------
+### 15-Nov-2018
 
 Hector Peraza's latest beta 11 of ZSM4 - a Z80/Z180/Z280 Macro-Assembler
 available at
@@ -518,8 +535,7 @@ removed superfluous lines from the BIOS sources.  No object code changes -
 just cosmetic!
 
 
-14-Nov-2018
------------
+### 14-Nov-2018
 
 Added a modified version of XMODEM 2.7 (for file transfer via the console
 serial port).  This now includes routines to drive the built-in Z280
@@ -530,8 +546,7 @@ or you can download a ZIP containing them directly from
 https://github.com/agn453/Z280RC/blob/master/utilities/xm27z280.zip
 
 
-13-Nov-2018
------------
+### 13-Nov-2018
 
 DMAXFR is not copying memory to memory when the source or destination
 physical address crosses one of the logical address bank boundaries.
@@ -558,8 +573,7 @@ https://github.com/agn453/Z280RC/blob/master/system/bios280/bios280.zip
 to assist those not wanting to download the whole GitHub repository.
 
 
-12-Nov-2018
------------
+### 12-Nov-2018
 
 Added USE$DMA$TO$COPY configuration equate.  If set to FALSE then extended
 memory moves using the BIOS MOVE routine will use the memory management unit
@@ -572,8 +586,7 @@ The Banked memory version using just bank 0 and 1 (CPM3BNK1.SYS) now seems
 to be working.
 
 
-11-Nov-2018
------------
+### 11-Nov-2018
 
 Added DEBUG capability to enter the debugger upon CTRL-P being typed
 at the console.  Also made a special banked configuration that supports
@@ -587,8 +600,7 @@ information about the running system's BIOS, SCB and disk drive data
 (DPH and DPB).
 
 
-08-Nov-2018
------------
+### 08-Nov-2018
 
 Updated disk modules to use hard-coded disk parameter headers and disk
 parameter blocks with internal disk allocation vectors (rather than
@@ -598,8 +610,7 @@ effect on the PIP file copying verification error under the banked
 system.  Non-banked and Loader configurations work fine!
 
  
-06-Nov-2018
------------
+### 06-Nov-2018
 
 My own version of a CP/M Plus BIOS for the Z280RC are in the "system/bios280"
 subdirectory.
@@ -636,8 +647,7 @@ I suspect some issue with allocation of buffers (which I'll continue to look
 at) - however, if you see an obvious error, please raise it as a GitHub
 issue.
 
-18-Jul-2018
------------
+### 18-Jul-2018
 
 Only an updated Non-Banked CBIOS3 and a CP/M utility to support the on-board
 clock calendar timekeeping chip (TIME.MAC) have been added.

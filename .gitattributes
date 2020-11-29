@@ -22,3 +22,4 @@ README.md text eol=crlf
 *.HLP binary
 *.PLM text eol=crlf
 *.DAT text eol=crlf
+diskdef* text eol=crlf
