@@ -31,7 +31,7 @@ bytes swapped (the Z280RC interface has the bytes written in big-endian
 order).  The Linux 'dd' command has a 'conv=swab' option that does this.
 
 The definition file can be downloaded from
-[here](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/diskdefs-z280rc-swab)
+[here](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/diskdefs-z280rc-swab).
 
 After adding these entries to the system's diskdefs file you can manipulate
 disk images by specifying the '-f z280rc-X' format (where X corresponds
@@ -45,7 +45,7 @@ sudo dd if=/dev/sda of=z280rc-cf.img bs=512 count=131072 conv=swab
 
 # list the CP/M directory of the B: drive partition
 cpmls -f z280rc-b -l z280rc-cf.img
-[directory of B: partition ommitted]
+[directory of B: partition omitted]
 
 # copy a file to the CP/M E: drive in user area 10
 cpmcp -f z280rc-e z280rc-cf.img filename.txt 10:FILE.TXT
