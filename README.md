@@ -19,6 +19,82 @@ New Utilities are in the "utilities" subdirectory.
 
 ## Modification History (in reverse chronological order):
 
+### 17-Sep-2021
+
+In preparation for increasing the number of directory entries on the CP/M
+CompactFlash drives A: to D: from 512 to 2048, I have uploaded my modified
+source-code for CP/M 2.2 that can be built using Hector Peraza's ZSM4
+Macro Assembler.  To assist with the generation of a CPM22ALL.HEX Intel
+HEX loader format, I've added the RELHEX utility that converts the
+assembler's .REL file into .HEX to the utilities subdirectory. You'll
+find the source for RELHEX12.MAC
+[here](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/RELHEX12.MAC,
+and a compiled CP/M binary)
+[here](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/RELHEX12.COM).
+
+To prepare CPM22ALL.HEX from the source in
+[CPM22ALL.MAC](https://raw.githubusercontent.com/agn453/Z280RC/master/system/cpm22/CPM22ALL.MAC)
+use commands like -
+
+```
+	ZSM4 =CPM22ALL
+	RELHEX12 CPM22ALL
+```
+
+To install this, you may wish to grab and install the
+latest ZZmon2 monitor V2.2 from https://github.com/agn453/ZZmon2 , clear
+memory using the Z command, then upload 
+[CPM22ALL.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/system/cpm22/CPM22ALL.HEX)
+to the running monitor. Finally, copy it to the CP/M 2 boot sectors using 
+the C2 comand.  For example -
+
+```
+TinyZZ Monitor for Z280RC v2.2 17-Sep-2021
+
+>Zero memory
+ Press Return to confirm:
+
+>
+```
+Now send the Intel HEX file in ASCII mode.  You should see a few rows of dots
+like
+
+```
+>..............................................................................
+...............................................................................
+...............................................................................
+...............................................................................
+...............................................................................
+.................................0X
+
+
+>Copy to CF
+0 - Boot & ZZmon
+1 - User Apps
+2 - CP/M 2.2
+3 - CP/M 3
+Select: 2 Press Return to confirm:
+
+
+>Boot
+1 - User Apps
+2 - CP/M 2.2
+3 - CP/M 3
+4 - RSX280
+5 - UZI280
+Select: 2 Press Return to confirm:
+
+Copyright 1979 (c) by Digital Research
+CP/M 2.2 for Z280RC
+20180727 1.5 meg RAMdisk
+
+a>
+```
+
+I'll post the 2048 directory entry modifications in the next few days (after
+I test them out).
+
+
 ### 29-Nov-2020
 
 I've included my cpmtools diskdef file entries in the "utilities"

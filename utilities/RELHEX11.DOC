@@ -1,0 +1,47 @@
+
+
+			RELHEX
+
+
+AUDIENCE:
+
+People who have M80 or RMAC but who do not have MAC
+
+
+FUNCTION:
+
+Converts a .REL file to a .HEX file without filling in
+unspecified regions with 0's (as L80 does).  Thus the .HEX file
+may be used as a patch overlay file in conjunction with DDT.
+
+
+ADVANTAGES OVER OTHER PUBLIC DOMAIN VERSION:
+
+     There is another public domain version of RELHEX which is
+based upon READREL.  This version has the following advantages
+over that one:
+
+1.  Works in conjunction with RMAC.  The other version fails
+when RMAC declares a program (CSEG) size, even though the
+declared size is zero.  Note that M80 does not declare a program
+(CSEG) size if the size is zero.
+
+2.  Much smaller than the other version.
+
+3.  Much faster than the other version.
+
+
+RESTRICTIONS:
+
+1.  An ASEG directive must be placed in the source file before
+the first ORG directive.  If there is no ORG then place the ASEG
+before the first code-generating instruction.
+
+2. RELHEX is not a linker.  All code and data in the source file
+must be in ASEG and there may not be any PUBLIC or EXTERN
+directives.
+
+
+
+					Carl Mascott
+					December 6, 1984

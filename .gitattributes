@@ -9,6 +9,7 @@ README.md text eol=crlf
 *.H text eol=crlf linguist-language=C
 *.MAC text eol=crlf linguist-language=Assembly
 *.SUB text eol=crlf
+*.HEX text eol=crlf
 *.lbr binary
 *.LBR binary
 *.OBJ binary

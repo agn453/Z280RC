@@ -1,0 +1,605 @@
+;
+; Converts a .REL LINK-80 relocatable object file containing only
+; absolute (ASEG) records to an Intel .HEX format file without
+; filling in unspecified regions with zeroes (as L80 does).
+;
+; The resulting .HEX file may be used as a patch overlay file
+; in conjunction with a debugger like DDT, SID or ZSID.
+;
+; Disassembled from RELHEX11.COM by Tony Nicholson.
+;
+; The original program is by Carl Mascott, dated December 6, 1984,
+; and was only distributed as a CP/M-80 binary.
+;
+; Modification History
+;
+;	17-Sep-2021	Tony Nicholson	Add an end-of-file type 1
+;					record to the end of the
+;					.HEX file.
+;
+; Build (under CP/M-Plus) using Microsoft M80 and DR LINK
+;
+;	M80 =RELHEX12!LINK RELHEX12
+;
+	.z80
+	aseg
+
+	org	00100h
+
+version	equ	12		;AGN - bumped to V1.2
+
+warmbt	equ	00000h
+bdos	equ	00005h
+fcb1	equ	0005ch
+fcb2	equ	0006ch
+ddma	equ	00080h
+
+fnam1	equ	fcb1+1		; first char of 1st file name
+ftyp1	equ	fcb1+9		; first char of 1st file type
+fcr1	equ	fcb1+32		; current record
+fnam2	equ	fcb2+1		; first char of 2nd file name
+
+relfcb	equ	fcb1		; fcb of the .REL file
+
+cr	equ	13
+lf	equ	10
+ctrlz	equ	26
+
+; BDOS functions
+
+$print	equ	9
+$openf	equ	15
+$closef	equ	16
+$srchf	equ	17
+$delf	equ	19
+$rdnext	equ	20
+$wrnext	equ	21
+$creatf	equ	22
+$setdma	equ	26
+
+begin:	jp	start
+;
+hex$:	defb	"HEX"
+rel$:	defb	"REL"
+
+usage$:	defb	cr,lf,"RELHEX V"
+	defb		'0'+(version/10),".",'0'+(version mod 10)
+  if version gt 11
+	defb		" 17-Sep-2021"
+  else
+	defb		"  11/17/84"
+  endif
+	defb	cr,lf
+	defb	cr,lf,"Usage: RELHEX <infile> [<outfile>]"
+	defb	cr,lf
+	defb	cr,lf,"<infile> type defaults to .REL"
+	defb	cr,lf,"<outfile> defaults to <infile>.HEX"
+	defb	cr,lf,"if <outfile> given w/o type, defaults to .HEX"
+	defb	cr,lf,"$"
+
+ambig$:	defb	cr,lf,"++ Ambiguous file name ++"
+	defb	cr,lf,"$"
+
+nocomr$:
+	defb	cr,lf,"++ Attempt to load common-relative ++"
+	defb	cr,lf,"$"
+
+dirfull$:
+	defb	cr,lf,"++ Directory full ++"
+	defb	cr,lf,"$"
+
+nodata$:
+	defb	cr,lf,"++ Non-zero data segment size ++"
+	defb	cr,lf,"$"
+
+nodrel$:
+	defb	cr,lf,"++ Attempt to load data-relative ++"
+	defb	cr,lf,"$"
+
+eof$:	defb	cr,lf,"++ Unexpected EOF ++"
+	defb	cr,lf,"$"
+
+norel$:	defb	cr,lf,"++ Attempt to set non-absolute loc ctr ++"
+	defb	cr,lf,"$"
+
+nocseg$:
+	defb	cr,lf,"++ Non-zero code segment size ++"
+	defb	cr,lf,"$"
+
+noprel$:
+	defb	cr,lf,"++ Attempt to load program-relative ++"
+	defb	cr,lf,"$"
+
+nosplk$:
+	defb	cr,lf,"++ Unsupported special link request ++"
+	defb	cr,lf,"$"
+
+opnerr$:
+	defb	cr,lf,"++ Can't open source file ++"
+	defb	cr,lf,"$"
+
+wrerr$:	defb	cr,lf,"++ Write error - disk full ++"
+	defb	cr,lf,"$"
+
+  if version gt 11	;AGN
+
+hexeof$:
+	defb	':00000001FF',cr,lf,0	; Intel HEX end-of-file record
+
+  endif
+
+d0371:	defb	000h
+d0372:	defb	080h
+d0373:	defb	000h
+d0374:	defb	078h
+d0375:	defb	070h
+t0376:	defb	065h
+d0377:	defw	t06b8
+d0379:	defb	000h
+
+hbufsiz	equ	01000h		; .HEX file buffer size
+hbufctr:
+	defw	00000h		; .HEX file buffer count
+
+t037c:	defw	a0468
+	defw	a0473
+	defw	a0479
+	defw	a047f
+
+t0384:	defw	a0485
+	defw	a0485
+	defw	a048b
+	defw	a0485
+	defw	a0485
+	defw	a0485
+	defw	a0485
+	defw	a0485
+	defw	a0485
+	defw	a0485
+	defw	a049d
+	defw	a04ae
+	defw	a0485
+	defw	a04c8
+	defw	a04d9
+	defw	endhex
+
+start:	ld	sp,stack
+
+	ld	a,(fnam1)	; Was a file name specified?
+	ld	de,usage$
+	cp	' '
+	jp	z,exitm		; No, show usage message and exit
+
+	ld	de,ftyp1
+	ld	a,(de)		; If file type not specified
+	cp	' '
+	jp	nz,a03c3
+	ld	hl,rel$		;  default it to ".REL"
+	ld	b,3
+	call	memcpy
+
+a03c3:	xor	a		; Set current record to zero
+	ld	(fcr1),a
+
+	ld	hl,fnam2	; Was second file name specified?
+	ld	de,hexfcb
+	ld	a,(hl)
+	dec	hl
+	cp	' '
+	jp	nz,a03f0	; Yes
+	ld	hl,fcb1		; No, copy name to hexfcb
+	ld	b,9
+	call	memcpy
+	ld	hl,hex$		;  and force type ".HEX"
+	ld	b,3
+	call	memcpy
+	xor	a
+	ld	b,4		; Zero extent, s1, s2 and rc
+a03e7:	ld	(de),a
+	inc	de
+	dec	b
+	jp	nz,a03e7
+	jp	a0406
+;
+a03f0:	ld	b,16		; Copy second fcb to hexfcb
+	call	memcpy
+	ld	de,hexft
+	ld	a,(de)		; If file type blank then use .HEX
+	cp	' '
+	jp	nz,a0406
+	ld	hl,hex$
+	ld	b,3
+	call	memcpy
+;
+a0406:	xor	a		; Clear current record
+	ld	(hexcr),a
+	ld	hl,fnam1	; exit if either filespec
+	call	chkufn		;   is ambiguous
+	ld	hl,hexfn
+	call	chkufn
+
+	ld	de,relfcb	; Open .REL file
+	ld	c,$openf
+	call	bdos
+	ld	de,opnerr$	; Cannot open source .REL file
+	inc	a
+	jp	z,exitm
+
+	ld	de,hexfcb	; Erase old .HEX file if it exists
+	ld	c,$srchf
+	push	de
+	call	bdos
+	pop	de
+	inc	a
+	jp	z,a043a
+	ld	c,$delf
+	push	de
+	call	bdos
+	pop	de
+
+a043a:	ld	c,$creatf	; Create .HEX file
+	call	bdos
+	ld	de,dirfull$
+	inc	a
+	jp	z,exitm
+
+a0446:	ld	b,001h
+	call	a0554
+	or	a
+	jp	nz,a045a
+	ld	b,008h
+	call	a0554
+	call	a0562
+	jp	a0446
+;
+a045a:	ld	b,002h
+	call	a0554
+	ld	hl,t037c
+	call	a053d
+	jp	a0446
+;
+a0468:	ld	b,004h
+	call	a0554
+	ld	hl,t0384
+	jp	a053d
+;
+a0473:	ld	de,noprel$	; No program relative
+	jp	exitm
+;
+a0479:	ld	de,nodrel$	; No data-relative
+	jp	exitm
+;
+a047f:	ld	de,nocomr$	; No common
+	jp	exitm
+;
+a0485:	ld	de,nosplk$	; No special-link request
+	jp	exitm
+;
+a048b:	ld	b,3
+	call	a0554
+	ld	e,a
+a0491:	ld	a,e
+	or	a
+	ret	z
+	dec	e
+	ld	b,8
+	call	a0554
+	jp	a0491
+;
+a049d:	ld	b,2
+	call	a0554
+	call	a0547
+	ld	a,h
+	or	l
+	ld	de,nodata$	; No data-segment
+	jp	nz,exitm
+	ret
+;
+a04ae:	ld	a,(d0379)
+	or	a
+	call	nz,a0629
+	ld	b,2
+	call	a0554
+	ld	de,norel$	; No relative location counter
+	or	a
+	jp	nz,exitm
+	call	a0547
+	ld	(d0374),hl
+	ret
+;
+a04c8:	ld	b,2
+	call	a0554
+	call	a0547
+	ld	a,h
+	or	l
+	ld	de,nocseg$	; Non-zero length cseg
+	jp	nz,exitm
+	ret
+;
+a04d9:	ld	a,(d0379)
+	or	a
+	call	nz,a0629
+	ld	b,2
+	call	a0554
+	call	a0547
+	ld	(d0374),hl
+	call	a0629
+	call	a0597
+	ret
+;
+endhex:
+
+  if version gt 11	;AGN
+
+	ld	hl,hexeof$	; Write Intel HEX end-of-file
+.eh0:	ld	a,(hl)
+	or	a
+	jp	z,.eh1
+	inc	hl
+	push	hl
+	call	wrchar
+	pop	hl
+	jp	.eh0
+.eh1:
+
+  endif
+
+	ld	a,(hbufctr)	; Is the .HEX buffer filled
+	and	07fh		;  to a 128-byte sector
+	or	a		;  boundary?
+	jp	z,.eh2		; Yes
+	ld	a,ctrlz		; No, write end-of-file to buffer
+	call	wrchar
+;
+.eh2:	call	wrhbuf		; Flush .HEX file buffer to disk
+	ld	de,hexfcb	; Close output .HEX file
+	ld	c,$closef
+	call	bdos
+	jp	warmbt		; All done!
+;
+exitm:	ld	c,$print	; Print error message and exit
+	call	bdos
+	jp	warmbt
+;
+chkufn:	ld	de,ambig$
+	ld	b,8+3		; Look at file name and type
+a051b:	ld	a,(hl)		;  for an ambiguous wildcard
+	inc	hl
+	cp	'?'
+	jp	z,exitm
+	dec	b
+	jp	nz,a051b
+	ret
+;
+rdrel:	ld	de,ddma		; Read next .REL file sector
+	call	setdma		;  into default dma address
+	ld	c,$rdnext
+	ld	de,relfcb
+	call	bdos
+	ld	de,eof$		; Exit if unexpected end-of-file
+	or	a
+	jp	nz,exitm
+	ret
+;
+a053d:	add	a,a
+	ld	e,a
+	ld	d,000h
+	add	hl,de
+	ld	e,(hl)
+	inc	hl
+	ld	d,(hl)
+	ex	de,hl
+	jp	(hl)
+;
+a0547:	ld	b,008h
+	call	a0554
+	ld	l,a
+	ld	b,008h
+	call	a0554
+	ld	h,a
+	ret
+;
+a0554:	push	hl
+	push	de
+	xor	a
+a0557:	call	a0580
+	rla
+	dec	b
+	jp	nz,a0557
+	pop	de
+	pop	hl
+	ret
+;
+a0562:	ld	hl,(d0377)
+	ld	(hl),a
+	inc	hl
+	ld	(d0377),hl
+	ld	a,(d0379)
+	inc	a
+	ld	(d0379),a
+	cp	010h
+	call	z,a0629
+	ret
+;
+memcpy:	ld	a,(hl)
+	ld	(de),a
+	inc	hl
+	inc	de
+	dec	b
+	jp	nz,memcpy
+	ret
+;
+a0580:	push	bc
+	ld	b,a
+	ld	a,(d0371)
+	or	a
+	call	z,a0597
+	dec	a
+	ld	(d0371),a
+	ld	a,(d0373)
+	rla
+	ld	(d0373),a
+	ld	a,b
+	pop	bc
+	ret
+;
+a0597:	push	bc
+	ld	a,(d0372)
+	cp	080h
+	call	z,rdrel
+	ld	l,a
+	ld	h,000h
+	inc	a
+	ld	(d0372),a
+	ld	de,00080h
+	add	hl,de
+	ld	a,(hl)
+	ld	(d0373),a
+	ld	a,008h
+	ld	(d0371),a
+	pop	bc
+	ret
+;
+wrhbuf:	ld	hl,(hbufctr)	; Flush .HEX file buffer to disk
+	ld	a,h		; Anything in the buffer?
+	or	l
+	ret	z		; No - nothing to do
+	ld	de,-128
+	ld	b,0
+	dec	hl
+a05c2:	inc	b
+	add	hl,de
+	jp	c,a05c2
+	ld	hl,hbuf-128
+a05ca:	ld	de,128 ;00080h
+	add	hl,de
+	push	hl
+	ex	de,hl
+	call	setdma
+	ld	de,hexfcb
+	ld	c,$wrnext
+	push	bc
+	call	bdos
+	pop	bc
+	pop	hl
+	ld	de,wrerr$	; Write error - disk full?
+	or	a
+	jp	nz,exitm
+	dec	b
+	jp	nz,a05ca
+	ld	hl,00000h
+	ld	(hbufctr),hl
+	ret
+;
+wrchar:	push	af		; Write character to .HEX file
+	ld	hl,(hbufctr)
+	ld	a,h
+	cp	010h
+	call	z,wrhbuf	; Write .HEX file buffer to disk
+	ld	de,hbuf
+	ex	de,hl
+	add	hl,de
+	pop	af
+	ld	(hl),a
+	inc	de
+	ex	de,hl
+	ld	(hbufctr),hl
+	ret
+;
+hexout:	push	af
+	push	hl
+	push	de
+	push	af
+	rra
+	rra
+	rra
+	rra
+	call	nibout
+	pop	af
+	call	nibout
+	pop	de
+	pop	hl
+	pop	af
+	ret
+;
+nibout:	and	00fh
+	cp	10
+	jp	c,a0623		; 0..9
+	add	a,'A'-':'	; A..F ASCII offset
+a0623:	add	a,'0'
+	call	wrchar
+	ret
+;
+a0629:	ld	a,':'		; Write INTEL HEX record
+	call	wrchar
+	ld	hl,t0376
+	ld	a,(d0379)
+	call	hexout
+	ld	(hl),a
+	ld	a,(d0375)
+	call	hexout
+	add	a,(hl)
+	ld	(hl),a
+	ld	a,(d0374)
+	call	hexout
+	add	a,(hl)
+	ld	(hl),a
+	xor	a
+	call	hexout
+	ld	de,t06b8
+	ld	a,(d0379)
+a0652:	or	a
+	jp	z,a0663
+	push	af
+	ld	a,(de)
+	call	hexout
+	add	a,(hl)
+	ld	(hl),a
+	inc	de
+	pop	af
+	dec	a
+	jp	a0652
+;
+a0663:	ld	a,(hl)
+	cpl
+	inc	a
+	call	hexout
+	ld	a,cr
+	call	wrchar
+	ld	a,lf
+	call	wrchar
+	ld	hl,(d0374)
+	ld	a,(d0379)
+	ld	e,a
+	ld	d,000h
+	add	hl,de
+	ld	(d0374),hl
+	xor	a
+	ld	(d0379),a
+	ld	hl,t06b8
+	ld	(d0377),hl
+	ret
+;
+setdma:	push	bc
+	push	de
+	push	hl
+	ld	c,$setdma
+	call	bdos
+	pop	hl
+	pop	de
+	pop	bc
+	ret
+;
+hexfcb:	defs	33
+hexfn	equ	hexfcb+1	; file name
+hexft	equ	hexfcb+9	; file type
+hexcr	equ	hexfcb+32	; file current record
+;
+t06b8:	defs	64	; Buffer for Intel HEX record
+
+	defs	16
+stack:	defs	2
+
+hbuf:	ds	hbufsiz
+
+	end	begin
