@@ -24,11 +24,11 @@ New Utilities are in the "utilities" subdirectory.
 In preparation for increasing the number of directory entries on the CP/M
 CompactFlash drives A: to D: from 512 to 2048, I have uploaded my modified
 source-code for CP/M 2.2 that can be built using Hector Peraza's ZSM4
-Macro Assembler.  To assist with the generation of a CPM22ALL.HEX Intel
-HEX loader format, I've added the RELHEX utility that converts the
-assembler's .REL file into .HEX to the utilities subdirectory. You'll
+Macro Assembler.  To assist with the generation of a CPM22ALL.HEX in Intel
+HEX loader format, I've added a RELHEX utility that converts the
+assembler's .REL output file into .HEX to the utilities subdirectory. You'll
 find the source for RELHEX12.MAC
-[here](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/RELHEX12.MAC,
+[here](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/RELHEX12.MAC),
 and a compiled CP/M binary)
 [here](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/RELHEX12.COM).
 
