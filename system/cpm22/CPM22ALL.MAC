@@ -7,9 +7,17 @@
 ;	27-Jul-2018	Tony Nicholson	Convert to ZSM4 syntax and lowercase
 ;	27-Jul-2018	Tony Nicholson	Adjust RAM disk size for Z280RC
 ;					memory size (1.5MB)
-;
+;	18-Sep-2021	Tony Nicholson	Increase number of directory entries
+;					for CompactFlash drives A:..D:
+;					To enable this, set the DE2048
+;					equate below to -1.  (NB: Cannot
+;					use the ZSM4 /D switch since
+;					this creates a global symbol
+;					which prevents RELHEX from generating
+;					a .HEX file for loading into ZZmon)
 	.z280
 	aseg
+
 ;**************************************************************
 ;*
 ;*             C P / M   version   2 . 2
@@ -31,6 +39,8 @@ entry	equ	5		;entry point for the cp/m bdos.
 tfcb	equ	5ch		;default file control block.
 tbuff	equ	80h		;i/o buffer and command line storage.
 tbase	equ	100h		;transiant program storage area.
+;
+DE2048	equ	0		;AGN set to -1 to enable 2048 dir entries
 ;
 ;   Set control character equates.
 ;
@@ -3860,14 +3870,18 @@ dpblk0:
 	db 5		; block shift factor (BSH)
 	db 31		;block mask (BLM)
 	db 1		;null mask (EXM)
+  if DE2048    		;AGN 2048 directory entries
+	dw 2015
+	dw 2047
+	db 255
+	db 255
+  else
 	dw 1983		;disk size-1 (DSM)
-;	dw 63		;directory max (DRM)
-	dw 511
-;	db 192		;alloc 0 (AL0)
-	db 0f0h
+	dw 511		;directory max (DRM)
+	db 0f0h		;alloc 0 (AL0)
 	db 0		;alloc 1 (AL1)
-;	dw 16		;check size (CKS)
-	dw 0
+  endif
+	dw 0 		;check size (CKS)
 	dw 1		; track offset (OFF)
 	
 	
@@ -3878,13 +3892,18 @@ dpblk1:
 	db 5		; block shift factor
 	db 31		;block mask
 	db 1		;null mask
+  if DE2048    		;AGN 2048 directory entries
+	dw 2047
+	dw 2047
+	db 255
+	db 255
+  else
 	dw 2015		;disk size-1
 	dw 511		;directory max
-;	db 192		;alloc 0
-	db 0f0h
+	db 0f0h		;alloc 0
 	db 0		;alloc 1
-;	dw 16		;check size
-	dw 0
+  endif
+	dw 0 		;check size
 	dw 64		; track offset 
 	
 dpblk2:
@@ -3894,13 +3913,18 @@ dpblk2:
 	db 5		; block shift factor
 	db 31		;block mask
 	db 1		;null mask
+  if DE2048    		;AGN 2048 directory entries
+	dw 2047
+	dw 2047
+	db 255
+	db 255
+  else
 	dw 2015		;disk size-1
 	dw 511		;directory max
-;	db 192		;alloc 0
-	db 0f0h
+	db 0f0h		;alloc 0
 	db 0		;alloc 1
-;	dw 16		;check size
-	dw 0
+  endif
+	dw 0		;check size
 	dw 128		; track offset 
 	
 dpblk3:
@@ -3910,11 +3934,17 @@ dpblk3:
 	db 5		; block shift factor
 	db 31		;block mask
 	db 1		;null mask
+  if DE2048    		;AGN 2048 directory entries
+	dw 2047
+	dw 2047
+	db 255
+	db 255
+  else
 	dw 2015		;disk size-1
 	dw 511		;directory max
-;	db 192		;alloc 0
-	db 0f0h
+	db 0f0h		;alloc 0
 	db 0		;alloc 1
+  endif
 ;	dw 16		;check size
 	dw 0
 	dw 192		; track offset         	
@@ -4757,7 +4787,11 @@ signon:
 ;        	db "3/25/18 3.5 meg ramdisk",13,10,0 
 ;AGN - revised sign-on (keeping size the same)
 	db "CP/M 2.2 for Z280RC ", 13,10
+  if DE2048
+	db "20210918 w/2048 CF A:-D:",13,10,0
+  else
         db "20180727 1.5 meg RAMdisk",13,10,0 
+  endif
 
 scratch:
 	ds 1
@@ -4785,11 +4819,19 @@ dirbf: 	ds 128		;scratch directory area
 ;all01: 	ds 31
 ;all02:	ds 31
 ;all03:	ds 31
+  if DE2048		;AGN
+all00:	ds 252		;allocation vectors
+all01:	ds 256		;(as calculated by the DISKDEF macro library)
+all02:  ds 256
+all03:  ds 256
+all04:  ds 48
+  else
 all00:	ds 256
 all01:	ds 256
 all02:	ds 256
 all03:	ds 256
 all04:	ds 256
+  endif
 ;chk00:	ds 16		;check vector 0-3
 ;chk01:	ds 16
 ;chk02:	ds 16

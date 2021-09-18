@@ -19,12 +19,116 @@ New Utilities are in the "utilities" subdirectory.
 
 ## Modification History (in reverse chronological order):
 
+### 18-Sep-2021
+
+The changes I made to CP/M 2.2 to support 2048 directory entries (instead
+of the original 512 directory entries) seem to be working.
+
+I've updated the system/cpm22/CPM22ALL.MAC file to include a symbol
+definition to enable this.  Just change the symbol DE2048 to -1 and
+rebuild a new Intel HEX loader file (as I outlined below).
+
+For your convenience, I've included 
+[CPM22BIG.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/system/cpm22/CPM22BIG.HEX)
+that you can load into ZZmon V2.3 (see below), then write this
+to a *NEW* or *UNUSED* CompactFlash card.
+
+WARNING:  THIS CHANGES THE CP/M DISK DIRECTORY AND FILE ALLOCATION
+ON EACH OF THE CP/M PARTITIONS - so don't do this to your previous
+working CompactFlash card.
+
+In addition to supporting a larger number of files, I've altered the disk
+allocation to use the previously unused track 63 on each of the A:, B:,
+C: and D: partitions.  The latter three are now 8192 Kilobytes, while
+the A: has 1 reserved track for the system boot loaders (it is 8064 Kb).
+
+Once you have uploaded CPM22BIG.HEX and issued the C2 command to write
+the new CP/M 2.2 image to the boot track, format each of the drives on
+your *NEW* CompactFlash drive using the XA, XB, XC, XD (and XE to clear
+the RAMdisk). Now you can proceed to load the CP/M 2.2 programs onto the
+RAMdisk (drive E:) from the
+[CPM22DRI.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/system/cpm22/CPM22DRI.HEX)
+file.
+
+```
+TinyZZ Monitor for Z280RC v2.3 18-Sep-2021                                      
+                                                                                
+                                                                                
+>Boot                                                                           
+1 - User Apps                                                                   
+2 - CP/M 2.2                                                                    
+3 - CP/M 3                                                                      
+4 - RSX280                                                                      
+5 - UZI280                                                                      
+Select: 2 Press Return to confirm:                                              
+
+Copyright 1979 (c) by Digital Research                                          
+CP/M 2.2 for Z280RC                                                             
+20210918 w/2048 CF A:-D:
+                                                                                
+a>b:                                                                            
+b>dir                                                                           
+No file                                                                         
+b>e:                                                                            
+e>dir                                                                           
+E: ASM      COM : BIOS     ASM : CBIOS    ASM : DDT      COM                    
+E: DEBLOCK  ASM : DISKDEF  LIB : DUMP     COM : DUMP     ASM                    
+E: ED       COM : LOAD     COM : MOVCPM   COM : PIP      COM                    
+E: STAT     COM : SUBMIT   COM : SYSGEN   COM : XSUB     COM                    
+e>pip b:=e:*.*[v]                                                               
+                                                                                
+COPYING -                                                                       
+ASM.COM                                                                         
+BIOS.ASM                                                                        
+CBIOS.ASM                                                                       
+DDT.COM                                                                         
+DEBLOCK.ASM                                                                     
+DISKDEF.LIB                                                                     
+DUMP.COM                                                                        
+DUMP.ASM
+ED.COM                                                                          
+LOAD.COM                                                                        
+MOVCPM.COM                                                                      
+PIP.COM                                                                         
+STAT.COM                                                                        
+SUBMIT.COM                                                                      
+SYSGEN.COM                                                                      
+XSUB.COM                                                                        
+                                                                                
+e>b:                                                                            
+b>stat b:                                                                       
+                                                                                
+Bytes Remaining On B: 8004k                                                     
+                                                                                
+b>stat b:dsk:                                                                   
+                                                                                
+    B: Drive Characteristics                                                    
+65536: 128 Byte Record Capacity                                                 
+ 8192: Kilobyte Drive  Capacity                                                 
+ 2048: 32  Byte Directory Entries                                               
+    0: Checked  Directory Entries                                               
+  256: Records/ Extent
+   32: Records/ Block                                                           
+ 1024: Sectors/ Track                                                           
+   64: Reserved Tracks                                                          
+                                                                                
+b>
+```
+
+Next up, I'll do the CP/M 3 system updates... stay tuned!
+
+
 ### 17-Sep-2021
 
 In preparation for increasing the number of directory entries on the CP/M
-CompactFlash drives A: to D: from 512 to 2048, I have uploaded my modified
+CompactFlash drives A: to D:, I have uploaded my modified
 source-code for CP/M 2.2 that can be built using Hector Peraza's ZSM4
-Macro Assembler.  To assist with the generation of a CPM22ALL.HEX in Intel
+Macro Assembler.  This also contains a (minor) fix to the RAMdisk size
+to match the Z280RC's memory (Bill Shen's original source was for the TinyZ280
+which supported larger SIMM72 DRAM modules, whereas the Z280RC has 2Mb of
+static RAM).
+
+To assist with the generation of a CPM22ALL.HEX in Intel
 HEX loader format, I've added a RELHEX utility that converts the
 assembler's .REL output file into .HEX to the utilities subdirectory. You'll
 find the source for RELHEX12.MAC
@@ -42,7 +146,8 @@ use commands like -
 ```
 
 To install this, you may wish to grab and install the
-latest ZZmon2 monitor V2.2 from https://github.com/agn453/ZZmon2 , clear
+latest ZZmon2 monitor V2.3 from Hector Peraza's GitHub repository
+at https://github.com/hperaza/ZZmon2, clear
 memory using the Z command, then upload 
 [CPM22ALL.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/system/cpm22/CPM22ALL.HEX)
 to the running monitor. Finally, copy it to the CP/M 2 boot sectors using 
@@ -91,7 +196,7 @@ CP/M 2.2 for Z280RC
 a>
 ```
 
-I'll post the 2048 directory entry modifications in the next few days (after
+I'll post the new 2048 directory entry modifications in the next few days (after
 I test them out).
 
 
