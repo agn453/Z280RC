@@ -22,17 +22,22 @@ New Utilities are in the "utilities" subdirectory.
 ### 19-Sep-2021
 
 There's now an updated CP/M 3 banked memory system supporting 2048
-directory entries.  You'll need to install the new "BIG" CP/M 3 Loader
-from
+directory entries on the A: to D: drives (and if you require additional
+drives using the PARTN8 configuration option).
+
+To be able to load CPM3.SYS from the revised drive layout, you'll need
+to install the new "BIG" CP/M 3 Loader from
 [CPMLBIG.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/system/bios280/CPMLBIG.HEX)
-onto the CP/M 3 boot area using ZZmon V2.3 by uploading this Intel HEX file
-and then write it to the boot track on the CompactFlash disk using the C3 command.
+onto the Z280RC's CP/M 3 boot area using ZZmon V2.3 by uploading this
+CPMLBIG.HEX Intel HEX file, and then write it to the boot track on the
+CompactFlash disk using the C3 command.
 
 Next, you'll need to copy the
 [CPM3BIG.SYS](https://raw.githubusercontent.com/agn453/Z280RC/master/system/bios280/CPM3BIG.SYS)
-to the A: drive as CPM3.SYS, and install the CP/M 3 distribution files.
+to the A: drive as CPM3.SYS, and install the CP/M 3 distribution files (be
+careful not to overwrite the new CPM3.SYS when you do this).
 
-You can do this using cpmtools on a image file that's been transferred to
+You can use cpmtools 'cpmcp' on a image file that's been transferred to
 a Windows, Linux or macOS system - using updated diskdefs from
 [here](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/diskdefs-z280rc-swab-BIG),  or by using the CP/M 2.2 system and XMODEM as detailed below
 
@@ -56,9 +61,9 @@ a>b:
 b>pip xm.hex=con:[hz]
 ```
 
-Now, send the
+Send the Intel HEX load file for XMODEM from the
 [XM27Z280.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/XM27Z280.HEX)
-file in ASCII mode to PIP.  After a while, the b> will appear, and you can
+file in ASCII mode to PIP.  After a while, the b> prompt will appear, then
 load the HEX file to make XM.COM then download the XMODEM default configuartion
 file using xmodem protocol (send it using your comms program) from 
 [XMZ280RC.CFG](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/XMZ280RC.CFG) -
@@ -76,7 +81,8 @@ b>xm xmz280rc.cfg /r/c/x3/z9/q
 
 Now you have a working XMODEM (XM) command, use it to transfer files to the
 CP/M drive.  You'll only need to use the /r (receive) or /s (send) options
-from now on if you have the XMZ280RC.CFG file on the current drive.
+and maybe the /c (crc/checksum mode) from now on, if you have the
+XMZ280RC.CFG file on the current drive.
 
 To save you some time, I have prepared an image of my CompactFlash
 CP/M drive partitions (A: thru D:) which is populated with a large range
@@ -91,7 +97,7 @@ example (when /dev/sda is the CompactFlash device name under Linux)
 
 ```
 gunzip z280rc-bigcpm-swab.img.gz
-sudo dd if=z280rc-bigcpm-swab.img if=/dev/sda bs=512 count=65536 conv=swab
+sudo dd if=z280rc-bigcpm-swab.img of=/dev/sda bs=512 count=65536 conv=swab
 ```
 
 ### 18-Sep-2021
