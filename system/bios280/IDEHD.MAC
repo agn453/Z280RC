@@ -388,7 +388,11 @@ ide07:
 
 dpb0:
   if use$disk$macros
+    ifdef DE2048
+	dpb	512,256,64,4096,2048,1,8000h
+    else
 	dpb	512,256,63,4096,512,1,8000h
+    endif
   else
 	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
 	defb	bsh, blm		; Block shift and mask
@@ -410,7 +414,11 @@ dpb0:
 
 dpb1:
   if use$disk$macros
+    ifdef DE2048
+	dpb	512,256,128,4096,2048,64,8000h
+    else
 	dpb	512,256,127,4096,512,64,8000h
+    endif
   else
 	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
 	defb	bsh, blm		; Block shift and mask
@@ -425,7 +433,11 @@ dpb1:
 
 dpb2:
   if use$disk$macros
+    ifdef DE2048
+	dpb	512,256,192,4096,2048,128,8000h
+    else
 	dpb	512,256,191,4096,512,128,8000h
+    endif
   else
 	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
 	defb	bsh, blm		; Block shift and mask
@@ -440,7 +452,11 @@ dpb2:
 
 dpb3:
   if use$disk$macros
+    ifdef DE2048
+	dpb	512,256,256,4096,2048,192,8000h
+    else
 	dpb	512,256,255,4096,512,192,8000h
+    endif
   else
 	defw	(hstsiz/128)*spt	; Logical 128-byte sectors per track
 	defb	bsh, blm		; Block shift and mask
@@ -457,7 +473,11 @@ dpb3:
 dpb4:
       if use$disk$macros
        if use$big$drm
-	dpb	512,256,319,4096,2048,256,8000h
+	ifdef DE2048
+	 dpb	512,256,320,4096,2048,256,8000h
+	else
+	 dpb	512,256,319,4096,2048,256,8000h
+	endif
        else
 	dpb	512,256,319,4096,512,256,8000h
        endif
@@ -481,7 +501,11 @@ dpb4:
 dpb5:
       if use$disk$macros
        if use$big$drm
-	dpb	512,256,383,4096,2048,320,8000h
+	ifdef DE2048
+	 dpb	512,256,384,4096,2048,320,8000h
+	else
+	 dpb	512,256,383,4096,2048,320,8000h
+	endif
        else
 	dpb	512,256,383,4096,512,320,8000h
        endif
@@ -505,7 +529,11 @@ dpb5:
 dpb6:
       if use$disk$macros
        if use$big$drm
-	dpb	512,256,447,4096,2048,384,8000h
+	ifdef DE2048
+         dpb	512,256,448,4096,2048,384,8000h
+	else
+         dpb	512,256,447,4096,2048,384,8000h
+	endif
        else
 	dpb	512,256,447,4096,512,384,8000h
        endif
@@ -529,7 +557,11 @@ dpb6:
 dpb7:
       if use$disk$macros
        if use$big$drm
-	dpb	512,256,511,4096,2048,448,8000h
+	ifdef DE2048
+	 dpb	512,256,512,4096,2048,448,8000h
+	else
+	 dpb	512,256,511,4096,2048,448,8000h
+	endif
        else
 	dpb	512,256,511,4096,512,448,8000h
        endif
