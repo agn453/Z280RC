@@ -19,6 +19,80 @@ New Utilities are in the "utilities" subdirectory.
 
 ## Modification History (in reverse chronological order):
 
+### 19-Sep-2021
+
+There's now an updated CP/M 3 banked memory system supporting 2048
+directory entries.  You'll need to install the new "BIG" CP/M 3 Loader
+from
+[CPMLBIG.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/system/bios280/CPMLBIG.HEX)
+onto the CP/M 3 boot area using ZZmon V2.3 by uploading this Intel HEX file
+and then write it to the boot track on the CompactFlash disk using the C3 command.
+
+Next, you'll need to copy the
+[CPM3BIG.SYS](https://raw.githubusercontent.com/agn453/Z280RC/master/system/bios280/CPM3BIG.SYS)
+to the A: drive as CPM3.SYS, and install the CP/M 3 distribution files.
+
+You can do this using cpmtools on a image file that's been transferred to
+a Windows, Linux or macOS system - using updated diskdefs from
+[here](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/diskdefs-z280rc-swab-BIG),  or by using the CP/M 2.2 system and XMODEM as detailed below
+
+```
+TinyZZ Monitor for Z280RC v2.3 18-Sep-2021
+
+
+>Boot
+1 - User Apps
+2 - CP/M 2.2
+3 - CP/M 3
+4 - RSX280
+5 - UZI280
+Select: 2 Press Return to confirm:
+
+Copyright 1979 (c) by Digital Research
+CP/M 2.2 for Z280RC
+20210918 w/2048 CF A:-D:
+
+a>b:
+b>pip xm.hex=con:[hz]
+```
+
+Now, send the
+[XM27Z280.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/XM27Z280.HEX)
+file in ASCII mode to PIP.  After a while, the b> will appear, and you can
+load the HEX file to make XM.COM then download the XMODEM default configuartion
+file using xmodem protocol (send it using your comms program) from 
+[XMZ280RC.CFG](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/XMZ280RC.CFG) -
+
+```
+b>load xm
+
+FIRST ADDRESS 0100
+LAST  ADDRESS 10FF
+BYTES READ    1000
+RECORDS WRITTEN 20
+
+b>xm xmz280rc.cfg /r/c/x3/z9/q
+```
+
+Now you have a working XMODEM (XM) command, use it to transfer files to the
+CP/M drive.  You'll only need to use the /r (receive) or /s (send) options
+from now on if you have the XMZ280RC.CFG file on the current drive.
+
+To save you some time, I have prepared an image of my CompactFlash
+CP/M drive partitions (A: thru D:) which is populated with a large range
+of software (compilers like Hi-Tech C, FORTRAN-80, BASIC-80, COBOL-80,
+RML ALGOL, TurboPascal plus the Z3PLUS Z-System and various editors and
+assemblers.  The CP/M 3 BIOS source files are on drive C in user area 1.
+
+Download the gzip'ed image from
+[z280rc-bigcpm-swab.img.gz](https://raw.githubusercontent.com/agn453/Z280RC/master/system/disk-image/z280rc-bigcpm-swab.img.gz) then write it to your blank
+128Mb or 256Mb CompactFlash card using dd with the byte-swap option.  For
+example (when /dev/sda is the CompactFlash device name under Linux)
+
+```
+sudo dd if=z280rc-bigcpm-swab.img if=/dev/sda bs=512 count=65536 conv=swab
+```
+
 ### 18-Sep-2021
 
 The changes I made to CP/M 2.2 to support 2048 directory entries (instead
@@ -31,7 +105,7 @@ rebuild a new Intel HEX loader file (as I outlined below).
 For your convenience, I've included 
 [CPM22BIG.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/system/cpm22/CPM22BIG.HEX)
 that you can load into ZZmon V2.3 (see below), then write this
-to a *NEW* or *UNUSED* CompactFlash card.
+to a *NEW* or *SPARE* CompactFlash card.
 
 WARNING:  THIS CHANGES THE CP/M DISK DIRECTORY AND FILE ALLOCATION
 ON EACH OF THE CP/M PARTITIONS - so don't do this to your previous
@@ -40,7 +114,7 @@ working CompactFlash card.
 In addition to supporting a larger number of files, I've altered the disk
 allocation to use the previously unused track 63 on each of the A:, B:,
 C: and D: partitions.  The latter three are now 8192 Kilobytes, while
-the A: has 1 reserved track for the system boot loaders (it is 8064 Kb).
+the A: drive has 1 reserved track for the system boot loaders (it is 8064 Kb).
 
 Once you have uploaded CPM22BIG.HEX and issued the C2 command to write
 the new CP/M 2.2 image to the boot track, format each of the drives on

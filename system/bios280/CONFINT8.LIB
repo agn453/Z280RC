@@ -9,9 +9,10 @@
 	.z280
 
 ; This date is included in the sign-on message
+; (also embed configuration name with it)
 
 build$date macro
-	defb	'INT8 20200630'
+	defb	'INT8 20200715'
 	endm
 
 false	equ	0
@@ -43,14 +44,14 @@ use$big$drm equ	true		; TRUE to allocate 2048 directory entries
 				; (only on the PARTN8 partitions E:..H:)
 use$timer$interrupt equ true	; TRUE to enable Heart-Beat interrupt
 
-clock$50hz equ false		; TRUE for 50Hz (using cascaded C/T 0 & C/T 1)
+clock$50hz equ true		; TRUE for 50Hz (using cascaded C/T 0 & C/T 1)
 				; FALSE for 128Hz (using only C/T 0)
 
   if ldrbios
 use$device$io equ false		; FALSE omits Character device support
 				; (MUST be FALSE for LDRBIOS - doesn't use SCB)
   else
-use$device$io equ false		; FALSE maximises TPA space
+use$device$io equ true		; FALSE maximises TPA space
 				; TRUE include character devices support
   endif
 
@@ -58,10 +59,10 @@ clock$set$support equ true	; TRUE to include time set support in CLOCK
 
 dma$burst$mode equ false	; TRUE burst mode/FALSE continuous mode DMA
 
-baud$rate$set equ false		; TRUE to include setting baud rate
+baud$rate$set equ true		; TRUE to include setting baud rate
 
   if use$device$io
-quadser	equ	false		; TRUE to include QuadSer 4-port serial I/O
+quadser	equ	true		; TRUE to include QuadSer 4-port serial I/O
   endif
 
 ; Now construct the sign-on message

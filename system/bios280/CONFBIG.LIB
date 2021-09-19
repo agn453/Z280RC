@@ -1,0 +1,261 @@
+	.xlist		; Suppress listing of this MACLIB
+
+;	+-----------------------+
+;	|			|
+;	|  C O N F I G . L I B	|
+;	|			|
+;	+-----------------------+
+
+	.z280
+
+; This date is included in the sign-on message
+
+build$date macro
+	defb	'BIG  20210919'
+	endm
+
+false	equ	0
+true	equ	not false
+
+debug	equ	false		; TRUE to include BIOSDBG module
+ldrbios equ	false		; TRUE to generate Loader BIOS 
+banked	equ	true		; TRUE for Banked memory
+cache$on equ	true		; TRUE to enable on-chip cache for Instr/Data
+multi$sector$io equ false	; TRUE to support MULTIO (not tested)
+
+; Interrupt mode and System/User mode not yet implemented
+int$enabled equ	false		; TRUE to enable interrupts (mode 3)
+
+krnl$debug equ	false		; TRUE to enable BIOSKRNL debug output
+				; for disk I/O and memory moves.
+
+idehd	equ	true		; Built-in IDE CompactFlash disk
+partn8	equ	false		; TRUE for extra drives E:..H:
+ramdisk equ	true		; and RAMDISK drive M: (uses top 1.5Mb of RAM)
+de2048	equ	true		; Use 2048 directory entries
+
+use$disk$macros equ false	; TRUE use DPH and DPB macros in CPM3M80.LIB
+				; FALSE DPH and DPB are manually specified
+				; in the disk modules.
+use$dma$to$copy equ false	; TRUE to copy disk buffer to user buffer
+				; using DMA, FALSE to copy using MMU
+				; (only applies when BANKED is TRUE)
+use$big$drm equ	true		; TRUE to allocate 2048 directory entries
+				; (only on the PARTN8 partitions E:..H:)
+use$timer$interrupt equ false	; TRUE to enable Heart-Beat interrupt
+
+  if ldrbios
+use$device$io equ false		; FALSE omits Character device support
+				; (MUST be FALSE for LDRBIOS - doesn't use SCB)
+  else
+use$device$io equ true		; FALSE maximises TPA space
+				; TRUE include character devices support
+  endif
+
+clock$set$support equ true	; TRUE to include time set support in CLOCK
+
+dma$burst$mode equ false	; TRUE burst mode/FALSE continuous mode DMA
+
+baud$rate$set equ true		; TRUE to include setting baud rate
+
+  if use$device$io
+quadser	equ	true		; TRUE to include QuadSer 4-port serial I/O
+  endif
+
+; Now construct the sign-on message
+
+config	macro	
+	defb	cr,lf,'Z280RC '
+  if ldrbios
+	defb	'Loader '
+  else
+    if banked
+	defb	'Banked '
+    else
+	defb	'Non-Banked '
+    endif
+	defb	'BIOS '
+  endif
+	build$date
+	defb	cr,lf
+  	defb	'With '
+  if debug
+	defb	'Debug '
+  endif
+  if cache$on
+	defb	'Cache '
+  else
+	defb	'NoCache '
+  endif
+  if multi$sector$io
+	defb	'MultIO '
+  endif
+  if banked
+    if use$dma$to$copy
+	defb	'DMAMOVE '
+    else
+	defb	'MMUMOVE '
+    endif
+  endif
+  if dma$burst$mode
+	defb	'DMABurst '
+  else
+	defb	'DMACont. '
+  endif
+  if not ldrbios
+    if use$device$io
+      if quadser
+	defb	'QuadSer '
+      endif
+    endif
+    if not use$disk$macros
+	defb	'CSVAlloc'
+    endif
+  endif
+	defb	cr,lf
+	defb	'Drives '
+  if idehd
+    if ldrbios
+	defb	'CF A: '
+    else
+      if partn8
+	defb	'CF A-H: '
+      else
+	defb	'CF A-D: '
+      endif
+    endif
+  endif
+  if ramdisk
+	defb	'Ram M:'
+  endif
+	defz	cr,lf
+	endm ; signon
+
+  if dma$burst$mode
+dma$descriptor equ 1000000010000000b	; Burst mode for memory to memory
+		; EN (bit 15)=1
+		; auto-increment memory for source (bits 14..12)=000b
+		; no interrupt (bit 11)=0
+		; byte size (bits 10..9)=00b
+		; burst/continuous mode (bits 8..7)=01b/10b
+		; flowthrough (bits 6..5)=00b
+		; transfer complete (bit 4)
+		; auto-increment memory for destination (bits 3..1)=000b
+		; end-of-process signaled (bit 0)
+  else
+dma$descriptor equ 1000000100000000b	; Continuous mode
+;dma$descriptor equ 1000000000000000b	; Single transaction mode (not used)
+  endif
+
+; Commonly used CP/M entry points
+
+bdos	equ	0005h		; BDOS entry jump vector
+warmboot equ	0000h		; Warm boot jump vector 
+tpa	equ	0100h		; TPA program load address
+
+ccp$drive equ	'A'		; CCP loaded from this drive
+ccp$len equ	(0d80h-tpa)	; CCP.COM program length
+ccp$size equ	ccp$len/128	; number of 128-byte records in CCP.COM
+
+; Character I/O devices
+;
+; Bits in vector are -
+;
+CIO$NULL equ	00000h	; Null device
+CIO$UART equ	08000h	; Z280 MCU On-chip UART
+
+  if	use$device$io
+    if quadser
+CIO$TTY0 equ	04000h	; QuadSer port 0
+CIO$TTY1 equ	02000h	; QuadSer port 1
+CIO$TTY2 equ	01000h	; QuadSer port 2
+CIO$TTY3 equ	00800h	; QuadSer port 3
+    endif
+  endif
+;
+def$civec equ	CIO$UART	; Console input UART
+def$covec equ	CIO$UART	; Console output UART
+
+  if	use$device$io
+    if quadser		; Use TTY3
+def$aivec equ	CIO$TTY3	; Auxilary input TTY3
+def$aovec equ	CIO$TTY3	; Auxilary input TTY3
+    else
+def$aivec equ	CIO$NULL	; Auxilary input NULL
+def$aovec equ	CIO$NULL	; Auxilary input NULL
+    endif
+  else
+def$aivec equ	CIO$NULL	; Auxilary input NULL
+def$aovec equ	CIO$NULL	; Auxilary input NULL
+  endif
+
+def$lovec equ	CIO$NULL	; List output NULL
+
+  if	banked
+common$base equ	0e000h		; Common memory base address
+ccp$in$mem equ	true		; TRUE for CCP warm boot from memory
+tpa$bank equ	1		; TPA is bank 1
+  else
+common$base equ	00000h		; No common memory
+ccp$in$mem equ	false		; FALSE for CCP loaded from disk each time
+  endif
+
+common$size equ	0-common$base	; Size of common memory
+
+common$segment	macro
+	cseg
+	endm
+
+bank0$segment	macro
+  if banked
+	dseg
+  else
+	cseg
+  endif
+	endm
+
+  if	debug
+;
+; Macro to print a message and enter the BIOSDBG module
+;
+enter$debug	macro	textmsg
+	local	msg, dbg
+    ifnb <textmsg>
+	push	af		; Preserve registers
+	push	bc
+	push	hl
+	call	pshiop		; Push I/O page register
+	ld	hl,msg		; Print message (side-effect changes IOP)
+	call	?pmsg
+	call	popiop		; Restore I/O page register
+	pop	hl		; Restore registers
+	pop	bc
+	pop	af
+	jr	dbg
+msg:	defz	cr,lf,textmsg
+    endif
+dbg:	call	biosdbg		; Enter debugger
+	endm
+  endif
+
+  if	int$enabled
+    if use$timer$interrupt
+int$mask equ	i$ct1		; Allow Counter/Timer 1 interrupts
+    else
+int$mask equ	i$none		; No maskable interrupts
+    endif
+int$debug equ	false		; Set TRUE to enable interrupt debug code
+  endif
+
+;
+; Non-printing characters
+;
+bell	equ	7
+lf	equ	10
+cr	equ	13
+ctlq	equ	'Q'-'@'
+ctls	equ	'S'-'@'
+ctlz	equ	'Z'-'@'
+esc	equ	27
+
+	.list

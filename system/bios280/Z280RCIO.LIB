@@ -423,4 +423,20 @@ itvtoff$icv	equ	270h	; Int C vectors (128 PC values)
 sc$dummy equ	00000h
 sc$sumode equ	0FF01h	; A=0 enter System-mode else User-mode
 
+;
+; Bank Zero memory allocations (for banked system)
+;
+; The first 20 (14h) pages of Bank 0 are reserved and should not
+; be specified to GENCPM when performing a system generation
+;
+; These are the reserved page definitions
+;
+bk0_pg0	equ	0000h	; page 00h used by CPMLDR for loading CP/M
+bk0_ccp equ	0100h	; pages 01h-0dh for storing a copy of CCP.COM
+bk0_free equ	0e00h	; pages 0eh-0fh (free and reserved)
+bk0_itvt equ	1000h	; pages 10h-11h interrupt and trap vector table
+bk0_ibuf equ	1200h	; pages 12h-13h BIOS interrupt buffers
+bk0_cpm	equ	1400h	; pages 14h-dfh CP/M 3 bank 0 and dir buffers
+bk0_common equ	0e000h	; pages e0h-ffh Common memory
+
 	.list

@@ -11,7 +11,7 @@
 ; This date is included in the sign-on message
 
 build$date macro
-	defb	'BNK1 20200630'
+	defb	'BNK1 20200715'
 	endm
 
 false	equ	0
@@ -44,10 +44,10 @@ use$big$drm equ	true		; TRUE to allocate 2048 directory entries
 use$timer$interrupt equ false	; TRUE to enable Heart-Beat interrupt
 
   if ldrbios
-use$device$io equ true		; FALSE omits Character device support
+use$device$io equ false		; FALSE omits Character device support
 				; (MUST be FALSE for LDRBIOS - doesn't use SCB)
   else
-use$device$io equ false		; FALSE maximises TPA space
+use$device$io equ true		; FALSE maximises TPA space
 				; TRUE include character devices support
   endif
 

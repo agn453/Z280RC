@@ -1,0 +1,138 @@
+; Loader program for the serial bootstrap mode of the Z280 CPU.
+
+; The program is load at address 0, and then waits for an Intel HEX
+; file to be loaded.
+
+	.z280
+
+CR	equ	0Dh
+LF	equ	0Ah
+
+	cseg
+
+LOADER:	ld	sp,0		; set stack to top of memory
+	ld	c,8		; I/O page reg
+	ld	l,0FEh		; UART I/O page
+	ldctl	(c),hl
+	ld	a,11100010b
+	out	(10h),a		; UART config reg
+	ld	a,10000000b
+	out	(12h),a		; UART TX status/ctrl reg
+	out	(14h),a		; UART RX status/ctrl reg
+  IF 1
+	ld	hl,LOGMSG
+	call	PUTSTR
+  ENDIF
+LOOP:	call	GETC		; get char
+	cp	':'
+	jr	z,HEXREC	; branch if start of Intel HEX record
+	call	UCASE
+	cp	'G'
+	jr	nz,LOOP		; ignore if not a 'G'o command
+	call	PUTC
+	ld	a,' '
+	call	PUTC
+	call	GETHEX		; get start address
+	ld	h,a
+	call	GETHEX
+	ld	l,a
+	jp	(hl)		; exec program
+
+HEXREC:	call	GETHEX		; get record length
+	ld	b,a		;  into reg B
+	ld	c,a		; checksum in reg C
+	call	GETHEX		; get hi addr
+	ld	h,a		;  into reg H
+	add	a,c
+	ld	c,a
+	call	GETHEX		; get lo addr
+	ld	l,a		;  into reg L
+	add	a,c
+	ld	c,a
+	call	GETHEX		; get record type
+	or	a
+	jr	z,DATA		; branch if data
+	dec	a
+	ld	a,'U'
+	jr	nz,next		; error if not EOF (unknown)
+	call	GETHEX		; get checksum
+	ld	a,'X'
+	call	PUTC		; indicate we're done
+	ld	a,CR
+	call	PUTC
+	ld	a,LF
+	call	PUTC
+	jp	(hl)		; exec program
+
+DATA:	add	a,c		; update checksum
+	ld	c,a
+	inc	b
+	dec	b
+	jr	z,endrec	; branch if record length is zero
+load:	call	GETHEX		; get data byte
+	ld	(hl),a		; store it
+	add	a,c
+	ld	c,a		; update checksum
+	inc	hl
+	djnz	load
+endrec:	call	GETHEX
+	add	a,c		; checksum must be zero
+	ld	a,'?'
+	jr	nz,next		; else display error
+	ld	a,'.'		; display progress
+next:	call	PUTC
+	jp	LOOP
+
+GETHEX:	call	GETC
+	call	ASCHEX
+	rlca
+	rlca
+	rlca
+	rlca
+	ld	e,a
+	call	GETC
+	call	ASCHEX
+	or	e
+	ret
+
+ASCHEX:	call	UCASE
+	sub	'0'
+	cp	10
+	ret	c
+	sub	7
+	and	0Fh
+	ret
+
+UCASE:	cp	'a'
+	ret	c
+	cp	'z'+1
+	ret	nc
+	and	5Fh
+	ret
+
+PUTSTR:	ld	a,(hl)
+	or	a
+	ret	z
+	call	PUTC
+	inc	hl
+	jr	PUTSTR
+
+GETC:	in	a,(14h)		; UART RX status/ctrl reg
+	and	10h
+	jr	z,GETC
+	in	a,(16h)		; UART RX data reg
+	ret
+
+PUTC:	ld	e,a
+twait:	in	a,(12h)		; UART TX status/ctrl reg
+	and	01h
+	jr	z,twait
+	ld	a,e
+	out	(18h),a		; UART TX data reg
+	ret
+
+LOGMSG:	db	CR,LF,'TinyLoad 1.1'
+	db	CR,LF,'G xxxx when done'
+	db	CR,LF,0
+
+	end	LOADER

@@ -31,6 +31,8 @@
 ;					so USE$DMA$TO$COPY TRUE now works
 ;	28-Nov-2018	Tony Nicholson	Prune LDRBIOS to just HD$READ
 ;	25-Jun-2020	Tony Nicholson	Squeeze a few less bytes of code
+;	19-Sep-2021	Tony Nicholson	Use 2048 directory entries if
+;					the DE2048 symbol is defined
 ;
 
 	maclib	CPM3M80.LIB	; CPM 3 Parameter Block Macros
@@ -96,14 +98,26 @@ hstsiz	equ	512		; CF Sector size
 spt	equ	256		; Sectors per "track"
 blksiz	equ	4096		; Blocksize of 4K
 spb	equ	blksiz/hstsiz	; Sectors per block
+  ifdef DE2048
+; 	For 2048 directory entries, use track 63 too
+drm	equ	2048		; Directory entries (also see DPB)
+dsm	equ	64*(spt/spb)	; Number of 4K blocks per drive
+dsm0	equ	63*(spt/spb)	; For boot drive we have 1 reserved track
+  else
 drm	equ	512		; Directory entries (also see DPB)
 dsm	equ	63*(spt/spb)	; Number of 4K blocks per drive
 dsm0	equ	62*(spt/spb)	; For boot drive we have 1 reserved track
+  endif
 bsh	equ	5		; Block shift factor for 4K blocks
 blm	equ	00011111b	; Block mask for bsh bits
 exm	equ	1		; Extent mask
+  ifdef DE2048
+al0	equ	11111111b	; First two bytes of allocation vector
+al1	equ	11111111b	; (reserve 16 groups for directory)
+  else
 al0	equ	11110000b	; First two bytes of allocation vector
 al1	equ	00000000b	; (reserve 4 groups for directory)
+  endif
 psh	equ	2		; Physical record shift factor
 phm	equ	00000011b	; Block mask for psh bits
 
@@ -120,7 +134,7 @@ hdtype	equ	10h		; Media type for Hard Disk
 
   if	hstsiz ne 512
 	; Block address calculations depend on this!
-	.printx	"Error: IDE sector size must be 512 bytes"
+	.printx	"ERROR: IDE sector size must be 512 bytes"
   endif
 ;
 ; Disk Layout

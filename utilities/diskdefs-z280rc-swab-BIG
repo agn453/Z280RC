@@ -1,0 +1,128 @@
+#AGN - Z280RC-BIG definitions (for the BIG 2048 directory entry partitions)
+#
+# Note:  The bytes from the CompactFlash image
+# need to be swapped when transferring to/from
+# the physical media for the Z280RC.
+#
+# Do this using the dd command's conv=swab option.
+#
+# For example (assumes /dev/sda is the CompactFlash drive)
+# copying just the first 64MB (8 partitions of 8MB each) -
+#
+#   sudo dd if=/dev/sda of=z280rc-cf.img bs=512 count=131072 conv=swab
+#
+# will copy the drive to an image in the file z280rc-cf.img
+#
+# To write it back to CompactFlash use -
+#
+#   sudo dd if=z280rc-cf.img of=/dev/sda bs=512 count=131072 conv=swab
+#
+
+# Z280RC - partition A:
+# Reserved track contains the boot loader, ZZMON, CP/M 2 image, CPMLDR
+diskdef z280rc-a-BIG
+  seclen 512
+  tracks 64
+  sectrk 256
+  blocksize 4096
+  maxdir 2048
+  skew 0
+  boottrk 1
+  os 3
+end
+
+# Z280RC - partition B:
+diskdef z280rc-b-BIG
+  seclen 512
+  tracks 64
+  sectrk 256
+  blocksize 4096
+  maxdir 2048
+  skew 0
+  boottrk 0
+  os 2.2
+  offset 64trk
+end
+
+# Z280RC - partition C:
+diskdef z280rc-c-BIG
+  seclen 512
+  tracks 64
+  sectrk 256
+  blocksize 4096
+  maxdir 2048
+  skew 0
+  boottrk 0
+  os 3
+  offset 128trk
+end
+
+# Z280RC - partition D:
+diskdef z280rc-d-BIG
+  seclen 512
+  tracks 64
+  sectrk 256
+  blocksize 4096
+  maxdir 2048
+  skew 0
+  boottrk 0
+  os 3
+  offset 192trk
+end
+
+# These are the four additional partitions for PARTN8 under CP/M Plus
+# with USE$BIG$DRM defined for 2048 directory entries
+#
+# Z280RC - partition E:
+diskdef z280rc-e
+  seclen 512
+  tracks 63
+  sectrk 256
+  blocksize 4096
+  maxdir 2048
+  skew 0
+  boottrk 0
+  os 3
+  offset 256trk
+end
+
+# Z280RC - partition F:
+diskdef z280rc-f
+  seclen 512
+  tracks 63
+  sectrk 256
+  blocksize 4096
+  maxdir 2048
+  skew 0
+  boottrk 0
+  os 3
+  offset 320trk
+end
+
+# Z280RC - partition G:
+diskdef z280rc-g
+  seclen 512
+  tracks 63
+  sectrk 256
+  blocksize 4096
+  maxdir 2048
+  skew 0
+  boottrk 0
+  os 3
+  offset 384trk
+end
+
+# Z280RC - partition H:
+diskdef z280rc-h
+  seclen 512
+  tracks 63
+  sectrk 256
+  blocksize 4096
+  maxdir 2048
+  skew 0
+  boottrk 0
+  os 3
+  offset 448trk
+end
+
+#end of Z280RC-BIG definitions

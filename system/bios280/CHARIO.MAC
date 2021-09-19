@@ -23,6 +23,7 @@
 ;	28-Nov-2018	Tony Nicholson	Only use Z280 UART routines
 ;					for LDRBIOS use (no device support)
 ;	29-Jun-2020	Tony Nicholson	Add support for QuadSer 4-port board
+;	15-Jul-2020	Tony Nicholson	Interrupt support for QuadSer board
 ;
 
 	maclib	CONFIG.LIB
@@ -34,6 +35,9 @@
 
   if banked
 	extrn	?bankio		; call the routines in bank 0
+    if int$enabled and quadser
+	extrn	@cbnk, ?bnksl	; bank select for interrupt service
+    endif
   endif
 
   if use$device$io
@@ -46,6 +50,10 @@
 	extrn	pshiop, popiop	; push and pop the I/O page register
 	extrn	iopqs		; selects I/O page for QuadSer board
 	public	@qsactv		; number of QuadSer ports detected
+
+      if banked and int$enabled
+	public	qsint		; Interrupt service routine
+      endif
 
     endif
 
@@ -81,8 +89,94 @@ max$devices equ 1		; Only Z280 UART
 ctrlp	equ	010h		; CTRL-P to enter BIOSDBG
   endif
 
+  if use$device$io
+
+    if banked and int$enabled and quadser
+;
+; Receive character ring buffers in Bank 0
+;
+q.ip	equ	0		; offset to input pointer
+q.op	equ	1		; offset to output pointer
+q.buf	equ	2		; offset to ring buffer
+q.size	equ	32		; ring buffer size (must be
+				;  power of 2 - so that masking
+q.mask	equ	q.size-1	;  simplifies pointer wrap)
+
+      if 0	;disable buffers in bank 0
+
 	common$segment
 
+	defs	30		; interrupt stack in common memory
+istack:	defs	2
+
+bufin	equ	bk0_ibuf	; in bank 0
+
+      else
+
+	common$segment
+bufin:				; in common memory
+	defs	4*(q.size+2)
+
+      endif
+
+bi0.ip	equ	bufin		; TTY0 buffer input pointer (1 byte)
+bi0.op	equ	bi0.ip+1	; TTY0 buffer output pointer (1 byte)
+bi0.buf equ	bi0.op+1	; TTY0 ring buffer
+
+bi1.ip	equ	bi0.buf+q.size	; TTY1 buffer input pointer (1 byte)
+bi1.op	equ	bi1.ip+1	; TTY1 buffer output pointer (1 byte)
+bi1.buf equ	bi1.op+1	; TTY1 ring buffer
+
+bi2.ip	equ	bi1.buf+q.size	; TTY2 buffer input pointer (1 byte)
+bi2.op	equ	bi2.ip+1	; TTY2 buffer output pointer (1 byte)
+bi2.buf equ	bi2.op+1	; TTY2 ring buffer
+
+bi3.ip	equ	bi2.buf+q.size	; TTY3 buffer input pointer (1 byte)
+bi3.op	equ	bi3.ip+1	; TTY3 buffer output pointer (1 byte)
+bi3.buf equ	bi3.op+1	; TTY3 ring buffer
+
+      if 0 ; transmit rings not used at present
+bufout equ	bi3.buf+q.size
+
+bo0.ip	equ	bufout		; TTY0 buffer input pointer (1 byte)
+bo0.op	equ	bo0.ip+1	; TTY0 buffer output pointer (1 byte)
+bo0.buf equ	bo0.op+1	; TTY0 ring buffer
+
+bo1.ip	equ	bo0.buf+q.size	; TTY1 buffer input pointer (1 byte)
+bo1.op	equ	bo1.ip+1	; TTY1 buffer output pointer (1 byte)
+bo1.buf equ	bo1.op+1	; TTY1 ring buffer
+
+bo2.ip	equ	bo1.buf+q.size	; TTY2 buffer input pointer (1 byte)
+bo2.op	equ	bo2.ip+1	; TTY2 buffer output pointer (1 byte)
+bo2.buf equ	bo2.op+1	; TTY2 ring buffer
+
+bo3.ip	equ	bo2.buf+q.size	; TTY3 buffer input pointer (1 byte)
+bo3.op	equ	bo3.ip+1	; TTY3 buffer output pointer (1 byte)
+bo3.buf equ	bo3.op+1	; TTY3 ring buffer
+
+       if (bo3.buf+q.size) ge bk0_cpm
+	.printx	'ERROR: Interrupt buffer space in bank 0 overflowed'
+       endif
+
+      else
+
+       if (bi3.buf+q.size) ge bk0_cpm
+	.printx	'ERROR: Interrupt buffer space in bank 0 overflowed'
+       endif
+
+      endif
+    endif
+  endif
+
+	common$segment
+
+;
+; Character device initialisation
+;
+; Enter with CP/M device number in register C
+;
+; No registers are saved
+;
 ?cinit:
 
   if banked
@@ -154,6 +248,27 @@ coninit:
 ; Enter with CP/M device number in A
 ;
 quad$init:
+      if int$enabled
+	; clear interrupt ring buffer pointers
+	push	af
+	dec	a		; A now 0..3
+	mult	q.size+2	; multiply by ring buffer size + 2
+	addw	hl,bufin	; HL now points to input ring buffer
+	xor	a
+	ld	(hl),a		; set .ip to zero
+	inc	hl
+	ld	(hl),a		; set .op to zero
+
+       if 0 ; transmit ring buffers not used at present
+	addw	hl,bufout-bufin-1 ; point to output ring buffer
+	ld	(hl),a
+	inc	hl
+	ld	(hl),a
+	pop	af
+       endif
+
+      endif
+
 	call	quad$dev8	; get device offset (0,8,16,24) to DE
 
       if baud$rate$set
@@ -303,7 +418,11 @@ baudhi:	defb		d19k2 shr 8	; baud rate divisor (high byte)
 
 	defb	qs_FCR,	00000001b	; enable FIFO, Rx threshold level = 1
 
+      if int$enabled
+	defb	qs_IER, 00000001b	; RxRDY interrupt enable (bit 0 on)
+      else
 	defb	qs_IER,	00000000b	; interrupts all disabled
+      endif
 
 	defb	qs_MCR,	10000011b	; enable prescaler (bit 7 on),
 					; interrupt OUT2 disabled (bit 3 off),
@@ -327,8 +446,7 @@ speed$table:
 	;	150	57600
 	;	1800	115200
 	;
-	; A replacement DEVICE.COM utility will accept
-	; the new values.
+	; A replacement DEVICE.COM utility accepts the new values.
 
 ;		        50, 28k8,  110, 38k4, 57k6,  300,  600
 	defw	       d50,d28k8, d110,d38k4,d57k6, d300, d600
@@ -361,6 +479,13 @@ quad$dev8:
     endif
   endif
 
+;
+; Character Input from device
+;
+; CP/M device number passed in register B
+;
+; Returns eight-bit character in A
+;
   if use$device$io
 
 ?ci:				; character input
@@ -373,7 +498,53 @@ quad$dev8:
 	or	a
 	jr	z,conin		; 0 = console UART
 
-	; QuadSer input for device 1..4
+      if banked and int$enabled
+
+	; Interrupt QuadSer input for device 1..4
+
+	push	hl		; Save HL
+	call	?bankio		; Switch to bank 0 routine
+	defw	qsinp
+	pop	hl		; Restore HL
+	ret
+
+	bank0$segment
+
+qsinp:
+	push	af		; save device number (1..4)
+
+qsi0:	call	?cist		; Busy wait until there's
+	jr	z,qsi0		;  a character
+
+	pop	af		; device number back to A
+	dec	a		;  and make it QuadSer unit (0..3)
+
+	push	ix		; save IX
+				;  (HL is already saved on stack by caller)
+
+	mult	a,q.size+2	; Offset to ring buffer in HL
+	ld	ix,bufin
+	lda	ix,(hl+ix)	; IX points to ring buffer
+
+	ld	a,(ix+q.op)	; get ring buffer output pointer
+	ld	l,a		;  and save it in L
+	inc	a		; advance output pointer
+	and	q.mask		; keep it within ring
+	ld	(ix+q.op),a
+	ld	h,0		; HL is now buffer offset
+	inc	ix
+	inc	ix		; IX points to input ring buffer
+	lda	hl,(hl+ix)	; point HL to ring buffer entry
+	ld	a,(hl)		; fetch character
+
+	pop	ix
+	ret
+
+	common$segment		; Back to common
+
+      else
+
+	; Polled QuadSer input for device 1..4
 
 	call	quad$dev8	; get device offset to DE
 	push	bc
@@ -394,6 +565,7 @@ qsi1:
 	pop	bc		; restore BC
 	ret			;  and return
 
+      endif
     endif
   endif
 
@@ -430,7 +602,16 @@ null$input:
 	ret
   endif
 
-?cist:				; character input status
+;
+; Character input status
+;
+; Enter with CP/M device number in register B
+;
+; Returns zero in A (and Z flag set) if none available
+; and 0FFh in A (and Z flag clear) is a one is
+;
+
+?cist:
 
   if use$device$io
 	ld	a,b
@@ -441,6 +622,39 @@ null$input:
 
 	or	a
 	jr	z,const		; Console UART input status
+
+      if banked and int$enabled
+
+	; QuadSer port interrupt input status
+
+	push	hl		; Save HL
+	call	?bankio		; Switch to bank 0 routine
+	defw	qsins
+	pop	hl		; Restore HL
+	ret
+
+	bank0$segment
+
+qsins:
+	dec	a		; make device code into QuadSer unit (0..3)
+
+	push	ix		; save IX
+				;  (HL is already saved on stack by caller)
+
+	mult	a,q.size+2	; Offset to ring buffer in HL
+	ld	ix,bufin
+	lda	ix,(hl+ix)	; IX points to ring buffer
+	ld	a,(ix+q.op)	; compare output and input
+	sub	(ix+q.ip)	;  ring buffer pointers
+	jr	z,qsi2		; no character available if equal
+	or	0FFh
+qsi2:
+	pop	ix
+	ret
+
+	common$segment
+
+      else
 
 	; QuadSer port input status
 
@@ -459,6 +673,7 @@ null$input:
 	and	qsm$rxrdy	; test RxRDY bit
 	jr	ci4
 
+      endif
     endif
   endif
 
@@ -478,8 +693,15 @@ null$status:
 	or	0ffh		; return indicating character available
 	ret
 
+;
+; Character output
+;
+; Enter with CP/M device number in register B
+; and the character to output in C
+;
+
   if use$device$io
-?co:				; character output
+?co:
 	ld	a,b
 	cp	max$devices
 	jr	nc,null$output
@@ -546,7 +768,16 @@ null$output:
 				; swallow data
 	ret
 
-?cost:				; character output status
+;
+; Character output status
+;
+; Enter with CP/M device number in register B
+;
+; Returns zero in A (and Z flag set) if device is busy
+; and 0FFh (and Z flag cleared) when ready
+;
+
+?cost:
 
   if use$device$io
 	ld	a,b
@@ -624,5 +855,145 @@ tty0:	defb	'TTY0  '	; device 1, QuadSer port 0
   endif
 
 	defb	0		; table terminator
+
+  if use$device$io
+    if banked and int$enabled and quadser
+
+;
+; Interrupt Service Routine for INTB
+;
+; INTB is connected to the RC2014 bus nINT (pin 22).
+; The only device currently supported is the QuadSer
+; 4-port UART module.
+;
+	common$segment		; Must be in common memory
+
+qsint:
+	ex	(sp),hl		; push HL, get reason code to HL
+	push	ix
+	push	bc
+	push	af
+
+      if int$debug
+
+	cpw	hl,itvtoff$intb ; Is it an INTB interrupt?
+	jr	nz,qsidone	; No
+      else
+
+	; Ignore the reason code
+
+      endif
+
+      if 0 ; ring buffers are not in bank 0
+
+	ld	(istack),sp	; switch to common memory
+	ld	sp,istack	;  stack before changing bank
+
+	ld	a,(@cbnk)	; Switch to bank 0
+	push	af		;  after saving current bank
+	xor	a
+	call	?bnksl
+
+      endif
+
+	ld	c,iop		; Save current I/O page
+	ldctl	hl,(c)
+	push	hl
+
+	ld	l,qserp		; Point to QuadSer I/O page
+	ldctl	(c),hl
+
+	ld	c,qser$base+qs_ISR ; point to TTY0's interrupt status register
+qsinext:
+	in	a,(c)		; Is an interrupt pending?
+	bit	0,a		;  (bit 0 set)
+
+	call	z,ttyint	; Yes, process interrupt (C points to ISR)
+
+	; Carry is set if there was a buffer overflow.
+	;
+	; We don't check this for now (silently lose
+	; characters)
+
+	ld	a,c		; Next TTY port
+	add	a,qser1-qser0
+	ld	c,a
+	cp	qser3+qs_ISR+1
+	jr	c,qsinext
+
+	pop	hl		; Restore I/O page
+	ld	c,iop
+	ldctl	(c),hl
+
+      if 0
+
+	pop	af		; Restore current bank
+	call	?bnksl
+	ld	sp,(istack)	; Back to original stack
+
+      endif
+
+qsidone:
+	pop	af		; Restore registers and
+	pop	bc		;  return from interrupt
+	pop	ix
+	pop	hl
+	retil
+
+ttyint:	; C points to this port's ISR
+	ld	a,c
+	add	a,qs_LSR-qs_ISR	; point to line status register
+ttymore:
+	ld	c,a
+	in	a,(c)		; read line status
+	bit	0,a		; data available? (bit 0)
+	jr	nz,ttyrx	; Yes
+
+	; We only do Rx interrupts for now, so no
+	; other bits in the line status are checked
+
+	ld	a,c
+	sub	a,qs_LSR-qs_ISR	; point C back to ISR
+	ld	c,a
+	or	a		; clear Carry
+	ret
+
+ttyrx:	ld	a,c
+	sub	a,qs_ISR+qs_RHR	; point C to receiver holding register
+	ld	c,a
+	in	b,(c)		; fetch character to B
+
+	; C points to the RHR
+	ld	a,c		; convert to port offset (0,8,16,24)
+	sub	a,qser$base
+
+	ld	ix,bufin	; point to input ring buffer space
+	rrca			; divide by 8
+	rrca
+	rrca			; now A contains TTY port number (0..3)
+	mult	a,q.size+2	; multiply by ring buffer size + 2 to HL
+	lda	ix,(hl+ix)	; IX now points to input ring buffer
+
+	ld	a,(ix+q.ip)	; get input pointer
+	ld	l,a		;  and save it in L
+	inc	a		; advance the pointer
+	and	q.mask		;  and wrap to start if needed
+	cp	(ix+q.op)	; is it the same as output pointer?
+	scf
+	ret	z		; yes, the input ring buffer is full
+	ld	(ix+q.ip),a	; update input pointer
+
+	ld	h,0		; HL is now buffer offset
+	inc	ix
+	inc	ix		; IX points to input ring buffer
+	lda	hl,(hl+ix)	; point HL to buffer entry
+	ld	(hl),b		; save character
+
+	ld	a,c		; now point C back to the LSR
+	add	a,qs_LSR	;  and check for more
+	jr	ttymore
+
+    endif ;banked and int$enabled and quadser
+  endif ;use$device$io
 
 	end

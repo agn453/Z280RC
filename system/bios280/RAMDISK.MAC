@@ -108,7 +108,7 @@ hdtype	equ	20h		; Media Type for Memory Disk
 
     if	hstsiz ne 512
 	; Block addressing relies on this
-	.printx	"Error: RAMDISK sector size must be 512 bytes"
+	.printx	"ERROR: RAMDISK sector size must be 512 bytes"
     endif
 
 	; Get Hard-coded $date for RAMDISK label

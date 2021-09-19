@@ -25,7 +25,7 @@
 ;
 ;   Device support is in external modules -
 ;
-;   IDEHD	IDE Hard Disk interface
+;   IDEHD	IDE CompactFlash Hard Disk interface
 ;   RAMDISK	RAM Disk using free memory
 ;   CLOCK	DS1302 timekeeper clock
 ;   CHARIO	Console and QuadSer board Serial I/O
@@ -78,6 +78,8 @@
 ;					support and common dispatch
 ;					routine to call the banked
 ;					portion of character I/O
+;	08-Jul-2020	Tony Nicholson	QuadSer interrupt service routine
+;					(defined in the CHARIO module)
 ;
 	page
 	maclib	CPM3M80.LIB	; CP/M 3 Data Structures (M80 format)
@@ -104,6 +106,9 @@
     if quadser
 	public	iopqs		; I/O page selecting QuadSer board
 	extrn	@qsactv		; QuadSer board detected (in CHARIO)
+      if banked and int$enabled
+	extrn	qsint		; Interrupt service routine (in CHARIO)
+      endif
     endif
   endif
 
@@ -292,7 +297,7 @@ ttrc:	defw	0EEEEh	; So we can see an interrupt was processed
     endif ; ldrbios
   else
 	; Sanity check we have a system boot device
-	.printx	"System storage device IDEHD not defined"
+	.printx	"ERROR: System storage device IDEHD not defined"
   endif ; idehd
 	page
 ;
@@ -496,7 +501,7 @@ initd1:	pop	bc		; Next drive
 	ld	c,tcr
 	ldctl	(c),hl
 
-	ld	hl,1400h	; Clear base memory in Bank 0
+	ld	hl,bk0_cpm	; Clear base memory in Bank 0
 clr00:	dec	hl		; (addresses 000000..0013ff)
 	ld	(hl),0		; Later on we'll use this region
 	ld	a,h		; for saving a copy of the CCP
@@ -505,11 +510,11 @@ clr00:	dec	hl		; (addresses 000000..0013ff)
 	
     if int$enabled
 	ld	hl,itvt		; Copy the Interrupt and Trap
-	ld	de,1000h	;  Vector table to 001000h
+	ld	de,bk0_itvt	;  Vector table to 001000h
 	ld	bc,itvtl
 	ldir
 
-	ld	hl,0010h	; Interrupt/Trap vector table at 001000h
+	ld	hl,bk0_itvt shr 8 ; Interrupt/Trap vector page 0010h
 	ld	c,itv
 	ldctl	(c),hl
 
@@ -705,7 +710,12 @@ itvt:
 	jp	?boot		; (and contains a jump to Cold Boot)
 	defw	int$mask,nmint	; NMI (is tied high via a pull-up resistor)
 	defw	0,iret3		; INTA
+    if quadser
+	defw	int$mask and (not i$b),qsint	; INTB is RC2014 bus interrupt
+				; QuadSer
+    else
 	defw	0,iret3		; INTB
+    endif
 	defw	0,iret3		; INTC
     if use$timer$interrupt and (not clock$50hz)
 	defw	int$mask and (not i$ct0),tiktok ; Counter/Timer 0
@@ -766,15 +776,21 @@ tiktok:
 	push	af		; Preserve flags
 
       if int$debug
-	ld	(ttrc),hl	; Save reason code where we can see it
-      endif
 
-      if clock$50hz
+	ld	(ttrc),hl	; Save reason code where we can see it
+
+       if clock$50hz
 	cpw	hl,itvtoff$tc1	; Is it a Counter/Timer 1 interrupt?
-      else
+       else
 	cpw	hl,itvtoff$tc0	; Is it a Counter/Timer 0 interrupt?
-      endif
+       endif
 	jr	nz,ttdone	; No
+
+      else
+
+	; Ignore the reason code
+
+      endif
 	
 	ld	c,iop		; Save current I/O Page
 	ldctl	hl,(c)
@@ -1495,7 +1511,7 @@ defpdr	macro	bank,attr
 	local	pf,pg,pn
 pf	aset	bank
     if (pf lt 0) or (pf gt 16)
-	.printx	'Bank number out of range 0..16'
+	.printx	'ERROR: Bank number out of range 0..16'
 	exitm
     endif
     if (pf gt 1)	; Adjust for common
@@ -2353,27 +2369,31 @@ pshiop:
 ; Dispatch and Return to/from Banked Portion of
 ; Character I/O using the local @tstack stack
 ;
-; Enter with the banked routine address pointed
-; to by the SP (instruction following the call
-; to ?BANKIO)
+; The address of the routine in bank 0 follows
+; the call to this routine and is extracted via
+; the stack pointer and the return address is
+; adjusted.
 ;
-; Contents of the HL register are not preserved and
-; IX is reserved for updatng the return address.
-; Others are kept as modified by the routine
+; e.g.		call	?bankio	; Call SUB0 in bank 0
+;		defw	sub0
+;
+; Contents of the HL register is not preserved and
+; IY is reserved for updatng the return address.
+; Other register changes are passed back.
 ;
   if banked
 
 	common$segment
 
 ?bankio:
-	ex	(sp),ix		; save IX and get parameter address to IX
+	ex	(sp),iy		; save IY and get parameter address to IY
 	ld	(@tstack),sp	; save current stack pointer
 	ld	sp,@tstack	; switch to stack in common memory
 	ld	a,(@cbnk)	; get and save current bank to stack
 	push	af
 	xor	a		; select the banked bios routine
 	call	?bnksl		;  bank (bank 0)
-	ldw	hl,(ix+0)	; fetch routine address (in bank 0) to HL
+	ldw	hl,(iy+0)	; fetch routine address (in bank 0) to HL
 	push	?bioret		; push address of return routine
 	jp	(hl)		; off we go into bank 0
 
@@ -2384,9 +2404,9 @@ pshiop:
 	call	?bnksl		;  current bank
 	pop	af		; restore the result
 	ld	sp,(@tstack)	;  original stack pointer
-	inc	ix		; fix-up return address
-	inc	ix
-	ex	(sp),ix		; put it on stack, restore IX and
+	inc	iy		; fix-up return address
+	inc	iy
+	ex	(sp),iy		; put it on stack, restore IY and
 	ret			;  and return
 
   endif
