@@ -90,6 +90,7 @@ Download the gzip'ed image from
 example (when /dev/sda is the CompactFlash device name under Linux)
 
 ```
+gunzip z280rc-bigcpm-swab.img.gz
 sudo dd if=z280rc-bigcpm-swab.img if=/dev/sda bs=512 count=65536 conv=swab
 ```
 
