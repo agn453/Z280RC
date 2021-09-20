@@ -19,6 +19,18 @@ New Utilities are in the "utilities" subdirectory.
 
 ## Modification History (in reverse chronological order):
 
+
+### 20-Sep-2021
+
+I updated the CP/M 3 disk image to include the CP/M 2.2 BIOS sources
+(on drive B: user area 1), and included Infocom games and terminal
+set-up program (on drive D: in user area 0).  Also, updated the IDEHD.MAC
+CompactFlash driver module to match the latest version.
+
+Get it from
+[z280rc-bigcpm-swab.img.gz](https://raw.githubusercontent.com/agn453/Z280RC/master/system/disk-image/z280rc-bigcpm-swab.img.gz)
+
+
 ### 19-Sep-2021
 
 There's now an updated CP/M 3 banked memory system supporting 2048
@@ -91,14 +103,20 @@ RML ALGOL, TurboPascal plus the Z3PLUS Z-System and various editors and
 assemblers.  The CP/M 3 BIOS source files are on drive C in user area 1.
 
 Download the gzip'ed image from
-[z280rc-bigcpm-swab.img.gz](https://raw.githubusercontent.com/agn453/Z280RC/master/system/disk-image/z280rc-bigcpm-swab.img.gz) then write it to your blank
-128Mb or 256Mb CompactFlash card using dd with the byte-swap option.  For
-example (when /dev/sda is the CompactFlash device name under Linux)
+[z280rc-bigcpm-swab.img.gz](https://raw.githubusercontent.com/agn453/Z280RC/master/system/disk-image/z280rc-bigcpm-swab.img.gz)
+uncompress it with gunzip then write it to your blank 128Mb or 256Mb
+CompactFlash card using dd with the byte-swap option.
+
+For example (when /dev/sdX is the CompactFlash
+device name under Linux)
 
 ```
 gunzip z280rc-bigcpm-swab.img.gz
-sudo dd if=z280rc-bigcpm-swab.img of=/dev/sda bs=512 count=65536 conv=swab
+sudo dd if=z280rc-bigcpm-swab.img of=/dev/sdX bs=512 count=65536 conv=swab
 ```
+
+(substitute for /dev/sdX as appropriate on your system).
+
 
 ### 18-Sep-2021
 
