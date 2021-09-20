@@ -20,6 +20,35 @@ New Utilities are in the "utilities" subdirectory.
 ## Modification History (in reverse chronological order):
 
 
+### 21-Sep-2021
+
+Please note:  The CP/M 3 system images I've made available are linked
+with Simeon Cran's ZPM3 replacement BDOS routines.
+
+ZPM3 is a Z80 coded CP/M 3 compatible BDOS replacement which includes
+
+* Bug fixes (the "Random Read Bug" and System Control Block sanity checks),
+
+* Enhancements to the BDOS Parse (Function 152) to accept drive/user
+area filespecs (like C1:FILE.DAT,)
+
+* New functions for file time-stamps manipulation - Get Stamp (Function 54),
+Use Stamp (Function 55) can retrieve and change a file's time-stamp, and
+
+* Command-line history and WordStar(C)-style editing for Read Console
+Buffer (Function 10).
+
+You'll find more details
+[here](https://raw.githubusercontent.com/agn453/Z280RC/master/system/zpm3/ZPM3.TXT)
+and I've added the ZPM3 distribution archive (includes sourcecode) in the
+[system/zpm3/ZPM3S.ARC](https://raw.githubusercontent.com/agn453/Z280RC/master/system/zpm3/ZPM3S.ARC)
+file.
+
+If you wish to revert to the Digital Research CP/M 3 BDOS, you'll need to
+select it with the DRI-CPM3.SUB file and rebuild a new CPM3.SYS file (e.g.
+using the BIGBIOS.SUB build procedure from the BIOS source area).
+
+
 ### 20-Sep-2021
 
 I updated the CP/M 3 disk image to include the CP/M 2.2 BIOS sources
