@@ -74,9 +74,9 @@ end
 # with USE$BIG$DRM defined for 2048 directory entries
 #
 # Z280RC - partition E:
-diskdef z280rc-e
+diskdef z280rc-e-BIG
   seclen 512
-  tracks 63
+  tracks 64
   sectrk 256
   blocksize 4096
   maxdir 2048
@@ -87,9 +87,9 @@ diskdef z280rc-e
 end
 
 # Z280RC - partition F:
-diskdef z280rc-f
+diskdef z280rc-f-BIG
   seclen 512
-  tracks 63
+  tracks 64
   sectrk 256
   blocksize 4096
   maxdir 2048
@@ -100,9 +100,9 @@ diskdef z280rc-f
 end
 
 # Z280RC - partition G:
-diskdef z280rc-g
+diskdef z280rc-g-BIG
   seclen 512
-  tracks 63
+  tracks 64
   sectrk 256
   blocksize 4096
   maxdir 2048
@@ -113,9 +113,9 @@ diskdef z280rc-g
 end
 
 # Z280RC - partition H:
-diskdef z280rc-h
+diskdef z280rc-h-BIG
   seclen 512
-  tracks 63
+  tracks 64
   sectrk 256
   blocksize 4096
   maxdir 2048
