@@ -3,6 +3,7 @@ text=auto
 
 README.md text eol=crlf
 *.DOC text eof=crlf
+*.ARC binary
 *.AS text eol=crlf linguist-language=Assembly
 *.BIN binary
 *.C text eol=crlf linguist-language=C
@@ -25,5 +26,6 @@ README.md text eol=crlf
 *.HLP binary
 *.gz binary
 *.PLM text eol=crlf
+*.TXT text eol=crlf
 *.DAT text eol=crlf
 diskdef* text eol=crlf
