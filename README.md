@@ -30,7 +30,7 @@ ZPM3 is a Z80 coded CP/M 3 compatible BDOS replacement which includes
 * Bug fixes (the "Random Read Bug" and System Control Block sanity checks),
 
 * Enhancements to the BDOS Parse (Function 152) to accept drive/user
-area filespecs (like C1:FILE.DAT,)
+area filespecs (like C1:FILE.DAT),
 
 * New functions for file time-stamps manipulation - Get Stamp (Function 54),
 Use Stamp (Function 55) can retrieve and change a file's time-stamp, and
