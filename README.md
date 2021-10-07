@@ -20,6 +20,20 @@ New Utilities are in the "utilities" subdirectory.
 ## Modification History (in reverse chronological order):
 
 
+### 07-Oct-2021
+
+Change the CP/M 2 cold-boot default drive to B: (since this is where
+the CP/M 2.2 system files are loaded).  Updated only the "BIG" version
+of the
+[CPM22BIG.MAC](https://raw.githubusercontent.com/agn453/Z280RC/master/system/cpm22/CPM22BIG.MAC)
+monolithic source file - and there's a new Intel
+HEX loader file for
+[CPM22BIG.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/system/cpm22/CPM22BIG.HEX)
+in the system/cpm22 subdirectory.  No more "REQUIRES CP/M 3" messages
+when you type a "PIP" command!  (and a warm-boot returns to the current
+selected default drive).
+
+
 ### 21-Sep-2021
 
 Please note:  The CP/M 3 system images I've made available are linked
