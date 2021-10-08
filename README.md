@@ -11,11 +11,20 @@ wiki at
 The original software is located in zip files in the "original" subdirectory.
 
 My modifications to Bill Shen's original CBIOS3 for CP/M 3 are in the
-"system" subdirectory and below.  I also developed a CP/M 3 BIOS to add
-support for a Banked memory configuration.  It's in the system/bios280
-subdirectory.
+"system" subdirectory and below.  
 
-New Utilities are in the "utilities" subdirectory.
+I've also developed
+
+* A modified CP/M 2 (in system/cpm22) to support file partitions containing
+up to 2048 directory entries (four 8Mb drives on CompactFlash with 1.5Mb RAMdisk);
+
+* A CP/M 3 BIOS (in system/bios280) supporting Banked memory (up to eight
+banks, 1.5Mb RAMdisk, support for 4-port QuadSer module);
+
+* Ported UZI280 (in system/uzi280*) - a version of the Unix operating system); and
+
+* Some new Utilities in the "utilities" subdirectory.
+
 
 ## Modification History (in reverse chronological order):
 
@@ -105,7 +114,7 @@ login: root
 [root]/usr/root#
 ```
 
-I'm working on adding suuport for the QuadSer module and direct boot capability
+I'm working on adding support for the QuadSer module and direct boot capability
 from ZZmon to UZI280 and a CP/M RESET utility (to restart back to ZZmon).
 
 They'll be added here soon.
