@@ -11,7 +11,7 @@
 ; This date is included in the sign-on message
 
 build$date macro
-	defb	'BANK 20200715'
+	defb	'BANK 20211008'
 	endm
 
 false	equ	0
@@ -176,13 +176,13 @@ def$civec equ	CIO$UART	; Console input UART
 def$covec equ	CIO$UART	; Console output UART
 
   if	use$device$io
-    if quadser		; Use TTY3
-def$aivec equ	CIO$TTY3	; Auxilary input TTY3
-def$aovec equ	CIO$TTY3	; Auxilary input TTY3
-    else
+;    if quadser		; Use TTY3
+;def$aivec equ	CIO$TTY3	; Auxilary input TTY3
+;def$aovec equ	CIO$TTY3	; Auxilary input TTY3
+;    else
 def$aivec equ	CIO$NULL	; Auxilary input NULL
 def$aovec equ	CIO$NULL	; Auxilary input NULL
-    endif
+;    endif
   else
 def$aivec equ	CIO$NULL	; Auxilary input NULL
 def$aovec equ	CIO$NULL	; Auxilary input NULL

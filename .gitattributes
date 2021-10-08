@@ -13,6 +13,7 @@ README.md text eol=crlf
 *.SUB text eol=crlf
 *.HEX text eol=crlf
 *.lbr binary
+*.LIB text eol=crlf
 *.LBR binary
 *.OBJ binary
 *.RUN binary

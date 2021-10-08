@@ -20,6 +20,98 @@ New Utilities are in the "utilities" subdirectory.
 ## Modification History (in reverse chronological order):
 
 
+### 08-Oct-2021
+
+The CP/M 3 BIOS checks for the presence of a QuadSer module.  If
+none is found then it reports
+```
+%QUADSER I/O board not detected
+```
+during the system start-up, and it disables the TTY0 to TTY3 devices.
+
+However, the default character device assignments for both
+the AUXIN and AUXOUT devices were not adjusted (causing an error
+if you tried to use the DEVICE command).
+
+To fix this, I've changed the defaults for the AUXIN and AUXOUT
+to the NULL device.  This means if you have a QuadSer module,
+then you will now need to use the DEVICE command (in the PROFILE.SUB
+start-up file) to configure the AUXIN and AUXOUT devices under CP/M 3.
+For example -
+
+```
+C>device aux:=tty2[19200,xon]                                                  
+A:DEVICE   COM  (User 0)                                                        
+                                                                                
+Physical Devices:                                                               
+I=Input,O=Output,S=Serial,X=Xon-Xoff                                            
+UART   NONE  IOS    TTY0   19200 IOS    TTY1   19200 IOS                        
+TTY2   19200 IOSX   TTY3   19200 IOS                                            
+                                                                                
+Current Assignments:                                                            
+CONIN:  = UART                                                                  
+CONOUT: = UART                                                                  
+AUXIN:  = TTY2                                                                  
+AUXOUT: = TTY2                                                                  
+LST:    = Null Device                                                           
+                                                                                
+                                                                                
+C>
+```
+
+To set them back to NULL, use
+
+```
+C>device auxin:=null, auxout:=null                                             
+A:DEVICE   COM  (User 0)                                                        
+                                                                                
+Physical Devices:                                                               
+I=Input,O=Output,S=Serial,X=Xon-Xoff                                            
+UART   NONE  IOS    TTY0   19200 IOS    TTY1   19200 IOS                        
+TTY2   19200 IOSX   TTY3   19200 IOS                                            
+                                                                                
+Current Assignments:                                                            
+CONIN:  = UART                                                                  
+CONOUT: = UART                                                                  
+AUXIN:  = Null Device                                                           
+AUXOUT: = Null Device                                                           
+LST:    = Null Device                                                           
+                                                                                
+                                                                                
+C>
+```
+
+In addition, I have verified that my CP/M 2, CP/M 3 and UZI280
+(and Hector Peraza's RSX280) operating systems all work under the
+new Z280RC emulator by Michal Tomek.
+
+The emulator (which runs under Linux/macOS and Windows MinGW)
+is available from
+
+https://github.com/mtdev79/z280emu
+
+Note that the UZI280 operating system still needs to be loaded
+from CP/M and not yet from the ZZmon monitor -
+
+```
+C>bootuzi                                                                       
+C:BOOTUZI  COM                                                                  
+                                                                                
+UZI280 is (c) Copyright (1990-96) by Stefan Nitschke and Doug Braun             
+                                                                                
+boot: 0                                                                         
+UZI280 version 1.12                                                             
+login: root                                                                     
+[root]/usr/root#
+```
+
+I'm working on adding suuport for the QuadSer module and direct boot capability
+from ZZmon to UZI280 and a CP/M RESET utility (to restart back to ZZmon).
+
+They'll be added here soon.
+
+
+
 ### 07-Oct-2021
 
 Change the CP/M 2 cold-boot default drive to B: (since this is where
@@ -534,8 +626,8 @@ These were useful to me when I was writing the drivers for the OX16C954
 
 ### 30-Jun-2020
 
-Added CP/M Plus support for Bill Shen's QuadSer Rev1 4-port UART module in RC2014
-form-factor.
+Added CP/M Plus support for Bill Shen's QuadSer Rev1 4-port UART module
+in RC2014 form-factor.
 
 This is a UART module using the Oxford Semiconductor Ltd.
 OX16C954 rev B chip with 128-byte FIFOs for each receiver and
