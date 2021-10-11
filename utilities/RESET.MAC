@@ -9,6 +9,12 @@
 ;
 ; Tony Nicholson  08-Oct-2021
 ;
+; Modification History
+;
+; 12-Oct-2021	Tony Nicholson	Move interrupt disable to
+;				prior to overwriting CP/M and
+;				remove checks for 8K MMU page
+;				size (no longer applicable)
 ;
 	aseg
 	org	0100h
@@ -51,23 +57,24 @@ az80:	ld	a,40h		; The TSET instruction on a Z80
 	ld	c,$vers		; Get CP/M version
 	call	BDOS
 
-	ld	de,common$base	; Pre-load common base address to DE
-
 	cp	31h		; Is this CP/M-Plus?
 	jr	c,nonbnk
 
-	push	de
 	ld	c,$scb		; Get the common base address
 	ld	de,basescb	;  to HL
 	call	BDOS
-	pop	de
 
 	ld	a,h
 	or	l		; Non-banked is zero
 	jr	z,nonbnk
 
+	ld	de,common$base	; Common base address to DE
+
+	; The banked BIOS addresses in the MMU control blocks
+	; are assuming common$base is 0E000h
+
 	subw	hl,de		; Make sure we agree on this value
-	jr	z,bnk
+	jr	z,bnk		; Yes
 
 	ld	c,$print	; Common doesn't match
 	ld	de,nomatch$
@@ -76,23 +83,7 @@ az80:	ld	a,40h		; The TSET instruction on a Z80
 nonbnk:	xor	a		; Non-banked or CP/M 2 running
 	jr	announce	;  so no MMU is active
 
-bnk:	ld	l,mmup		; Select the MMU I/O page
-	ld	c,iop
-	ldctl	(c),hl
-
-	ld	c,mmcr		; Read MMU Master control register
-	inw	hl,(c)
-
-	ld	a,h		; High byte of mmcr to A
-
-	ld	l,uartp		; Back to default I/O page
-	ld	c,iop
-	ldctl	(c),hl
-
-	and	01000100b	; Make sure we are using 4K pages
-	jr	nz,idmode	; Can't be using 8K (separate I/D mode)	
-
-	ld	a,true		; Banked memory and MMU active
+bnk:	ld	a,true		; Banked memory and MMU active
 
 announce:
 	push	af		; Save MMU status
@@ -101,7 +92,7 @@ announce:
 	ld	de,reset$
 	call	BDOS
 
-	; Read zzmon from track 0 into buffer at 2000h
+	; Read ZZmon from track 0 into buffer at 2000h
 
 	ld	l,cfp		; Select the CF I/O page
 	ld	c,iop
@@ -140,18 +131,14 @@ readdrq:
 	inc	d
 	jr	moresect
 
-idmode:	ld	c,$print	; Error if 8K page mode detected
-	ld	de,no8kmsg$
-	jp	BDOS
-
 loaded:
+	di			; No more interrupts
+
 	pop	af		; Restore MMU status
 	or	a
 	jr	nz,isbanked
 
 	; Non-banked, now shuffle things to the right address
-
-	di			; No more interrupts
 
 	ld	hl,buffer	; Copy ZZmon to correct location
 	ld	de,zzmon
@@ -165,6 +152,8 @@ loaded:
 	jp	page0		; Go disable and reset
 
 isbanked:
+
+	; Banked, put ZZmon and reset code to bank 0 using DMA
 
 	ld	hl,movpb	; Use DMA to move ZZmon into place
 	call	dma3xfr
@@ -181,8 +170,6 @@ isbanked:
 
 	ld	hl,0000h	; Disable the MMU
 	ld	c,mmcr
-
-	di			; No more interrupts
 
 	pcache			; Purge instruction cache
 	jp	0FFFEh		; Jump to common FFFEh
@@ -271,10 +258,6 @@ reset$:	defb	13,10,'Resetting...'
 
 z280msg$:
 	defb	13,10,'ERROR: This program only runs on a Z280RC.'
-	defb	13,10,'$'
-
-no8kmsg$:
-	defb	13,10,'ERROR: 8K page mode detected.'
 	defb	13,10,'$'
 
 nomatch$:
