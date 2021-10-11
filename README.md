@@ -26,7 +26,8 @@ optional 4-port QuadSer module);
 
 * Some new utility programs in the "utilities" subdirectory - XMODEM,
 RESET, TIME, DU, NULU, RELHEX and updated for CP/M 3 versions of DEVICE,
-HELP. and KERMIT
+HELP and KERMIT.
+
 
 ## Modification History (in reverse chronological order):
 

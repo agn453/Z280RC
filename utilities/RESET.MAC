@@ -101,7 +101,7 @@ announce:
 	ld	de,reset$
 	call	BDOS
 
-	; Read zzmon from track 0 into buffer at 1000h
+	; Read zzmon from track 0 into buffer at 2000h
 
 	ld	l,cfp		; Select the CF I/O page
 	ld	c,iop
@@ -109,7 +109,8 @@ announce:
 
 	ld	a,40h  		; LA addressing mode
 	out	(CF2427),a
-	ld	d,0f8h 		; points to sector to read, last 8 sectors in track 0
+	ld	d,0f8h 		; points to sector to read,
+				;  last 8 sectors in track 0
 	ld	hl,buffer	; we read it into a buffer
 	ld	c,CFdata	; reg C points to CF data reg
 moresect:
@@ -117,7 +118,7 @@ moresect:
 	out	(CFsectcnt),a	; write to sector count with 1
 	ld	a,d		; read sector pointed by reg D
 	cp	0feh		; read sectors 0xF8-0xFD
-	jr	z,loaded	; load completed, run program loaded at 0xB400
+	jr	z,loaded	; load completed
 	out	(CF07),a	; read the sector pointed by reg D		
 	xor	a		; clear reg A
 	out	(CF1623),a	; track 0
@@ -150,6 +151,8 @@ loaded:
 
 	; Non-banked, now shuffle things to the right address
 
+	di			; No more interrupts
+
 	ld	hl,buffer	; Copy ZZmon to correct location
 	ld	de,zzmon
 	ld	bc,zzmonsz
@@ -159,7 +162,6 @@ loaded:
 	ld	de,page0	;  to bank 0 address 0000
 	ld	bc,dsize
 	ldir
-	di			; No more interrupts
 	jp	page0		; Go disable and reset
 
 isbanked:
@@ -181,6 +183,7 @@ isbanked:
 	ld	c,mmcr
 
 	di			; No more interrupts
+
 	pcache			; Purge instruction cache
 	jp	0FFFEh		; Jump to common FFFEh
 
