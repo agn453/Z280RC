@@ -1,0 +1,313 @@
+;
+; Perform a software RESET of the Z280RC system.
+;
+; This is the equivalent of pressing the RESET button.
+;
+; ZZmon is loaded into physical memory address 00B400h from the
+; CompactFlash track 0 sectors 0F8h to 0FDh and then
+; control is transferred to it.
+;
+; Tony Nicholson  08-Oct-2021
+;
+;
+	aseg
+	org	0100h
+
+	.z280
+
+	include	Z280RCIO.LIB	; system definitions
+
+false	equ	0
+true	equ	not false
+
+page0	equ	00000h		; Reset address page 0
+common$base equ	0E000h		; 8K common
+zzmon	equ	0B400h		; ZZmon load address
+zzmonsz	equ	8*512		; eight sectors
+buffer	equ	2000h
+
+BDOS	equ	00005h
+
+$print	equ	9		; BDOS Print String
+$vers	equ	12		; BDOS Get CP/M Version
+$scb	equ	49		; BDOS Get/Set System Control Block
+
+reset:
+	jp	main		; CP/M program signature (starts with C3h)
+
+main:	xor	a		; Make sure this is running
+	dec	a		;  on a Z280 by eliminating
+	jp	po,az80		;  an 8080/8085 (has even parity)
+
+badcpu:	ld	c,$print	; Tell them this is Z280RC only
+	ld	de,z280msg$
+	jp	BDOS
+
+az80:	ld	a,40h		; The TSET instruction on a Z80
+	tset	a		;  will set the S flag (minus)
+	jp	m,badcpu	;  and clear it (positive)
+				;  on a Z280
+
+	ld	c,$vers		; Get CP/M version
+	call	BDOS
+
+	ld	de,common$base	; Pre-load common base address to DE
+
+	cp	31h		; Is this CP/M-Plus?
+	jr	c,nonbnk
+
+	push	de
+	ld	c,$scb		; Get the common base address
+	ld	de,basescb	;  to HL
+	call	BDOS
+	pop	de
+
+	ld	a,h
+	or	l		; Non-banked is zero
+	jr	z,nonbnk
+
+	subw	hl,de		; Make sure we agree on this value
+	jr	z,bnk
+
+	ld	c,$print	; Common doesn't match
+	ld	de,nomatch$
+	jp	BDOS
+
+nonbnk:	xor	a		; Non-banked or CP/M 2 running
+	jr	announce	;  so no MMU is active
+
+bnk:	ld	l,mmup		; Select the MMU I/O page
+	ld	c,iop
+	ldctl	(c),hl
+
+	ld	c,mmcr		; Read MMU Master control register
+	inw	hl,(c)
+
+	ld	a,h		; High byte of mmcr to A
+
+	ld	l,uartp		; Back to default I/O page
+	ld	c,iop
+	ldctl	(c),hl
+
+	and	01000100b	; Make sure we are using 4K pages
+	jr	nz,idmode	; Can't be using 8K (separate I/D mode)	
+
+	ld	a,true		; Banked memory and MMU active
+
+announce:
+	push	af		; Save MMU status
+
+	ld	c,$print	; Announce what we're doing
+	ld	de,reset$
+	call	BDOS
+
+	; Read zzmon from track 0 into buffer at 1000h
+
+	ld	l,cfp		; Select the CF I/O page
+	ld	c,iop
+	ldctl	(c),hl
+
+	ld	a,40h  		; LA addressing mode
+	out	(CF2427),a
+	ld	d,0f8h 		; points to sector to read, last 8 sectors in track 0
+	ld	hl,buffer	; we read it into a buffer
+	ld	c,CFdata	; reg C points to CF data reg
+moresect:
+	ld	a,1		; read 1 sector
+	out	(CFsectcnt),a	; write to sector count with 1
+	ld	a,d		; read sector pointed by reg D
+	cp	0feh		; read sectors 0xF8-0xFD
+	jr	z,loaded	; load completed, run program loaded at 0xB400
+	out	(CF07),a	; read the sector pointed by reg D		
+	xor	a		; clear reg A
+	out	(CF1623),a	; track 0
+	out	(CF815),a
+	ld	a,20h		; read sector command
+	out	(CFstat),a	; issue the read sector command
+readbsy:
+	in	a,(CFstat)	; check bsy flag first
+	and	80h		; bsy flag is at bit 7
+	jr	nz,readbsy
+readdrq:
+	in	a,(CFstat)	; check data request bit set before read CF data
+	and	8		; bit 3 is DRQ, wait for it to set
+	jr	z,readdrq
+
+	ld	b,0h		; sector has 256 16-bit data
+	inirw			; reg HL and c are already setup at the top
+	in	a,(CFstat)
+	inc	d
+	jr	moresect
+
+idmode:	ld	c,$print	; Error if 8K page mode detected
+	ld	de,no8kmsg$
+	jp	BDOS
+
+loaded:
+	pop	af		; Restore MMU status
+	or	a
+	jr	nz,isbanked
+
+	; Non-banked, now shuffle things to the right address
+
+	ld	hl,buffer	; Copy ZZmon to correct location
+	ld	de,zzmon
+	ld	bc,zzmonsz
+	ldir
+
+	ld	hl,done0	; Finally move code to finish-up
+	ld	de,page0	;  to bank 0 address 0000
+	ld	bc,dsize
+	ldir
+	di			; No more interrupts
+	jp	page0		; Go disable and reset
+
+isbanked:
+
+	ld	hl,movpb	; Use DMA to move ZZmon into place
+	call	dma3xfr
+
+	ld	hl,pg0pb	; and also the reset code
+	call	dma3xfr
+
+	ld	hl,(outwhl)	; Put instruction to disable MMU
+	ld	(0FFFEh),hl	;  to top of memory
+
+	ld	l,mmup		; Select the MMU I/O page
+	ld	c,iop
+	ldctl	(c),hl
+
+	ld	hl,0000h	; Disable the MMU
+	ld	c,mmcr
+
+	di			; No more interrupts
+	pcache			; Purge instruction cache
+	jp	0FFFEh		; Jump to common FFFEh
+
+	; This will disable the MMU and wrap around to address 0 in bank 0
+	; which will run the code to clear the MSR, stack pointer and
+	; reset the I/O page and enter ZZmon.
+
+outwhl:	outw	(c),hl
+
+; DMA transfer
+;
+; Enter with HL pointing to a parameter block
+;
+dma3xfr:
+	ld	c,dal3		; Use DMA3 channel
+
+	push	bc		; Save channel and parameter block
+	push	hl		;  pointer to stack
+
+	ld	l,dmap		; Select DMA I/O page
+	ld	c,iop
+	ldctl	(c),hl
+
+	pop	hl		; Restore them
+	pop	bc
+
+	push	bc		;  and save them again
+	push	hl
+
+	ld	a,5		; Point to Transaction Descriptor register
+	add	c		;  (TDRn = DALn+5)
+	ld	c,a
+
+	ld	hl,0		; Stop the DMA channel prior
+	outw	(c),hl		;  to programming a new transfer
+
+	pop	hl		; restore them
+	pop	bc
+
+	outiw			; Write DAL
+	inc	c
+	outiw			; Write DAH
+	inc	c
+	outiw			; Write SAL
+	inc	c
+	outiw			; Write SAH
+	inc	c
+	outiw			; Write byte count
+	inc	c
+	outiw			; Start DMA
+
+dma$wait:
+	nop
+	nop
+	nop
+	inw	hl,(c)		; Wait until terminal count set
+	bit	4,l
+	jr	z,dma$wait
+
+	ld	hl,0		; Disable DMA3 channel
+	outw	(c),hl
+
+	ret
+
+basescb:
+	defb	05Dh		; Get SCB parameter block
+	defb	0		;  to fetch common memory
+	defw	0000h		;  base address
+
+; Remember DMA uses Physical addresses
+
+movpb:
+	dmapbw	00h,zzmon	; destination (P00B400)
+	dmapbw	01h,(common$base+buffer)	; source (L012000 is P010000)
+	defw	zzmonsz
+	defw	1000000010000000b ; Burst mode DMA descriptor
+
+pg0pb:	dmapbw	00h,page0	; destination address (P000000)
+	dmapbw	00h,(common$base+done0)	; source (L0102xx is P00E2xx)
+	defw	dsize
+	defw	1000000010000000b ; Burst mode DMA descriptor
+
+reset$:	defb	13,10,'Resetting...'
+	defb	13,10,'$'
+
+z280msg$:
+	defb	13,10,'ERROR: This program only runs on a Z280RC.'
+	defb	13,10,'$'
+
+no8kmsg$:
+	defb	13,10,'ERROR: 8K page mode detected.'
+	defb	13,10,'$'
+
+nomatch$:
+	defb	13,10,'ERROR: Common memory base mismatch.'
+	defb	13,10,'$'
+
+done0:
+	.phase	page0		; Code to reset common memory MMU
+
+; The following code sets up a "resetted" environment (as per
+; table 11-1 of the Z280 MPU Technical Manual).
+;
+; This runs at address 0000 in bank 0
+
+	; Bank 0 is now mapped for all memory addresses
+
+done:	ld	hl,0000h
+	ld	c,msr		; Clear the Master Status Register
+	ldctl	(c),hl
+
+	; L contains 0 from above
+	ld	c,iop		; I/O page 0
+	ldctl	(c),hl
+
+	ld	sp,0000h	; Stack pointer reset
+
+	im	0		; Interrupt mode 0
+
+	; We don't bother clearing I, R, or changing the bus
+	; timing and control, cache control, trap control,
+	; stack limit
+
+	jp	zzmon
+
+dsize	equ	$ - done
+
+	.dephase
+
+	end	reset

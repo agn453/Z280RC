@@ -2,7 +2,7 @@
 Software for Bill Shen's Z280RC Single Board Z280 system on a RC2014 board
 
 This repository contains a snapshot of the original software, plus
-my versions of modified source files and new utilities for Bill Shen's
+enhancements, updates and new utilities for Bill Shen's
 Z280RC single board Z280 system - as described on the RetroBrew builders
 wiki at
 
@@ -10,8 +10,8 @@ wiki at
 
 The original software is located in zip files in the "original" subdirectory.
 
-My modifications to Bill Shen's original CBIOS3 for CP/M 3 are in the
-"system" subdirectory and below.  
+My modifications to Bill Shen's original non-banked CBIOS3 for CP/M 3 are
+in the "system/cpm3-nonbanked" subdirectory - adding DS1302 clock support.  
 
 I've also developed
 
@@ -19,14 +19,29 @@ I've also developed
 up to 2048 directory entries (four 8Mb drives on CompactFlash with 1.5Mb RAMdisk);
 
 * A CP/M 3 BIOS (in system/bios280) supporting Banked memory (up to eight
-banks, 1.5Mb RAMdisk, support for 4-port QuadSer module);
+banks of memory, four (and optionally eight) 8Mb drives, 1.5Mb RAMdisk,
+optional 4-port QuadSer module);
 
-* Ported UZI280 (in system/uzi280*) - a version of the Unix operating system); and
+* Ported UZI280 (in system/uzi280*) - a version of the Unix operating system; and
 
-* Some new Utilities in the "utilities" subdirectory.
-
+* Some new utility programs in the "utilities" subdirectory - XMODEM,
+RESET, TIME, DU, NULU, RELHEX and updated for CP/M 3 versions of DEVICE,
+HELP. and KERMIT
 
 ## Modification History (in reverse chronological order):
+
+
+### 11-Oct-2021
+
+
+A new utility program to reset the system from CP/M back to the
+ZZmon command prompt.  (This is the software equivalent of pressing
+the reset button).
+
+Assembler source is in
+[utilities/RESET.MAC](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/RESET.MAC)
+and a pre-built binary is in
+[utilities/RESET.COM](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/RESET.COM)
 
 
 ### 08-Oct-2021
