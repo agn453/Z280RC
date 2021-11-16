@@ -32,8 +32,23 @@ HELP and KERMIT.
 ## Modification History (in reverse chronological order):
 
 
-### 11-Oct-2021
+### 16-Nov-2021
 
+Ported the Z280 UART console I/O routines to the latest version of
+Martin Eberhard's XMODEM version 2.9.  The new version is in the
+"utilities" subdirectory as a ZIP file
+[utilities/xm29z280.zip](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/xm29z280.zip)
+or you can download the individual files
+[utilities/XM29Z280.MAC](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/XM29Z280.MAC),
+[utilities/XM29Z280.HEX](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/XM29Z280.HEX) and
+[utilities/XM29Z280.COM](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/XM29Z280.COM)
+.  This version uses the same configuration file
+[utilities/XMZ280RC.CFG](https://raw.githubusercontent.com/agn453/Z280RC/master/utilities/XMZ280RC.CFG)
+as the previous version (see below)
+to obtain its default switch values (/X3 uses the built-in Z280 console UART).
+
+
+### 11-Oct-2021
 
 A new utility program to reset the system from CP/M back to the
 ZZmon command prompt.  (This is the software equivalent of pressing
@@ -977,12 +992,12 @@ just cosmetic!
 
 ### 14-Nov-2018
 
-Added a modified version of XMODEM 2.7 (for file transfer via the console
-serial port).  This now includes routines to drive the built-in Z280
-UART directly.  To select the internal routines use the /X3 switch on
-the XMODEM command line (or make it the default by having the XMZ280RC.CFG
-in the default directory). You'll find these files in the utilities folder
-or you can download a ZIP containing them directly from 
+Added a modified version of Martin Eberhard's XMODEM 2.7 (for file transfer
+via the console serial port).  This now includes routines to drive the
+built-in Z280 UART directly.  To select the internal routines use the /X3
+switch on the XMODEM command line (or make it the default by having the
+XMZ280RC.CFG in the default directory). You'll find these files in the
+utilities folder or you can download a ZIP containing them directly from 
 https://github.com/agn453/Z280RC/blob/master/utilities/xm27z280.zip
 
 
