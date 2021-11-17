@@ -32,6 +32,17 @@ HELP and KERMIT.
 ## Modification History (in reverse chronological order):
 
 
+### 17-Nov-2021
+
+Minor tweak to XMODEM to look for its configuration file on the
+system drive (in A:XMZ280RC.CFG).  Be sure to set this with the
+SYS attribute so it is seen from all user areas under CP/M 3.
+
+```
+A>set xmz280rc.cfg [sys ro]
+```
+
+
 ### 16-Nov-2021
 
 Ported the Z280 UART console I/O routines to the latest version of

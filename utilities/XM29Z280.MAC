@@ -17,11 +17,11 @@
 ; binary of XMODEM29 is built.
 ;
 ; To use on the Z280RC, use the accompanying XMZ280RC.CFG
-; file (on your system drive with SYS protection) or
+; file (on your A: system drive with SYS protection) or
 ; remember to include the /X3 switch which enables the
 ; built-in (non-interrupt) Z280 UART I/O routines.
 ;
-; by Tony Nicholson  16-Nov-2021
+; by Tony Nicholson  17-Nov-2021
 ;
 	.z80
 	aseg
@@ -268,7 +268,7 @@ rcsdav	equ	00010000b ; rcs data available bit
 ;==============================================================
 ;Revision History:
 ;
-; 2.9-z280rc 16-November-2021  Tony Nicholson
+; 2.9-z280rc 17-November-2021  Tony Nicholson
 ;  Converted to Zilog mnemonics (via XIZ).
 ;  The CP/M Plus BIOS console I/O routines could be easily
 ;  overrun at 115200 bps in receive mode, since there
@@ -277,6 +277,9 @@ rcsdav	equ	00010000b ; rcs data available bit
 ;  area when built with the Z280RC symbol defined.  The
 ;  /X3 command line switch selects them.
 ;  Also allow /Z to accept 1-9 for CPU speed in MHz.
+;  Always use the configuration file A:XMZ280RC.CFG (set
+;  this with the SYS attribute and it will be accessable
+;  from all user areas under CP/M 3).
 ;
 ; 2.9  14 Novemver 2021  M. Eberhard
 ;  Eat received characters until the line is idle for 1 second,
@@ -3741,10 +3744,12 @@ portab:	defw	conto,rxbcon,txcon ; X0 CP/M console
 ;***INIT-Only Table**************
 ;Configuration File Control Block
 ;********************************
-cfgfcb:	defb	0		; (dr) use default drive
+cfgfcb:
   ifdef z280rc
+	defb	1		; Always use the A: drive
 	defb	'XMZ280RC'	; (f1-f8)
   else
+	defb	0		; (dr) use default drive
 	defb	'XMODEM  '	; (f1-f8)
   endif
 	defb	'CFG'		; (t1-t3)
@@ -3758,3 +3763,4 @@ cfgfcb:	defb	0		; (dr) use default drive
 cfgbuf:	defs	blksiz
 
 	end
+                                                                               
