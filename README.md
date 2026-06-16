@@ -10,7 +10,7 @@ RetroBrew builders wiki at
 
 Some of these details are at Bill Shen's GitHub for the Z280RC at
 
-  https://github.com/Plasmode/280RC
+  https://github.com/Plasmode/Z280RC
 
 The original software is located in zip files in the "original" subdirectory.
 
