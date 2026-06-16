@@ -3,10 +3,14 @@ Software for Bill Shen's Z280RC Single Board Z280 system on a RC2014 board
 
 This repository contains a snapshot of the original software, plus
 enhancements, updates and new utilities for Bill Shen's
-Z280RC single board Z280 system - as described on the RetroBrew builders
-wiki at
+Z280RC single board Z280 system - that was described on the (now defunct)
+RetroBrew builders wiki at
 
   https://www.retrobrewcomputers.org/doku.php?id=builderpages:plasmo:z280rc
+
+Some of these details are at Bill Shen's GitHub for the Z280RC at
+
+  https://github.com/Plasmode/280RC
 
 The original software is located in zip files in the "original" subdirectory.
 
@@ -30,6 +34,21 @@ HELP and KERMIT.
 
 
 ## Modification History (in reverse chronological order):
+
+
+### 16-Jun-2026
+
+
+Updated some files that GitHub was reporting as changed due to some change
+that was made to the git defaults (I have the master repository located on
+my mac Mini using ```git version 2.50.1 (Apple Git-155)```).  Also renamed
+the binary object file libraries to lowercase (```lib280c.lib```,
+```lib280f.lib``` and ```runtime.lib``` in the system/uzi280-kernel
+directory, updated ```.gitAttributes``` to force them as binary). The
+other ```*.LIB``` files are text (ASCII with CR-LF line endings).
+
+Also flagged the references to the Retrobuild builders wiki as no longer
+available.
 
 
 ### 17-Nov-2021
